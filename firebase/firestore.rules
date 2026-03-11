@@ -1,0 +1,741 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================================
+    // HELPER FUNCTIONS
+    // ============================================================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function hasUserDoc() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    
+    function isActive() {
+      return isSignedIn() && hasUserDoc() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == "ACTIVE"
+      );
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function safeGetUserData() {
+      return hasUserDoc() ? getUserData() : {};
+    }
+    
+    function isSuperAdmin() {
+      return isSignedIn() && hasUserDoc() && (
+        getUserData().role == "SUPER_ADMIN" ||
+        getUserData().role == "super_admin"
+      );
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && hasUserDoc() && (
+        getUserData().role == "ADMIN" ||
+        getUserData().role == "tenant_admin" ||
+        getUserData().role == "admin"
+      );
+    }
+    
+    function isStaff() {
+      return isSignedIn() && hasUserDoc() && (
+        getUserData().role == "STAFF" ||
+        getUserData().role == "TEACHER" ||
+        getUserData().role == "teacher" ||
+        getUserData().role == "staff"
+      );
+    }
+    
+    // FINANCE helpers
+    function isFinance() {
+      return isSignedIn() && hasUserDoc() && (
+        getUserData().role == "FINANCE" ||
+        getUserData().role == "finance" ||
+        getUserData().role == "user" ||
+        getUserData().role == "accounts"
+      );
+    }
+    
+    function isAdminOrFinance() {
+      return isAdmin() || isFinance();
+    }
+    
+    // Legacy support
+    function isTenantAdmin() {
+      return isAdmin();
+    }
+    
+    function isTeacher() {
+      return isStaff();
+    }
+    
+    function belongsToSchool(schoolId) {
+      return isSignedIn() && hasUserDoc() && getUserData().schoolId == schoolId;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // ============================================================
+    // SCHOOLS COLLECTION
+    // ============================================================
+    match /schools/{schoolId} {
+      // SIGNUP: Any authenticated user can CREATE a school (for registration)
+      allow create: if isSignedIn();
+      
+      // READ: Super admin can read all, others can read their own school
+      allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+      
+      // UPDATE: Super admin or tenant admin of the school (must be active)
+      allow update: if isSignedIn() && (isSuperAdmin() || (isActive() && isTenantAdmin() && belongsToSchool(schoolId)));
+      
+      // DELETE: Only super admin
+      allow delete: if isSignedIn() && isSuperAdmin();
+      
+      // ADMIN USERS SUBCOLLECTION
+      match /adminUsers/{adminId} {
+        allow create: if isSignedIn() && request.auth.uid == adminId;
+        allow read: if isSignedIn() && (isSuperAdmin() || request.auth.uid == adminId);
+        allow update, delete: if isSignedIn() && isSuperAdmin();
+      }
+      
+      // TEACHERS SUBCOLLECTION
+      match /teachers/{teacherId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) || 
+          (isTeacher() && request.auth.uid == teacherId)
+        );
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // STAFF SUBCOLLECTION (under schools)
+      match /staff/{staffId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) || 
+          (isStaff() && resource.data.userId == request.auth.uid)
+        );
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // LEAVE TYPES SUBCOLLECTION
+      match /leaveTypes/{leaveTypeId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || isAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || (isAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // LEAVES SUBCOLLECTION
+      match /leaves/{leaveId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && (
+            resource.data.applicantId == request.auth.uid ||
+            resource.data.teacherId == request.auth.uid
+          ))
+        );
+        allow create: if isSignedIn() && isActive() && belongsToSchool(schoolId);
+        allow update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          // Teachers can update their own leaves:
+          // 1. Set status to 'cancellationRequested' (for approved leaves)
+          // 2. Set status to 'cancelled' (for pending leaves - immediate cancellation)
+          (isTeacher() && belongsToSchool(schoolId) && (
+            resource.data.applicantId == request.auth.uid ||
+            resource.data.teacherId == request.auth.uid
+          ) && 
+           (request.resource.data.status == 'cancellationRequested' || 
+            request.resource.data.status == 'CANCELLATION_REQUESTED' ||
+            (resource.data.status == 'pending' && request.resource.data.status == 'cancelled') ||
+            (resource.data.status == 'PENDING' && request.resource.data.status == 'CANCELLED')))
+        );
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // LEAVE BALANCES SUBCOLLECTION
+      match /leaveBalances/{leaveBalanceId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // SALARY STRUCTURES SUBCOLLECTION
+      match /salaryStructures/{structureId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // PAYROLL SUBCOLLECTION (legacy)
+      match /payroll/{payrollId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // PAYROLL CONFIG SUBCOLLECTION (salary setup per staff)
+      match /payrollConfig/{configId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && resource.data.staffId == request.auth.uid)
+        );
+        allow create, update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId))
+        );
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // PAYROLL RECORDS SUBCOLLECTION (monthly processed payroll)
+      match /payrollRecords/{recordId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          // Teachers can only read their own APPROVED/PAID records
+          (isTeacher() && belongsToSchool(schoolId) && (
+            resource.data.userId == request.auth.uid ||
+            resource.data.staffId == request.auth.uid
+          ))
+        );
+        allow create, update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId))
+        );
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // ATTENDANCE SUBCOLLECTION
+      match /attendance/{attendanceId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) || 
+          (isTeacher() && belongsToSchool(schoolId))
+        );
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // SETTINGS SUBCOLLECTION
+      match /settings/{settingId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // PERMISSION SETTINGS SUBCOLLECTION
+      match /permissionSettings/{settingId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // PERMISSION REQUESTS SUBCOLLECTION
+      match /permissionRequests/{requestId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && resource.data.staffId == request.auth.uid)
+        );
+        allow create: if isSignedIn() && isActive() && belongsToSchool(schoolId);
+        allow update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          // Teachers can update their own permissions:
+          // 1. Set status to 'cancellationRequested' (for approved permissions)
+          // 2. Set status to 'cancelled' (for pending permissions - immediate cancellation)
+          (isTeacher() && belongsToSchool(schoolId) && resource.data.staffId == request.auth.uid && 
+           (request.resource.data.status == 'cancellationRequested' || 
+            (resource.data.status == 'pending' && request.resource.data.status == 'cancelled')))
+        );
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // STAFF LEAVE BALANCES SUBCOLLECTION
+      match /staffLeaveBalances/{balanceId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && (
+            resource.data.userId == request.auth.uid ||
+            resource.data.staffId == request.auth.uid
+          ))
+        );
+        
+        // Allow teachers to CREATE their own balance docs, admins can also create/update
+        allow create: if isSignedIn() && isActive() && (
+          isSuperAdmin() ||
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && (
+            request.resource.data.userId == request.auth.uid ||
+            request.resource.data.staffId == request.auth.uid
+          ))
+        );
+        
+        // Allow admins to UPDATE existing balances, and teachers to update their own balances during initialization
+        allow update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && (
+            resource.data.userId == request.auth.uid ||
+            resource.data.staffId == request.auth.uid
+          ))
+        );
+        
+        allow delete: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId))
+        );
+      }
+      // STAFF PERMISSION BALANCES SUBCOLLECTION
+      match /staffPermissionBalances/{balanceId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && (
+            resource.data.userId == request.auth.uid ||
+            resource.data.staffId == request.auth.uid
+          ))
+        );
+        
+        // Allow teachers to CREATE their own permission balance docs, admins can also create/update
+        allow create: if isSignedIn() && isActive() && (
+          isSuperAdmin() ||
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && (
+            request.resource.data.userId == request.auth.uid ||
+            request.resource.data.staffId == request.auth.uid
+          ))
+        );
+        
+        // Allow admins to UPDATE existing balances, and teachers to update their own balances during initialization
+        allow update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && (
+            resource.data.userId == request.auth.uid ||
+            resource.data.staffId == request.auth.uid
+          ))
+        );
+        
+        allow delete: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId))
+        );
+      }
+      
+      // STAFF ENTITLEMENTS SUBCOLLECTION
+      match /staffEntitlements/{entitlementId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && resource.data.staffId == request.auth.uid)
+        );
+        allow create, update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId))
+        );
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // LEAVE CANCELLATIONS SUBCOLLECTION
+      match /leaveCancellations/{cancellationId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && resource.data.staffId == request.auth.uid)
+        );
+        allow create: if isSignedIn() && isActive() && belongsToSchool(schoolId) && (
+          isTeacher() && request.resource.data.staffId == request.auth.uid
+        );
+        allow update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // PERMISSION CANCELLATIONS SUBCOLLECTION
+      match /permissionCancellations/{cancellationId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && resource.data.staffId == request.auth.uid)
+        );
+        allow create: if isSignedIn() && isActive() && belongsToSchool(schoolId) && (
+          isTeacher() && request.resource.data.staffId == request.auth.uid
+        );
+        allow update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // HOLIDAYS SUBCOLLECTION
+      match /holidays/{holidayId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // ADMISSION PROVISIONING SUBCOLLECTION
+      match /admissionProvisioning/{provisionId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // FINANCE: FEE STRUCTURES
+      match /fee_structures/{structureId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // FINANCE: STUDENT FEE DETAILS
+      match /student_fee_details/{detailId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // FINANCE: BILLS (Revenue & Expense)
+      match /bills/{billId} {
+        allow read: if isSignedIn() && (
+          isSuperAdmin() ||
+          belongsToSchool(schoolId) ||
+          isAdminOrFinance()
+        );
+        allow create: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // STUDENTS SUBCOLLECTION
+      match /students/{studentId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // CLASSES SUBCOLLECTION
+      match /classes/{classId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // PERMISSION TYPES SUBCOLLECTION
+      match /permissionTypes/{permissionTypeId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // PERMISSIONS SUBCOLLECTION (for permission requests)
+      match /permissions/{permissionId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && (
+            resource.data.applicantId == request.auth.uid ||
+            resource.data.staffId == request.auth.uid
+          ))
+        );
+        allow create: if isSignedIn() && isActive() && belongsToSchool(schoolId) && 
+          request.resource.data.applicantId == request.auth.uid;
+        allow update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && (
+            resource.data.applicantId == request.auth.uid ||
+            resource.data.staffId == request.auth.uid
+          ) && (
+            request.resource.data.status == 'CANCELLED' ||
+            request.resource.data.status == 'cancelled' ||
+            request.resource.data.status == 'CANCELLATION_REQUESTED' ||
+            request.resource.data.status == 'cancellationRequested'
+          ))
+        );
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // PERMISSION CONFIG SUBCOLLECTION
+      match /permissionConfig/{configId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // MONTHLY PERMISSION USAGE SUBCOLLECTION
+      // NOTE: Updated via Dart transactions (no Cloud Functions)
+      match /monthlyPermissionUsage/{usageId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && (
+            resource.data.staffId == request.auth.uid ||
+            resource.data.userId == request.auth.uid
+          ))
+        );
+        // Admins can write (for permission approval transactions)
+        allow write: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && (
+            request.resource.data.staffId == request.auth.uid ||
+            request.resource.data.userId == request.auth.uid
+          ))
+        );
+      }
+      
+      // BALANCE MUTATIONS SUBCOLLECTION (audit trail)
+      // NOTE: Updated via Dart transactions (no Cloud Functions)
+      match /balanceMutations/{mutationId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId))
+        );
+        // Admins can create audit entries
+        allow create: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId))
+        );
+        // No updates or deletes allowed (immutable audit trail)
+        allow update, delete: if false;
+      }
+      
+      // AUDIT LOG SUBCOLLECTION
+      match /auditLog/{logId} {
+        allow read: if isSignedIn() && (
+          isSuperAdmin() || 
+          (isAdmin() && belongsToSchool(schoolId))
+        );
+        // Only Cloud Functions and admins can write
+        allow create: if isSignedIn() && (
+          isSuperAdmin() || 
+          (isAdmin() && belongsToSchool(schoolId))
+        );
+        allow update, delete: if false;
+      }
+    }
+    
+    // ============================================================
+    // ADMIN USERS COLLECTION (Top-level)
+    // ============================================================
+    match /adminUsers/{adminUserId} {
+      // READ: Super admin can read all, tenant admin can read from their school
+      allow read: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isTenantAdmin() && hasUserDoc() && belongsToSchool(resource.data.schoolId))
+      );
+      
+      // CREATE: Only super admin can create admin users
+      allow create: if isSignedIn() && isSuperAdmin();
+      
+      // UPDATE: Only super admin can update admin users
+      allow update: if isSignedIn() && isSuperAdmin();
+      
+      // DELETE: Only super admin can delete admin users
+      allow delete: if isSignedIn() && isSuperAdmin();
+    }
+    
+    // ============================================================
+    // TEACHERS COLLECTION (Top-level) - Legacy support
+    // ============================================================
+    match /teachers/{teacherId} {
+      // READ: Authenticated users can read teachers from their school
+      allow read: if isSignedIn() && (
+        isSuperAdmin() || 
+        (getUserData().schoolId == resource.data.schoolId)
+      );
+      
+      // CREATE: Super admin or tenant admin can create teachers
+      allow create: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isTenantAdmin() && getUserData().schoolId == request.resource.data.schoolId)
+      );
+      
+      // UPDATE: Super admin, tenant admin of same school, or the teacher themselves
+      allow update: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isTenantAdmin() && getUserData().schoolId == resource.data.schoolId) ||
+        (isTeacher() && request.auth.uid == resource.data.userId)
+      );
+      
+      // DELETE: Super admin or tenant admin of same school
+      allow delete: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isTenantAdmin() && getUserData().schoolId == resource.data.schoolId)
+      );
+    }
+    
+    // ============================================================
+    // STAFF COLLECTION (Top-level) - New staff management
+    // ============================================================
+    match /staff/{staffId} {
+      // Helper to check if user has a user document
+      function hasUserDoc() {
+        return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      }
+      
+      // Helper to safely get user data
+      function safeGetUserData() {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      }
+      
+      // READ: Authenticated users can read staff from their school
+      allow read: if isSignedIn() && (
+        isSuperAdmin() || 
+        (hasUserDoc() && safeGetUserData().schoolId == resource.data.schoolId)
+      );
+      
+      // CREATE: Super admin or tenant admin can create staff
+      allow create: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isTenantAdmin() && getUserData().schoolId == request.resource.data.schoolId)
+      );
+      
+      // UPDATE: Super admin, tenant admin of same school, the staff member themselves,
+      // or a new user updating their own staff record (when userId is being set)
+      allow update: if isSignedIn() && (
+        isSuperAdmin() || 
+        (hasUserDoc() && isTenantAdmin() && safeGetUserData().schoolId == resource.data.schoolId) ||
+        (request.auth.uid == resource.data.userId) ||
+        // Allow new user to update staff doc when setting their userId
+        (request.auth.uid == request.resource.data.userId && request.resource.data.authCreated == true)
+      );
+      
+      // DELETE: Super admin or tenant admin of same school
+      allow delete: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isTenantAdmin() && getUserData().schoolId == resource.data.schoolId)
+      );
+    }
+    
+    // ============================================================
+    // ADMIN USERS COLLECTION (Top-level) - Admin provisioning
+    // ============================================================
+    match /adminUsers/{adminId} {
+      // READ: Any authenticated user can read their own admin record,
+      // Super admin can read all, tenant admin can read admins from their school
+      allow read: if isSignedIn() && (
+        isSuperAdmin() || 
+        request.auth.uid == resource.data.userId ||
+        (isTenantAdmin() && getUserData().schoolId == resource.data.schoolId)
+      );
+      
+      // CREATE: Super admin, tenant admin for their school, OR the user creating their own record
+      // (needed because Firebase Auth auto-signs in as new user after createUserWithEmailAndPassword)
+      allow create: if isSignedIn() && (
+        isSuperAdmin() || 
+        request.auth.uid == request.resource.data.userId ||
+        (isTenantAdmin() && getUserData().schoolId == request.resource.data.schoolId)
+      );
+      
+      // UPDATE: Super admin, tenant admin of same school, or user updating their own record
+      allow update: if isSignedIn() && (
+        isSuperAdmin() || 
+        request.auth.uid == resource.data.userId ||
+        (isTenantAdmin() && getUserData().schoolId == resource.data.schoolId)
+      );
+      
+      // DELETE: Super admin or tenant admin of same school
+      allow delete: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isTenantAdmin() && getUserData().schoolId == resource.data.schoolId)
+      );
+    }
+    
+    // ============================================================
+    // LEAVE REQUESTS COLLECTION (Top-level) - For staff leave applications
+    // ============================================================
+    match /leaveRequests/{requestId} {
+      // READ: Super admin, tenant admin of school, or the staff member who applied
+      allow read: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isTenantAdmin() && getUserData().schoolId == resource.data.schoolId) ||
+        request.auth.uid == resource.data.staffId
+      );
+      
+      // CREATE: Any authenticated staff member can apply for leave
+      allow create: if isSignedIn() && 
+        request.auth.uid == request.resource.data.staffId &&
+        getUserData().schoolId == request.resource.data.schoolId;
+      
+      // UPDATE: Super admin, tenant admin (for approval), or staff member (for cancellation)
+      allow update: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isTenantAdmin() && getUserData().schoolId == resource.data.schoolId) ||
+        (request.auth.uid == resource.data.staffId && (
+          resource.data.status == 'pending' || 
+          (resource.data.status == 'approved' && request.resource.data.status == 'cancellationRequested')
+        ))
+      );
+      
+      // DELETE: Super admin or tenant admin
+      allow delete: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isTenantAdmin() && getUserData().schoolId == resource.data.schoolId)
+      );
+    }
+    
+    // ============================================================
+    // USERS COLLECTION
+    // ============================================================
+    match /users/{userId} {
+      // CREATE: User can create their own document
+      // When admin creates a staff user via createUserWithEmailAndPassword,
+      // Firebase auto-signs in as the new user. So the new user creates their own doc.
+      // We allow this if:
+      // 1. User is creating their own document (request.auth.uid == userId)
+      // 2. AND either it's a regular signup OR it's admin-created (createdByAdmin flag)
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      
+      // READ: User can read their own data, super admin can read all, tenant admin can read users from their school
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId || 
+        isSuperAdmin() ||
+        (isTenantAdmin() && resource.data.schoolId == getUserData().schoolId)
+      );
+      
+      // UPDATE: User can update their own data, super admin can update all, tenant admin can update users from their school
+      allow update: if isSignedIn() && (
+        request.auth.uid == userId || 
+        isSuperAdmin() ||
+        (isTenantAdmin() && resource.data.schoolId == getUserData().schoolId)
+      );
+      
+      // DELETE: Only super admin
+      allow delete: if isSignedIn() && isSuperAdmin();
+      
+      // NOTIFICATIONS SUBCOLLECTION
+      match /notifications/{notificationId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn() && (isSuperAdmin() || isTenantAdmin());
+        allow update, delete: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+  }
+}

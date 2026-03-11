@@ -1,0 +1,37 @@
+{
+  "name": "eazy-school-360-firebase",
+  "version": "1.0.0",
+  "description": "Firebase deployment and security rules management for Eazy School 360",
+  "scripts": {
+    "deploy-rules": "node firebase/deploy-rules.js",
+    "deploy-indexes": "node firebase/deploy-indexes.js",
+    "deploy-all": "npm run deploy-rules && npm run deploy-indexes && firebase deploy",
+    "fix-claims": "node firebase/fix-claims-cli.js",
+    "set-claims": "node firebase/set-custom-claims.js",
+    "validate-rules": "firebase firestore:rules:validate",
+    "get-rules": "firebase firestore:rules:get",
+    "setup": "firebase init",
+    "start": "npm run deploy-rules && flutter run -d chrome",
+    "build": "npm run deploy-rules && flutter build web --release",
+    "deploy": "npm run build && firebase deploy --only hosting"
+  },
+  "devDependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-tools": "^15.1.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/eazy-school-360.git"
+  },
+  "keywords": [
+    "firebase",
+    "flutter",
+    "school-management",
+    "security-rules"
+  ],
+  "author": "Eazy School 360 Team",
+  "license": "MIT"
+}

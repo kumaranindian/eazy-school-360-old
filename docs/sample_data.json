@@ -1,0 +1,351 @@
+{
+  "leave_types": [
+    {
+      "id": "casual_leave",
+      "name": "Casual Leave",
+      "description": "For personal matters and short absences",
+      "daysAllowed": 12,
+      "isActive": true,
+      "isHalfDayAllowed": true,
+      "isPaidLeave": true,
+      "requiresApproval": true,
+      "requiresAttachment": false,
+      "carryForwardAllowed": false,
+      "maxCarryForwardDays": 0,
+      "applicableFor": ["all"]
+    },
+    {
+      "id": "sick_leave",
+      "name": "Sick Leave",
+      "description": "For illness and medical appointments",
+      "daysAllowed": 10,
+      "isActive": true,
+      "isHalfDayAllowed": true,
+      "isPaidLeave": true,
+      "requiresApproval": true,
+      "requiresAttachment": true,
+      "carryForwardAllowed": false,
+      "maxCarryForwardDays": 0,
+      "applicableFor": ["all"]
+    },
+    {
+      "id": "earned_leave",
+      "name": "Earned Leave",
+      "description": "Privilege leave earned over time",
+      "daysAllowed": 15,
+      "isActive": true,
+      "isHalfDayAllowed": false,
+      "isPaidLeave": true,
+      "requiresApproval": true,
+      "requiresAttachment": false,
+      "carryForwardAllowed": true,
+      "maxCarryForwardDays": 30,
+      "applicableFor": ["all"]
+    },
+    {
+      "id": "maternity_leave",
+      "name": "Maternity Leave",
+      "description": "For expecting mothers",
+      "daysAllowed": 180,
+      "isActive": true,
+      "isHalfDayAllowed": false,
+      "isPaidLeave": true,
+      "requiresApproval": true,
+      "requiresAttachment": true,
+      "carryForwardAllowed": false,
+      "maxCarryForwardDays": 0,
+      "applicableFor": ["all"]
+    },
+    {
+      "id": "paternity_leave",
+      "name": "Paternity Leave",
+      "description": "For new fathers",
+      "daysAllowed": 15,
+      "isActive": true,
+      "isHalfDayAllowed": false,
+      "isPaidLeave": true,
+      "requiresApproval": true,
+      "requiresAttachment": true,
+      "carryForwardAllowed": false,
+      "maxCarryForwardDays": 0,
+      "applicableFor": ["all"]
+    },
+    {
+      "id": "compensatory_off",
+      "name": "Compensatory Off",
+      "description": "For working on holidays/weekends",
+      "daysAllowed": 0,
+      "isActive": true,
+      "isHalfDayAllowed": true,
+      "isPaidLeave": true,
+      "requiresApproval": true,
+      "requiresAttachment": false,
+      "carryForwardAllowed": false,
+      "maxCarryForwardDays": 0,
+      "applicableFor": ["all"]
+    },
+    {
+      "id": "unpaid_leave",
+      "name": "Leave Without Pay",
+      "description": "Unpaid leave for extended absences",
+      "daysAllowed": 30,
+      "isActive": true,
+      "isHalfDayAllowed": false,
+      "isPaidLeave": false,
+      "requiresApproval": true,
+      "requiresAttachment": false,
+      "carryForwardAllowed": false,
+      "maxCarryForwardDays": 0,
+      "applicableFor": ["all"]
+    }
+  ],
+  
+  "staff_roles": [
+    {
+      "id": "teacher",
+      "name": "Teacher",
+      "roleType": "teacher",
+      "description": "Teaching staff member",
+      "permissions": [
+        "view_own_profile",
+        "apply_leave",
+        "view_own_attendance",
+        "view_own_payslips",
+        "mark_student_attendance"
+      ]
+    },
+    {
+      "id": "non_teaching_staff",
+      "name": "Non-Teaching Staff",
+      "roleType": "non_teaching_staff",
+      "description": "Support staff (drivers, security, cleaners, etc.)",
+      "permissions": [
+        "view_own_profile",
+        "apply_leave",
+        "view_own_attendance",
+        "view_own_payslips"
+      ]
+    },
+    {
+      "id": "office_staff",
+      "name": "Office Staff",
+      "roleType": "office_staff",
+      "description": "Administrative office staff",
+      "permissions": [
+        "view_own_profile",
+        "apply_leave",
+        "view_own_attendance",
+        "view_own_payslips",
+        "view_staff_list"
+      ]
+    }
+  ],
+  
+  "admin_roles": [
+    {
+      "id": "super_admin",
+      "name": "Super Admin",
+      "description": "Full access to all system features and settings",
+      "permissions": [
+        "manage_schools",
+        "manage_admins",
+        "manage_staff",
+        "manage_leave",
+        "manage_payroll",
+        "manage_attendance",
+        "manage_settings",
+        "view_reports",
+        "manage_academics"
+      ],
+      "menuItems": [
+        "dashboard",
+        "schools",
+        "admin_provisioning",
+        "staff",
+        "leave_management",
+        "payroll",
+        "attendance",
+        "settings",
+        "reports"
+      ]
+    },
+    {
+      "id": "tenant_admin",
+      "name": "Tenant Admin",
+      "description": "Full access to school-specific features",
+      "permissions": [
+        "manage_admins",
+        "manage_staff",
+        "manage_leave",
+        "manage_payroll",
+        "manage_attendance",
+        "manage_settings",
+        "view_reports"
+      ],
+      "menuItems": [
+        "dashboard",
+        "admin_provisioning",
+        "staff",
+        "leave_management",
+        "payroll",
+        "attendance",
+        "settings",
+        "reports"
+      ]
+    },
+    {
+      "id": "hr_admin",
+      "name": "HR Admin",
+      "description": "Manage staff, leave, and HR-related operations",
+      "permissions": [
+        "manage_staff",
+        "manage_leave",
+        "view_reports"
+      ],
+      "menuItems": [
+        "dashboard",
+        "staff",
+        "leave_management",
+        "reports"
+      ]
+    },
+    {
+      "id": "payroll_admin",
+      "name": "Payroll Admin",
+      "description": "Manage salary structures and payroll processing",
+      "permissions": [
+        "view_staff",
+        "manage_payroll",
+        "view_reports"
+      ],
+      "menuItems": [
+        "dashboard",
+        "staff",
+        "payroll",
+        "reports"
+      ]
+    },
+    {
+      "id": "attendance_admin",
+      "name": "Attendance Admin",
+      "description": "Manage attendance tracking and reports",
+      "permissions": [
+        "view_staff",
+        "manage_attendance",
+        "view_reports"
+      ],
+      "menuItems": [
+        "dashboard",
+        "staff",
+        "attendance",
+        "reports"
+      ]
+    },
+    {
+      "id": "academic_admin",
+      "name": "Academic Admin",
+      "description": "Manage academic schedules, classes, and curriculum",
+      "permissions": [
+        "view_staff",
+        "manage_academics",
+        "view_reports"
+      ],
+      "menuItems": [
+        "dashboard",
+        "staff",
+        "academics",
+        "reports"
+      ]
+    }
+  ],
+  
+  "firestore_structure": {
+    "collections": {
+      "users": {
+        "description": "Firebase Auth user profiles",
+        "fields": {
+          "email": "string",
+          "displayName": "string",
+          "role": "string (super_admin | tenant_admin | teacher)",
+          "schoolId": "string (reference to schools collection)",
+          "isActive": "boolean",
+          "createdAt": "timestamp",
+          "updatedAt": "timestamp",
+          "createdByAdmin": "boolean"
+        }
+      },
+      "schools": {
+        "description": "School/tenant information",
+        "fields": {
+          "name": "string",
+          "address": "string",
+          "phone": "string",
+          "email": "string",
+          "isActive": "boolean",
+          "createdAt": "timestamp",
+          "updatedAt": "timestamp"
+        },
+        "subcollections": ["leaveTypes", "leaves", "leaveBalances", "salaryStructures", "payroll", "attendance", "settings"]
+      },
+      "staff": {
+        "description": "All staff members (teaching and non-teaching)",
+        "fields": {
+          "schoolId": "string",
+          "userId": "string (Firebase Auth UID if login enabled)",
+          "firstName": "string",
+          "lastName": "string",
+          "email": "string",
+          "phone": "string",
+          "staffType": "string (teaching | nonTeaching)",
+          "subCategory": "string",
+          "role": "string (teacher | non_teaching_staff | office_staff)",
+          "isActive": "boolean",
+          "isLoginRequired": "boolean",
+          "authCreated": "boolean",
+          "createdAt": "timestamp",
+          "updatedAt": "timestamp"
+        }
+      },
+      "adminUsers": {
+        "description": "Admin users for admin provisioning",
+        "fields": {
+          "userId": "string (Firebase Auth UID)",
+          "schoolId": "string",
+          "name": "string",
+          "email": "string",
+          "phone": "string",
+          "roles": "array of strings (hr_admin | payroll_admin | attendance_admin | academic_admin | tenant_admin)",
+          "isActive": "boolean",
+          "lastLoginAt": "timestamp",
+          "createdBy": "string",
+          "createdAt": "timestamp",
+          "updatedAt": "timestamp"
+        }
+      },
+      "leaveRequests": {
+        "description": "Leave applications from staff",
+        "fields": {
+          "schoolId": "string",
+          "staffId": "string",
+          "staffName": "string",
+          "staffType": "string",
+          "leaveTypeId": "string",
+          "leaveTypeName": "string",
+          "startDate": "timestamp",
+          "endDate": "timestamp",
+          "reason": "string",
+          "attachmentUrls": "array of strings",
+          "status": "string (pending | approved | rejected | cancelled)",
+          "remarks": "string",
+          "approvedBy": "string",
+          "approvedByName": "string",
+          "approvedAt": "timestamp",
+          "isHalfDay": "boolean",
+          "halfDayType": "string (first_half | second_half)",
+          "createdAt": "timestamp",
+          "updatedAt": "timestamp"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,279 @@
+// ============================================================
+// FIRESTORE SECURITY RULES FOR EAZY SCHOOL 360
+// ============================================================
+// Deploy these rules to Firebase Console -> Firestore Database -> Rules
+// Or use Firebase CLI: firebase deploy --only firestore:rules
+// ============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================================
+    // HELPER FUNCTIONS
+    // ============================================================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isActive() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isSuperAdmin() {
+      return isSignedIn() && getUserData().role == "super_admin";
+    }
+    
+    function isTenantAdmin() {
+      return isSignedIn() && getUserData().role == "tenant_admin";
+    }
+    
+    function isTeacher() {
+      return isSignedIn() && getUserData().role == "teacher";
+    }
+    
+    function belongsToSchool(schoolId) {
+      return isSignedIn() && getUserData().schoolId == schoolId;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // ============================================================
+    // SCHOOLS COLLECTION
+    // ============================================================
+    match /schools/{schoolId} {
+      // SIGNUP: Any authenticated user can CREATE a school (for registration)
+      // This allows new users to register their school without restrictions
+      allow create: if isSignedIn();
+      
+      // READ: Super admin can read all, others can read their own school
+      allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+      
+      // UPDATE: Super admin or tenant admin of the school (must be active)
+      allow update: if isSignedIn() && (isSuperAdmin() || (isActive() && isTenantAdmin() && belongsToSchool(schoolId)));
+      
+      // DELETE: Only super admin
+      allow delete: if isSignedIn() && isSuperAdmin();
+      
+      // ----------------------------------------------------------
+      // ADMIN USERS SUBCOLLECTION (under schools)
+      // ----------------------------------------------------------
+      match /adminUsers/{adminId} {
+        // SIGNUP: Allow creating admin user during registration (user creating their own record)
+        allow create: if isSignedIn() && request.auth.uid == adminId;
+        
+        // READ: Super admin or the admin themselves
+        allow read: if isSignedIn() && (isSuperAdmin() || request.auth.uid == adminId);
+        
+        // UPDATE/DELETE: Only super admin
+        allow update, delete: if isSignedIn() && isSuperAdmin();
+      }
+      
+      // ----------------------------------------------------------
+      // TEACHERS SUBCOLLECTION
+      // ----------------------------------------------------------
+      match /teachers/{teacherId} {
+        // READ: Active users belonging to the school
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        
+        // CREATE: Active tenant admin or super admin
+        allow create: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        
+        // UPDATE: Active tenant admin, super admin, or the teacher themselves
+        allow update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) || 
+          (isTeacher() && request.auth.uid == teacherId)
+        );
+        
+        // DELETE: Active tenant admin or super admin
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // ----------------------------------------------------------
+      // LEAVE TYPES SUBCOLLECTION
+      // ----------------------------------------------------------
+      match /leaveTypes/{leaveTypeId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // ----------------------------------------------------------
+      // LEAVES SUBCOLLECTION
+      // ----------------------------------------------------------
+      match /leaves/{leaveId} {
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isTeacher() && belongsToSchool(schoolId) && resource.data.teacherId == request.auth.uid)
+        );
+        allow create: if isSignedIn() && isActive() && belongsToSchool(schoolId);
+        allow update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // ----------------------------------------------------------
+      // LEAVE BALANCES SUBCOLLECTION
+      // ----------------------------------------------------------
+      match /leaveBalances/{leaveBalanceId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // ----------------------------------------------------------
+      // SALARY STRUCTURES SUBCOLLECTION
+      // ----------------------------------------------------------
+      match /salaryStructures/{structureId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // ----------------------------------------------------------
+      // PAYROLL SUBCOLLECTION
+      // ----------------------------------------------------------
+      match /payroll/{payrollId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // ----------------------------------------------------------
+      // ATTENDANCE SUBCOLLECTION
+      // ----------------------------------------------------------
+      match /attendance/{attendanceId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) || 
+          (isTeacher() && belongsToSchool(schoolId))
+        );
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // ----------------------------------------------------------
+      // SETTINGS SUBCOLLECTION
+      // ----------------------------------------------------------
+      match /settings/{settingId} {
+        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+    }
+    
+    // ============================================================
+    // USERS COLLECTION
+    // ============================================================
+    match /users/{userId} {
+      // SIGNUP: Allow users to create their own user document during registration
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      
+      // READ: User can read their own data, super admin can read all
+      allow read: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      
+      // UPDATE: User can update their own data, super admin can update all
+      allow update: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      
+      // DELETE: Only super admin
+      allow delete: if isSignedIn() && isSuperAdmin();
+      
+      // ----------------------------------------------------------
+      // NOTIFICATIONS SUBCOLLECTION
+      // ----------------------------------------------------------
+      match /notifications/{notificationId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn() && (isSuperAdmin() || isTenantAdmin());
+        allow update, delete: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+  }
+}
+
+
+// ============================================================
+// STORAGE SECURITY RULES FOR EAZY SCHOOL 360
+// ============================================================
+// Deploy these rules to Firebase Console -> Storage -> Rules
+// Or use Firebase CLI: firebase deploy --only storage
+// ============================================================
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isActive() {
+      return request.auth.token.isActive == true;
+    }
+    
+    function isTenantAdmin() {
+      return request.auth.token.role == 'tenant_admin';
+    }
+    
+    function isSuperAdmin() {
+      return request.auth.token.role == 'super_admin';
+    }
+    
+    function isTeacher() {
+      return request.auth.token.role == 'teacher';
+    }
+    
+    function belongsToSchool(schoolId) {
+      return request.auth.token.schoolId == schoolId;
+    }
+    
+    // ----------------------------------------------------------
+    // SCHOOL LOGOS
+    // ----------------------------------------------------------
+    match /school_logos/{schoolId}/{fileName} {
+      allow read: if true; // Public read access
+      allow write: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+    }
+    
+    // ----------------------------------------------------------
+    // TEACHER DOCUMENTS
+    // ----------------------------------------------------------
+    match /teacher_documents/{schoolId}/{teacherId}/{fileName} {
+      allow read: if isSignedIn() && (isSuperAdmin() || (isActive() && belongsToSchool(schoolId)));
+      allow write: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isTenantAdmin() && belongsToSchool(schoolId)) || 
+        (isTeacher() && belongsToSchool(schoolId) && request.auth.uid == teacherId)
+      );
+    }
+    
+    // ----------------------------------------------------------
+    // LEAVE ATTACHMENTS
+    // ----------------------------------------------------------
+    match /leave_attachments/{schoolId}/{leaveId}/{fileName} {
+      allow read: if isSignedIn() && (isSuperAdmin() || (isActive() && belongsToSchool(schoolId)));
+      allow write: if isSignedIn() && (isSuperAdmin() || (isActive() && belongsToSchool(schoolId)));
+    }
+    
+    // ----------------------------------------------------------
+    // PAYSLIPS
+    // ----------------------------------------------------------
+    match /payslips/{schoolId}/{payrollId}/{fileName} {
+      allow read: if isSignedIn() && (isSuperAdmin() || (isActive() && belongsToSchool(schoolId)));
+      allow write: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+    }
+    
+    // ----------------------------------------------------------
+    // USER AVATARS
+    // ----------------------------------------------------------
+    match /user_avatars/{userId} {
+      allow read: if true; // Public read access
+      allow write: if isSignedIn() && (isSuperAdmin() || request.auth.uid == userId);
+    }
+  }
+}

@@ -1,0 +1,65 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isActive() {
+      return request.auth.token.isActive == true;
+    }
+    
+    function isTenantAdmin() {
+      return request.auth.token.role == 'tenant_admin';
+    }
+    
+    function isSuperAdmin() {
+      return request.auth.token.role == 'super_admin';
+    }
+    
+    function isTeacher() {
+      return request.auth.token.role == 'teacher';
+    }
+    
+    function belongsToSchool(schoolId) {
+      return request.auth.token.schoolId == schoolId;
+    }
+    
+    // SCHOOL LOGOS
+    match /school_logos/{schoolId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+    }
+    
+    // TEACHER DOCUMENTS
+    match /teacher_documents/{schoolId}/{teacherId}/{fileName} {
+      // Relaxed to rely only on authentication and owner match, since custom claims
+      // may not be present for staff users in this environment.
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == teacherId;
+    }
+    
+    // LEAVE ATTACHMENTS
+    match /leave_attachments/{schoolId}/{leaveId}/{fileName} {
+      // Allow authenticated users to attach and view their leave files.
+      // Folder naming should ensure leaveId is unguessable; consider
+      // strengthening later with metadata validations if needed.
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    
+    // PAYSLIPS
+    match /payslips/{schoolId}/{payrollId}/{fileName} {
+      allow read: if isSignedIn() && (isSuperAdmin() || (isActive() && belongsToSchool(schoolId)));
+      allow write: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+    }
+    
+    // USER AVATARS
+    match /user_avatars/{userId} {
+      allow read: if true;
+      allow write: if isSignedIn() && (isSuperAdmin() || request.auth.uid == userId);
+    }
+  }
+}

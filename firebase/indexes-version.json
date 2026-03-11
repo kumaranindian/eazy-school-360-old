@@ -1,0 +1,72 @@
+{
+  "version": "1.0.0",
+  "deploymentId": "indexes-deploy-1766428142787",
+  "timestamp": "2025-12-22T18:29:02.787Z",
+  "indexesFile": "firestore.indexes.json",
+  "deployedIndexes": [
+    {
+      "collectionGroup": "permissions",
+      "fields": "status:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "permissions",
+      "fields": "applicantId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "leaves",
+      "fields": "status:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "leaves",
+      "fields": "applicantId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "leaves",
+      "fields": "applicantId:ASCENDING,status:ASCENDING"
+    },
+    {
+      "collectionGroup": "leaves",
+      "fields": "leaveTypeId:ASCENDING,status:ASCENDING"
+    },
+    {
+      "collectionGroup": "leaves",
+      "fields": "applicantId:ASCENDING,status:ASCENDING,startDate:ASCENDING"
+    },
+    {
+      "collectionGroup": "leaveCancellations",
+      "fields": "status:ASCENDING,requestedAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "leaveCancellations",
+      "fields": "applicantId:ASCENDING,requestedAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "leaveCancellations",
+      "fields": "leaveApplicationId:ASCENDING,status:ASCENDING"
+    },
+    {
+      "collectionGroup": "holidays",
+      "fields": "isActive:ASCENDING,date:ASCENDING"
+    },
+    {
+      "collectionGroup": "staff",
+      "fields": "userId:ASCENDING"
+    },
+    {
+      "collectionGroup": "staff",
+      "fields": "employeeId:ASCENDING"
+    },
+    {
+      "collectionGroup": "users",
+      "fields": "email:ASCENDING"
+    },
+    {
+      "collectionGroup": "users",
+      "fields": "schoolId:ASCENDING,role:ASCENDING"
+    },
+    {
+      "collectionGroup": "users",
+      "fields": "schoolId:ASCENDING,status:ASCENDING"
+    }
+  ]
+}

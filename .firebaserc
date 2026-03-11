@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "dev": "eazy-school-360",
+    "default": "eazy-school-360"
+  },
+  "targets": {},
+  "etags": {}
+}
