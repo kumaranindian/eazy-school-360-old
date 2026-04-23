@@ -10,6 +10,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../../core/providers/auth_provider.dart';
+import '../../shared/widgets/searchable_dropdown.dart';
+import '../../shared/pdf/pdf_branding.dart';
 
 // Dark theme colors
 const Color _bgDark = Color(0xFF0D1117);
@@ -213,7 +215,7 @@ class _FinancialReportsScreenState extends ConsumerState<FinancialReportsScreen>
           totalExam += (s['stuTotalExamFees'] as num?)?.toDouble() ?? 0;
           totalVan += (s['stuTotalVanFees'] as num?)?.toDouble() ?? 0;
           totalAdmission += (s['stuTotalAdmissionFees'] as num?)?.toDouble() ?? 0;
-          totalArrears += (s['stuPendingFees'] as num?)?.toDouble() ?? 0;
+          totalArrears += ((s['arrearTuitionFees'] as num?)?.toDouble() ?? 0) + ((s['arrearExamFees'] as num?)?.toDouble() ?? 0) + ((s['arrearVanFees'] as num?)?.toDouble() ?? 0);
           totalConcession += (s['stuConcessionFees'] as num?)?.toDouble() ?? 0;
           totalCollected += (s['stuPaidTotalFees'] as num?)?.toDouble() ?? 0;
           totalPending += (s['stuBalTotalFees'] as num?)?.toDouble() ?? 0;
@@ -281,7 +283,7 @@ class _FinancialReportsScreenState extends ConsumerState<FinancialReportsScreen>
         sheet.cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 7)).value = DoubleCellValue((d['studPaidVanFees'] as num?)?.toDouble() ?? 0.0);
         sheet.cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 8)).value = DoubleCellValue((d['stuPaidTotalFees'] as num?)?.toDouble() ?? 0.0);
         sheet.cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 9)).value = DoubleCellValue((d['stuConcessionFees'] as num?)?.toDouble() ?? 0.0);
-        sheet.cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 10)).value = DoubleCellValue((d['stuPendingFees'] as num?)?.toDouble() ?? 0.0);
+        sheet.cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 10)).value = DoubleCellValue(((d['arrearTuitionFees'] as num?)?.toDouble() ?? 0.0) + ((d['arrearExamFees'] as num?)?.toDouble() ?? 0.0) + ((d['arrearVanFees'] as num?)?.toDouble() ?? 0.0));
         sheet.cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 11)).value = DoubleCellValue((d['stuBalAdmissionFees'] as num?)?.toDouble() ?? 0.0);
         sheet.cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 12)).value = DoubleCellValue((d['stuBalTutionFees'] as num?)?.toDouble() ?? 0.0);
         sheet.cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 13)).value = DoubleCellValue((d['stuBalExamFees'] as num?)?.toDouble() ?? 0.0);
@@ -413,22 +415,15 @@ class _FinancialReportsScreenState extends ConsumerState<FinancialReportsScreen>
                   const SizedBox(height: 20),
                   const Text('Date Range', style: TextStyle(color: _textSecondary, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(color: _bgDark, borderRadius: BorderRadius.circular(10), border: Border.all(color: _borderColor)),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: selectedRange,
-                        isExpanded: true,
-                        dropdownColor: _cardDark,
-                        style: const TextStyle(color: _textPrimary),
-                        items: ['This Week', 'This Month', 'This Quarter', 'This Fiscal Year', 'Custom'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-                        onChanged: (v) {
-                          if (v == null) return;
-                          setDlgState(() { selectedRange = v; if (v != 'Custom') updateRange(v); });
-                        },
-                      ),
-                    ),
+                  SearchableDropdown<String>(
+                    value: selectedRange,
+                    items: const ['This Week', 'This Month', 'This Quarter', 'This Fiscal Year', 'Custom'],
+                    itemLabel: (v) => v,
+                    hint: 'Select date range',
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setDlgState(() { selectedRange = v; if (v != 'Custom') updateRange(v); });
+                    },
                   ),
                   if (selectedRange == 'Custom') ...[
                     const SizedBox(height: 12),
@@ -523,6 +518,7 @@ class _FinancialReportsScreenState extends ConsumerState<FinancialReportsScreen>
         expenses = expenses.where((e) => (e['isMissedExpense'] ?? 'No') != 'Yes').toList();
       }
 
+      final branding = await PdfBranding.forSchool(_schoolId!);
       final pdf = pw.Document();
       final summaryMap = <String, double>{};
       double grandTotal = 0;
@@ -538,13 +534,12 @@ class _FinancialReportsScreenState extends ConsumerState<FinancialReportsScreen>
       pdf.addPage(pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(20),
-        header: (ctx) => pw.Column(children: [
-          pw.Center(child: pw.Text('Expense Report', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold))),
-          pw.SizedBox(height: 4),
-          pw.Center(child: pw.Text('${DateFormat('dd MMM yyyy').format(start)} - ${DateFormat('dd MMM yyyy').format(end)}', style: const pw.TextStyle(fontSize: 12))),
-          pw.SizedBox(height: 12),
-        ]),
-        footer: (ctx) => pw.Container(alignment: pw.Alignment.center, margin: const pw.EdgeInsets.only(top: 10), child: pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey))),
+        header: (ctx) => PdfBranding.buildHeader(
+          branding,
+          title: 'Expense Report',
+          subtitle: '${DateFormat('dd MMM yyyy').format(start)} - ${DateFormat('dd MMM yyyy').format(end)}',
+        ),
+        footer: (ctx) => PdfBranding.buildFooter(branding, ctx),
         build: (ctx) => [
           pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
@@ -566,12 +561,16 @@ class _FinancialReportsScreenState extends ConsumerState<FinancialReportsScreen>
       ));
 
       // Summary page
-      pdf.addPage(pw.Page(
+      pdf.addPage(pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(20),
-        build: (ctx) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-          pw.Center(child: pw.Text('Expense Summary', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold))),
-          pw.SizedBox(height: 16),
+        header: (ctx) => PdfBranding.buildHeader(
+          branding,
+          title: 'Expense Summary',
+          subtitle: '${DateFormat('dd MMM yyyy').format(start)} - ${DateFormat('dd MMM yyyy').format(end)}',
+        ),
+        footer: (ctx) => PdfBranding.buildFooter(branding, ctx),
+        build: (ctx) => [
           pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
@@ -580,7 +579,7 @@ class _FinancialReportsScreenState extends ConsumerState<FinancialReportsScreen>
           ),
           pw.SizedBox(height: 12),
           pw.Container(alignment: pw.Alignment.centerRight, child: pw.Text('Grand Total: ₹${grandTotal.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold))),
-        ]),
+        ],
       ));
 
       final pdfBytes = await pdf.save();

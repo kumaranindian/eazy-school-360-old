@@ -61,6 +61,8 @@ class UserPermissions {
   final bool canViewAllSchools;
   final bool canManageSubscriptions;
   final bool canAssignAdmins;
+  final bool canAccessStudentDirectory;
+  final bool canUploadSheets;
 
   const UserPermissions({
     this.canManageStaff = false,
@@ -74,6 +76,8 @@ class UserPermissions {
     this.canViewAllSchools = false,
     this.canManageSubscriptions = false,
     this.canAssignAdmins = false,
+    this.canAccessStudentDirectory = false,
+    this.canUploadSheets = false,
   });
 
   factory UserPermissions.fromMap(Map<String, dynamic> map) {
@@ -89,6 +93,8 @@ class UserPermissions {
       canViewAllSchools: map['canViewAllSchools'] as bool? ?? false,
       canManageSubscriptions: map['canManageSubscriptions'] as bool? ?? false,
       canAssignAdmins: map['canAssignAdmins'] as bool? ?? false,
+      canAccessStudentDirectory: map['canAccessStudentDirectory'] as bool? ?? false,
+      canUploadSheets: map['canUploadSheets'] as bool? ?? false,
     );
   }
 
@@ -105,6 +111,8 @@ class UserPermissions {
       'canViewAllSchools': canViewAllSchools,
       'canManageSubscriptions': canManageSubscriptions,
       'canAssignAdmins': canAssignAdmins,
+      'canAccessStudentDirectory': canAccessStudentDirectory,
+      'canUploadSheets': canUploadSheets,
     };
   }
 
@@ -136,6 +144,8 @@ class UserPermissions {
           canApplyLeave: true,
           canRequestPermission: true,
           canViewOwnData: true,
+          canAccessStudentDirectory: true,
+          canUploadSheets: true,
         );
       case UserRole.STAFF:
         return const UserPermissions(

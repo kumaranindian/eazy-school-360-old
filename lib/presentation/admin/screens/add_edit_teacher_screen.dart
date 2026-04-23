@@ -402,16 +402,29 @@ class _AddEditTeacherScreenState extends ConsumerState<AddEditTeacherScreen> {
           role: _selectedRole,
         );
 
-        await repository.createTeacher(widget.schoolId, request);
+        final result = await repository.createTeacher(widget.schoolId, request);
 
         if (mounted) {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Teacher added successfully'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          
+          // Show success dialog with temporary password if it's a new user
+          if (result['isNewAuthUser'] == true && (result['tempPassword'] as String?)?.isNotEmpty == true) {
+            await showDialog(
+              context: context,
+              builder: (_) => _SuccessDialog(
+                name: (result['teacher'] as dynamic)?.name ?? _nameController.text.trim(),
+                email: _emailController.text.trim(),
+                tempPassword: (result['tempPassword'] as String?) ?? '',
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Teacher added successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
         }
       }
     } catch (e) {
@@ -425,5 +438,85 @@ class _AddEditTeacherScreenState extends ConsumerState<AddEditTeacherScreen> {
         });
       }
     }
+  }
+}
+
+// Success Dialog Widget
+class _SuccessDialog extends StatelessWidget {
+  final String name;
+  final String email;
+  final String tempPassword;
+
+  const _SuccessDialog({
+    required this.name,
+    required this.email,
+    required this.tempPassword,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.check_circle, color: Colors.green, size: 24),
+          const SizedBox(width: 8),
+          const Text('Teacher Created Successfully'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Teacher account has been created for:'),
+          const SizedBox(height: 12),
+          _buildInfoRow('Name:', name),
+          _buildInfoRow('Email:', email),
+          _buildInfoRow('Temporary Password:', tempPassword),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              'Please share these login credentials with the teacher. They can change their password after first login.',
+              style: TextStyle(fontSize: 12, color: Colors.blue),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('OK'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          const Text(': '),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

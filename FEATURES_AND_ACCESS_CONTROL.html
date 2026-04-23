@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eazy School 360 - Features & Access Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0D1117 0%, #161B22 100%);
+            color: #E6EDF3;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #161B22;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: white;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+        }
+        
+        .section h2 {
+            color: #4CAF50;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #30363D;
+        }
+        
+        .section h3 {
+            color: #58A6FF;
+            font-size: 1.3em;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        
+        .role-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .badge-super-admin {
+            background: #FF6B6B;
+            color: white;
+        }
+        
+        .badge-admin {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .badge-finance {
+            background: #FFA726;
+            color: white;
+        }
+        
+        .badge-staff {
+            background: #42A5F5;
+            color: white;
+        }
+        
+        .badge-parent {
+            background: #AB47BC;
+            color: white;
+        }
+        
+        .feature-card {
+            background: #0D1117;
+            border: 1px solid #30363D;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            border-color: #4CAF50;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+        }
+        
+        .feature-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #E6EDF3;
+            margin-bottom: 10px;
+        }
+        
+        .feature-description {
+            color: #8B949E;
+            margin-bottom: 15px;
+        }
+        
+        .access-list {
+            margin-top: 10px;
+        }
+        
+        .access-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #21262D;
+        }
+        
+        .access-item:last-child {
+            border-bottom: none;
+        }
+        
+        .access-type {
+            font-weight: 600;
+            color: #4CAF50;
+            min-width: 100px;
+        }
+        
+        .permission-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .new-badge {
+            background: #FF6B6B;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: #0D1117;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        th {
+            background: #21262D;
+            color: #4CAF50;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #21262D;
+        }
+        
+        tr:hover {
+            background: #161B22;
+        }
+        
+        .check {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .cross {
+            color: #F85149;
+            font-weight: bold;
+        }
+        
+        .footer {
+            background: #0D1117;
+            padding: 30px;
+            text-align: center;
+            color: #8B949E;
+            border-top: 1px solid #30363D;
+        }
+        
+        .toc {
+            background: #0D1117;
+            border: 1px solid #30363D;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .toc h3 {
+            color: #4CAF50;
+            margin-bottom: 15px;
+        }
+        
+        .toc ul {
+            list-style: none;
+        }
+        
+        .toc li {
+            padding: 8px 0;
+        }
+        
+        .toc a {
+            color: #58A6FF;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .toc a:hover {
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 Eazy School 360</h1>
+            <p>Complete School Management System - Features & Access Control Documentation</p>
+        </div>
+        
+        <div class="content">
+            <!-- Table of Contents -->
+            <div class="toc">
+                <h3>📋 Table of Contents</h3>
+                <ul>
+                    <li><a href="#roles">User Roles & Permissions</a></li>
+                    <li><a href="#academic-year">Academic Year Management (NEW)</a></li>
+                    <li><a href="#student-promotion">Student Promotion (NEW)</a></li>
+                    <li><a href="#staff-management">Staff Management</a></li>
+                    <li><a href="#student-management">Student Management</a></li>
+                    <li><a href="#finance">Finance Management</a></li>
+                    <li><a href="#leave-permission">Leave & Permission Management</a></li>
+                    <li><a href="#payroll">Payroll Management</a></li>
+                    <li><a href="#reports">Reports & Analytics</a></li>
+                    <li><a href="#settings">Settings & Configuration</a></li>
+                </ul>
+            </div>
+            
+            <!-- User Roles Section -->
+            <div class="section" id="roles">
+                <h2>👥 User Roles & Permissions</h2>
+                
+                <div class="feature-card">
+                    <div class="feature-title">
+                        <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                    </div>
+                    <div class="feature-description">
+                        System-wide administrator with full access to all features across all schools.
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Access:</span>
+                            <span>Full read/write/delete access to all collections and features</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Scope:</span>
+                            <span>All schools in the system</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-title">
+                        <span class="role-badge badge-admin">ADMIN</span>
+                        <span style="color: #8B949E; font-size: 0.9em;">(Also: TENANT_ADMIN)</span>
+                    </div>
+                    <div class="feature-description">
+                        School administrator with full access to their school's data and features.
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Access:</span>
+                            <span>Full management of staff, students, finance, academic years, promotions</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Scope:</span>
+                            <span>Single school (their assigned school only)</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Can:</span>
+                            <span>Approve leaves, manage payroll, configure settings, promote students</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-title">
+                        <span class="role-badge badge-finance">FINANCE</span>
+                        <span style="color: #8B949E; font-size: 0.9em;">(Also: USER, ACCOUNTS)</span>
+                    </div>
+                    <div class="feature-description">
+                        Finance department user with access to financial operations and student fee management.
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Access:</span>
+                            <span>Student fees, bills, expenses, fee structures, arrears, financial reports</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Scope:</span>
+                            <span>Single school (their assigned school only)</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Cannot:</span>
+                            <span>Manage staff, approve leaves, configure policies, promote students</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-title">
+                        <span class="role-badge badge-staff">STAFF</span>
+                        <span style="color: #8B949E; font-size: 0.9em;">(Also: TEACHER)</span>
+                    </div>
+                    <div class="feature-description">
+                        Teaching and non-teaching staff with access to their own data and class teacher features.
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Access:</span>
+                            <span>Own profile, apply for leaves/permissions, view students (if class teacher)</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Class Teacher:</span>
+                            <span>Can approve student leave requests for their assigned class</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Scope:</span>
+                            <span>Own data + assigned class (if class teacher)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Academic Year Management Section -->
+            <div class="section" id="academic-year">
+                <h2>📅 Academic Year Management <span class="new-badge">NEW</span></h2>
+                
+                <div class="feature-card">
+                    <div class="feature-title">Academic Year Configuration</div>
+                    <div class="feature-description">
+                        Manage academic years (May-April) and fiscal years (April-March) for the school.
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Read:</span>
+                            <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                            <span class="role-badge badge-admin">ADMIN</span>
+                            <span class="role-badge badge-finance">FINANCE</span>
+                            <span class="role-badge badge-staff">STAFF</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Create/Update:</span>
+                            <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                            <span class="role-badge badge-admin">ADMIN</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Delete:</span>
+                            <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                            <span class="role-badge badge-admin">ADMIN</span>
+                        </div>
+                    </div>
+                    <div class="feature-description" style="margin-top: 15px;">
+                        <strong>Features:</strong>
+                        <ul style="margin-left: 20px; margin-top: 10px; color: #8B949E;">
+                            <li>Initialize academic years (creates 5 years: -2, -1, current, +1, +2)</li>
+                            <li>Set current academic/fiscal year</li>
+                            <li>Auto-detect current year based on date</li>
+                            <li>View year date ranges</li>
+                            <li>Run data migration for existing schools</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-title">Data Migration</div>
+                    <div class="feature-description">
+                        Migrate existing school data to support academic year system.
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Execute:</span>
+                            <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                            <span class="role-badge badge-admin">ADMIN</span>
+                        </div>
+                    </div>
+                    <div class="feature-description" style="margin-top: 15px;">
+                        <strong>Migration Steps:</strong>
+                        <ul style="margin-left: 20px; margin-top: 10px; color: #8B949E;">
+                            <li>Assign current academic year to all existing students</li>
+                            <li>Assign academic year to fee structures</li>
+                            <li>Assign fiscal year to bills</li>
+                            <li>Verify migration completion</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Student Promotion Section -->
+            <div class="section" id="student-promotion">
+                <h2>🎓 Student Promotion <span class="new-badge">NEW</span></h2>
+                
+                <div class="feature-card">
+                    <div class="feature-title">Class-wise Student Promotion</div>
+                    <div class="feature-description">
+                        Promote students from one class to the next with automatic arrears calculation and carry-forward.
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Execute:</span>
+                            <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                            <span class="role-badge badge-admin">ADMIN</span>
+                        </div>
+                    </div>
+                    <div class="feature-description" style="margin-top: 15px;">
+                        <strong>Features:</strong>
+                        <ul style="margin-left: 20px; margin-top: 10px; color: #8B949E;">
+                            <li>Single student promotion</li>
+                            <li>Bulk class promotion (all students in a class-section)</li>
+                            <li>School-wide promotion (all classes)</li>
+                            <li>Automatic class progression (Pre-KG → LKG → ... → XII → GRADUATED)</li>
+                            <li>Calculate pending fees as arrears</li>
+                            <li>Create arrears records automatically</li>
+                            <li>Update student academic year</li>
+                            <li>View promotion summary with arrears created</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-title">Arrears Management</div>
+                    <div class="feature-description">
+                        Track and manage pending fees carried forward from previous academic years.
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Read:</span>
+                            <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                            <span class="role-badge badge-admin">ADMIN</span>
+                            <span class="role-badge badge-finance">FINANCE</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Create/Update:</span>
+                            <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                            <span class="role-badge badge-admin">ADMIN</span>
+                            <span class="role-badge badge-finance">FINANCE</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Delete:</span>
+                            <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                            <span class="role-badge badge-admin">ADMIN</span>
+                        </div>
+                    </div>
+                    <div class="feature-description" style="margin-top: 15px;">
+                        <strong>Arrears Features:</strong>
+                        <ul style="margin-left: 20px; margin-top: 10px; color: #8B949E;">
+                            <li>Automatic calculation during promotion</li>
+                            <li>Track arrears status (PENDING, PAID, PARTIALLY_PAID, WAIVED)</li>
+                            <li>Record payments towards arrears</li>
+                            <li>Waive arrears with reason</li>
+                            <li>View arrears history per student</li>
+                            <li>Bulk arrears creation for class/school</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Staff Management Section -->
+            <div class="section" id="staff-management">
+                <h2>👨‍🏫 Staff Management</h2>
+                
+                <div class="permission-grid">
+                    <div class="feature-card">
+                        <div class="feature-title">Staff Directory</div>
+                        <div class="feature-description">View and manage all staff members</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Read:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                            </div>
+                            <div class="access-item">
+                                <span class="access-type">Create/Update:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Class Teacher Assignment</div>
+                        <div class="feature-description">Assign teachers to classes and sections</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Manage:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Staff Profile</div>
+                        <div class="feature-description">View and update own profile</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Own Data:</span>
+                                <span class="role-badge badge-staff">STAFF</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Student Management Section -->
+            <div class="section" id="student-management">
+                <h2>👨‍🎓 Student Management</h2>
+                
+                <div class="permission-grid">
+                    <div class="feature-card">
+                        <div class="feature-title">Student Directory</div>
+                        <div class="feature-description">View and manage all students</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Read:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                                <span class="role-badge badge-finance">FINANCE</span>
+                            </div>
+                            <div class="access-item">
+                                <span class="access-type">Create/Update:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                                <span class="role-badge badge-finance">FINANCE</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Student Leave Approval</div>
+                        <div class="feature-description">Approve/reject student leave requests</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Approve:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                                <span class="role-badge badge-staff">CLASS TEACHER</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Delete Student</div>
+                        <div class="feature-description">Remove student records</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Delete:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Finance Management Section -->
+            <div class="section" id="finance">
+                <h2>💰 Finance Management</h2>
+                
+                <div class="permission-grid">
+                    <div class="feature-card">
+                        <div class="feature-title">Fee Management</div>
+                        <div class="feature-description">Manage student fees and fee structures</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Full Access:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                                <span class="role-badge badge-finance">FINANCE</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Bill Management</div>
+                        <div class="feature-description">Create and manage bills</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Full Access:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                                <span class="role-badge badge-finance">FINANCE</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Expense Entry</div>
+                        <div class="feature-description">Record school expenses</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Create:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                                <span class="role-badge badge-finance">FINANCE</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Upload Sheet</div>
+                        <div class="feature-description">Bulk upload data via Excel</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Upload:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                                <span class="role-badge badge-finance">FINANCE</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Leave & Permission Management Section -->
+            <div class="section" id="leave-permission">
+                <h2>📋 Leave & Permission Management</h2>
+                
+                <div class="permission-grid">
+                    <div class="feature-card">
+                        <div class="feature-title">Apply Leave</div>
+                        <div class="feature-description">Staff can apply for leave</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Apply:</span>
+                                <span class="role-badge badge-staff">STAFF</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Leave Approval</div>
+                        <div class="feature-description">Approve/reject leave requests</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Approve:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Leave Policy</div>
+                        <div class="feature-description">Configure leave types and policies</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Configure:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Permission Requests</div>
+                        <div class="feature-description">Request and approve permissions</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Request:</span>
+                                <span class="role-badge badge-staff">STAFF</span>
+                            </div>
+                            <div class="access-item">
+                                <span class="access-type">Approve:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Payroll Management Section -->
+            <div class="section" id="payroll">
+                <h2>💵 Payroll Management</h2>
+                
+                <div class="feature-card">
+                    <div class="feature-title">Payroll Processing</div>
+                    <div class="feature-description">
+                        Manage staff salaries, salary structures, and payroll processing
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Full Access:</span>
+                            <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                            <span class="role-badge badge-admin">ADMIN</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">View Own:</span>
+                            <span class="role-badge badge-staff">STAFF</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Reports Section -->
+            <div class="section" id="reports">
+                <h2>📊 Reports & Analytics</h2>
+                
+                <div class="feature-card">
+                    <div class="feature-title">Financial Reports</div>
+                    <div class="feature-description">
+                        View comprehensive financial reports, fee collection analysis, and expense tracking
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">View:</span>
+                            <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                            <span class="role-badge badge-admin">ADMIN</span>
+                            <span class="role-badge badge-finance">FINANCE</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Settings Section -->
+            <div class="section" id="settings">
+                <h2>⚙️ Settings & Configuration</h2>
+                
+                <div class="permission-grid">
+                    <div class="feature-card">
+                        <div class="feature-title">School Settings</div>
+                        <div class="feature-description">Configure school details and preferences</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Configure:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Holiday Management</div>
+                        <div class="feature-description">Manage school holidays and calendar</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Manage:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-title">Finance Users</div>
+                        <div class="feature-description">Manage finance department users</div>
+                        <div class="access-list">
+                            <div class="access-item">
+                                <span class="access-type">Manage:</span>
+                                <span class="role-badge badge-super-admin">SUPER ADMIN</span>
+                                <span class="role-badge badge-admin">ADMIN</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Access Control Matrix -->
+            <div class="section">
+                <h2>🔐 Complete Access Control Matrix</h2>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            <th>Super Admin</th>
+                            <th>Admin</th>
+                            <th>Finance</th>
+                            <th>Staff</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Academic Year Management</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Read</td>
+                            <td class="check">✓ Read</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Student Promotion</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                            <td class="cross">✗</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Arrears Management</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Staff Management</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                            <td class="check">✓ Own</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Student Management</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Fee Management</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Bill Management</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Expense Entry</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Leave Approval</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                            <td class="check">✓ Apply</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Permission Approval</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                            <td class="check">✓ Request</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Payroll Management</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                            <td class="check">✓ View Own</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Financial Reports</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Holiday Management</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                            <td class="check">✓ Read</td>
+                        </tr>
+                        <tr>
+                            <td><strong>School Settings</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                            <td class="cross">✗</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Student Leave Approval</strong></td>
+                            <td class="check">✓ Full</td>
+                            <td class="check">✓ Full</td>
+                            <td class="cross">✗</td>
+                            <td class="check">✓ Class Only</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Firestore Collections -->
+            <div class="section">
+                <h2>🗄️ Firestore Collections & Security</h2>
+                
+                <h3>New Collections (Academic Year System)</h3>
+                <div class="feature-card">
+                    <div class="feature-title">schools/{schoolId}/academicYears</div>
+                    <div class="feature-description">
+                        Stores academic year records (May-April cycle)
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Read:</span>
+                            <span>All authenticated users in the school</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Write:</span>
+                            <span>SUPER_ADMIN, ADMIN only</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-title">schools/{schoolId}/fiscalYears</div>
+                    <div class="feature-description">
+                        Stores fiscal year records (April-March cycle)
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Read:</span>
+                            <span>All authenticated users in the school</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Write:</span>
+                            <span>SUPER_ADMIN, ADMIN only</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-title">schools/{schoolId}/arrears</div>
+                    <div class="feature-description">
+                        Tracks pending fees carried forward from previous years
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Read:</span>
+                            <span>SUPER_ADMIN, ADMIN, FINANCE</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Write:</span>
+                            <span>SUPER_ADMIN, ADMIN, FINANCE</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-title">schools/{schoolId}/studentLeaves</div>
+                    <div class="feature-description">
+                        Student leave requests and approvals
+                    </div>
+                    <div class="access-list">
+                        <div class="access-item">
+                            <span class="access-type">Read:</span>
+                            <span>SUPER_ADMIN, ADMIN, STAFF (class teacher)</span>
+                        </div>
+                        <div class="access-item">
+                            <span class="access-type">Write:</span>
+                            <span>SUPER_ADMIN, ADMIN, STAFF (class teacher for approval)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>Eazy School 360</strong> - Complete School Management System</p>
+            <p>Last Updated: April 18, 2026</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">
+                For technical support or feature requests, contact your system administrator.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

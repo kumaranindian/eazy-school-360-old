@@ -12,6 +12,12 @@ class FeePayment {
   final String className;
   final String section;
   final String academicYear;
+  final String fiscalYear;
+  /// For arrears payments: the academic year the unpaid fees originated from.
+  /// When empty, defaults to [academicYear] (regular current-year payment).
+  final String originatingAcademicYear;
+  /// For arrears payments: the class the student was in when the arrears were incurred.
+  final String originatingClass;
   
   // Payment breakdown
   final double admissionFeePaid;
@@ -45,6 +51,9 @@ class FeePayment {
     required this.className,
     required this.section,
     required this.academicYear,
+    this.fiscalYear = '',
+    this.originatingAcademicYear = '',
+    this.originatingClass = '',
     this.admissionFeePaid = 0.0,
     this.tuitionFeePaid = 0.0,
     this.examFeePaid = 0.0,
@@ -74,6 +83,9 @@ class FeePayment {
       className: data['className'] as String? ?? '',
       section: data['section'] as String? ?? '',
       academicYear: data['academicYear'] as String? ?? '',
+      fiscalYear: data['fiscalYear'] as String? ?? '',
+      originatingAcademicYear: data['originatingAcademicYear'] as String? ?? '',
+      originatingClass: data['originatingClass'] as String? ?? '',
       admissionFeePaid: (data['admissionFeePaid'] as num?)?.toDouble() ?? 0.0,
       tuitionFeePaid: (data['tuitionFeePaid'] as num?)?.toDouble() ?? 0.0,
       examFeePaid: (data['examFeePaid'] as num?)?.toDouble() ?? 0.0,
@@ -125,6 +137,9 @@ class FeePayment {
       'className': className,
       'section': section,
       'academicYear': academicYear,
+      'fiscalYear': fiscalYear,
+      'originatingAcademicYear': originatingAcademicYear.isEmpty ? academicYear : originatingAcademicYear,
+      'originatingClass': originatingClass.isEmpty ? className : originatingClass,
       'admissionFeePaid': admissionFeePaid,
       'tuitionFeePaid': tuitionFeePaid,
       'examFeePaid': examFeePaid,
@@ -164,6 +179,9 @@ class FeePayment {
     String? className,
     String? section,
     String? academicYear,
+    String? fiscalYear,
+    String? originatingAcademicYear,
+    String? originatingClass,
     double? admissionFeePaid,
     double? tuitionFeePaid,
     double? examFeePaid,
@@ -190,6 +208,9 @@ class FeePayment {
       className: className ?? this.className,
       section: section ?? this.section,
       academicYear: academicYear ?? this.academicYear,
+      fiscalYear: fiscalYear ?? this.fiscalYear,
+      originatingAcademicYear: originatingAcademicYear ?? this.originatingAcademicYear,
+      originatingClass: originatingClass ?? this.originatingClass,
       admissionFeePaid: admissionFeePaid ?? this.admissionFeePaid,
       tuitionFeePaid: tuitionFeePaid ?? this.tuitionFeePaid,
       examFeePaid: examFeePaid ?? this.examFeePaid,

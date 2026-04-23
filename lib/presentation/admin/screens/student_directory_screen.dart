@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,6 +9,7 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../data/repositories/student_repository.dart';
 import '../../../domain/entities/student.dart';
 import '../../../domain/entities/app_user.dart';
+import '../../../domain/entities/academic_year.dart';
 import '../../../firebase_options.dart';
 
 class StudentDirectoryScreen extends ConsumerStatefulWidget {
@@ -22,6 +24,7 @@ class _StudentDirectoryScreenState extends ConsumerState<StudentDirectoryScreen>
   String? _filterClass;
   String? _filterSection;
   String? _filterLoginStatus;
+  String? _filterAcademicYear;
   final _searchController = TextEditingController();
   bool _isBulkCreating = false;
 
@@ -542,15 +545,48 @@ class _StudentDirectoryScreenState extends ConsumerState<StudentDirectoryScreen>
             ),
           ),
           const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: () => _showEditStudentDialog(context, student, schoolId),
-            icon: const Icon(Icons.edit_outlined, size: 16),
-            label: const Text('Edit Student'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _textSecondary,
-              side: const BorderSide(color: _borderColor),
-              minimumSize: const Size(double.infinity, 38),
-            ),
+          // Action buttons row
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _showEditStudentDialog(context, student, schoolId),
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text('Edit Student'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _textSecondary,
+                    side: const BorderSide(color: _borderColor),
+                    minimumSize: const Size(double.infinity, 38),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _viewStudentBills(context, student, schoolId),
+                  icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                  label: const Text('View Bills'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.green,
+                    side: const BorderSide(color: Colors.green),
+                    minimumSize: const Size(double.infinity, 38),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _viewStudentFeeDetails(context, student, schoolId),
+                  icon: const Icon(Icons.account_balance_wallet_outlined, size: 16),
+                  label: const Text('Fee Details'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.blue,
+                    side: const BorderSide(color: Colors.blue),
+                    minimumSize: const Size(double.infinity, 38),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -574,114 +610,477 @@ class _StudentDirectoryScreenState extends ConsumerState<StudentDirectoryScreen>
     final parentNameController = TextEditingController(text: existingStudent?.parentName ?? '');
     final parentPhoneController = TextEditingController(text: existingStudent?.parentPhone ?? '');
     final parentEmailController = TextEditingController(text: existingStudent?.parentEmail ?? '');
+    final concessionCtrl = TextEditingController(text: '0');
+    final arrearTuitionCtrl = TextEditingController(text: '0');
+    final arrearExamCtrl = TextEditingController(text: '0');
+    final arrearVanCtrl = TextEditingController(text: '0');
     String selectedClass = existingStudent?.className ?? 'I';
     String selectedSection = existingStudent?.section ?? 'A';
+    String vanAvailed = existingStudent?.isVanAvailed == true ? 'Yes' : 'No';
+    bool feeLoading = isEditing;
+    Map<String, dynamic>? feeData;
+    String? feeDocId;
+    // Fee structure loading
+    Map<String, dynamic>? feeStructure;
+    bool feeStructureLoading = false;
+    late TextEditingController vanFeeCtrl;
+    vanFeeCtrl = TextEditingController(text: '0'); // Initialize immediately
+    
+    // Academic year selection
+    String selectedAcademicYear = existingStudent?.academicYearCode ?? AcademicYear.getCurrentYearCode();
+    
+    // Helper function to get academic year options
+    List<String> _academicYearOptions() {
+      final current = DateTime.now();
+      final base = current.month >= 5 ? current.year : current.year - 1;
+      return List.generate(7, (i) {
+        final year = base + i - 3; // 3 years before to 3 years after
+        return '$year-${(year + 1) % 100}';
+      });
+    }
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: _cardDark,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(isEditing ? 'Edit Student' : 'Add New Student', style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
-          content: SizedBox(
-            width: 440,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+        builder: (ctx, setDialogState) {
+          // Helper function to load fee structure
+          Future<void> _loadFeeStructure(String className, String schoolId, StateSetter setDialogState) async {
+            if (className.isEmpty) {
+              setDialogState(() {
+                feeStructure = null;
+                feeStructureLoading = false;
+              });
+              return;
+            }
+            
+            setDialogState(() => feeStructureLoading = true);
+            try {
+              print('🔍 Loading fee structure for class: $className, schoolId: $schoolId');
+              
+              final snap = await FirebaseFirestore.instance
+                  .collection('schools')
+                  .doc(schoolId)
+                  .collection('fee_structures')
+                  .where('className', isEqualTo: className)
+                  .where('isActive', isEqualTo: true)
+                  .limit(1)
+                  .get();
+              
+              print('📊 Found ${snap.docs.length} fee structure documents');
+              
+              if (snap.docs.isNotEmpty) {
+                final data = snap.docs.first.data();
+                print('✅ Fee structure found: $data');
+                setDialogState(() {
+                  feeStructure = data;
+                  vanFeeCtrl.text = data['vanFee']?.toString() ?? '0';
+                  feeStructureLoading = false;
+                });
+              } else {
+                print('❌ No fee structure found for class: $className');
+                // Try to see what fee structures exist
+                final allSnap = await FirebaseFirestore.instance
+                    .collection('schools')
+                    .doc(schoolId)
+                    .collection('fee_structures')
+                    .get();
+                print('📋 All fee structures in database:');
+                for (var doc in allSnap.docs) {
+                  final data = doc.data();
+                  print('  - ${data['className']} (isActive: ${data['isActive']})');
+                }
+                
+                setDialogState(() {
+                  feeStructure = null;
+                  vanFeeCtrl.text = '0';
+                  feeStructureLoading = false;
+                });
+              }
+            } catch (e) {
+              print('🚨 Error loading fee structure: $e');
+              setDialogState(() {
+                feeStructure = null;
+                vanFeeCtrl.text = '0';
+                feeStructureLoading = false;
+              });
+            }
+          }
+          
+          // Helper function to display fee info row
+          Widget _feeInfoRow(String label, dynamic value) {
+            final amt = (value as num?)?.toDouble() ?? 0;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _formField('Student Name *', nameController, Icons.person_outline),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(child: _formDropdown('Class *', selectedClass, ['Pre-KG', 'LKG', 'UKG', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'], (v) => setDialogState(() => selectedClass = v!))),
-                      const SizedBox(width: 12),
-                      Expanded(child: _formDropdown('Section *', selectedSection, ['A', 'B', 'C', 'D'], (v) => setDialogState(() => selectedSection = v!))),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _formField('Student Phone', phoneController, Icons.phone_outlined),
-                  const Divider(height: 28, color: _borderColor),
-                  const Align(alignment: Alignment.centerLeft, child: Text('Parent / Guardian Details', style: TextStyle(color: _accentBlue, fontWeight: FontWeight.w600, fontSize: 13))),
-                  const SizedBox(height: 12),
-                  _formField('Parent Name', parentNameController, Icons.family_restroom_outlined),
-                  const SizedBox(height: 12),
-                  _formField('Parent Mobile *', parentPhoneController, Icons.phone_android_outlined),
-                  const SizedBox(height: 12),
-                  _formField('Parent Email *', parentEmailController, Icons.email_outlined),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.info_outline, size: 16, color: Colors.blue),
-                        SizedBox(width: 8),
-                        Expanded(child: Text('Parent email is used as login ID. Default password = mobile number.', style: TextStyle(color: Colors.blue, fontSize: 11))),
-                      ],
-                    ),
-                  ),
+                  Text(label, style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                  Text('₹${amt.toStringAsFixed(0)}', style: TextStyle(
+                    color: amt > 0 ? _textPrimary : _textSecondary,
+                    fontWeight: FontWeight.w600, fontSize: 12,
+                  )),
                 ],
               ),
+            );
+          }
+          
+          return AlertDialog(
+            backgroundColor: _cardDark,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(isEditing ? 'Edit Student' : 'Add New Student', style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
+            content: SizedBox(
+              width: 440,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _formField('Student Name *', nameController, Icons.person_outline),
+                    const SizedBox(height: 12),
+                    // Academic Year Selection
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.calendar_today_outlined, color: Colors.blue, size: 16),
+                              const SizedBox(width: 6),
+                              const Text('Academic Year', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600, fontSize: 12)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _academicYearOptions().map((yr) {
+                              final isSelected = selectedAcademicYear == yr;
+                              final isCurrent = yr == AcademicYear.getCurrentYearCode();
+                              return ChoiceChip(
+                                label: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(yr, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : _textPrimary)),
+                                    if (isCurrent) ...[
+                                      const SizedBox(width: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(color: isSelected ? Colors.white : Colors.blue, borderRadius: BorderRadius.circular(8)),
+                                        child: Text('Current', style: TextStyle(fontSize: 8, color: isSelected ? Colors.blue : Colors.white)),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                selected: isSelected,
+                                onSelected: isEditing ? null : (_) => setDialogState(() => selectedAcademicYear = yr),
+                                backgroundColor: _bgDark,
+                                selectedColor: Colors.blue,
+                                side: BorderSide(color: isSelected ? Colors.blue : _borderColor),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: _formDropdown('Class *', selectedClass, ['Pre-KG', 'LKG', 'UKG', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'], (v) {
+                          setDialogState(() {
+                            selectedClass = v!;
+                            feeStructure = null;
+                            feeStructureLoading = true;
+                          });
+                          if (v!.isNotEmpty) {
+                            _loadFeeStructure(v, schoolId, setDialogState);
+                          }
+                        })),
+                        const SizedBox(width: 12),
+                        Expanded(child: _formDropdown('Section *', selectedSection, ['A', 'B', 'C', 'D'], (v) => setDialogState(() => selectedSection = v!))),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _formField('Student Phone', phoneController, Icons.phone_outlined),
+                    const Divider(height: 28, color: _borderColor),
+                    const Align(alignment: Alignment.centerLeft, child: Text('Parent / Guardian Details', style: TextStyle(color: _accentBlue, fontWeight: FontWeight.w600, fontSize: 13))),
+                    const SizedBox(height: 12),
+                    _formField('Parent Name', parentNameController, Icons.family_restroom_outlined),
+                    const SizedBox(height: 12),
+                    _formField('Parent Mobile *', parentPhoneController, Icons.phone_android_outlined),
+                    const SizedBox(height: 12),
+                    _formField('Parent Email *', parentEmailController, Icons.email_outlined),
+                    const SizedBox(height: 8),
+                    
+                    // Transport Option
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.purple.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.directions_bus_outlined, color: Colors.purple, size: 16),
+                              const SizedBox(width: 6),
+                              const Text('Transport Facility', style: TextStyle(color: Colors.purple, fontWeight: FontWeight.w600, fontSize: 12)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _formDropdown('Transport Required', vanAvailed, ['No', 'Yes'], (value) {
+                                  setDialogState(() {
+                                    vanAvailed = value!;
+                                  });
+                                }),
+                              ),
+                            ],
+                          ),
+                          if (vanAvailed == 'Yes') ...[
+                            const SizedBox(height: 8),
+                            _formField('Van Fee Amount', vanFeeCtrl, Icons.directions_bus_outlined,
+                              onChanged: (value) {
+                                print('🚌 Van fee changed to: $value');
+                                setDialogState(() {});
+                              }),
+                            if (feeStructure != null) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.purple.withValues(alpha: 0.2))
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.info_outline, color: Colors.purple, size: 16),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Default van fee: ₹${((feeStructure!['vanFee'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}. You can modify as needed.',
+                                        style: TextStyle(color: Colors.purple, fontSize: 11),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // Fee Structure Display
+                    if (selectedClass.isNotEmpty) ...[
+                      const Divider(height: 28, color: _borderColor),
+                      const Align(alignment: Alignment.centerLeft, child: Text('Fee Structure', style: TextStyle(color: _accentBlue, fontWeight: FontWeight.w600, fontSize: 13))),
+                      const SizedBox(height: 12),
+                      if (feeStructureLoading)
+                        const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator(color: _accentBlue, strokeWidth: 2)))
+                      else if (feeStructure != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(color: _bgDark, borderRadius: BorderRadius.circular(8)),
+                          child: Column(
+                            children: [
+                              _feeInfoRow('Tuition Fee', feeStructure!['tuitionFee']),
+                              _feeInfoRow('Exam Fee', feeStructure!['examFee']),
+                              if (feeStructure!['vanFee'] != null) _feeInfoRow('Van Fee', feeStructure!['vanFee']),
+                              _feeInfoRow('Total Fee', ((feeStructure!['tuitionFee'] as num?)?.toDouble() ?? 0) + ((feeStructure!['examFee'] as num?)?.toDouble() ?? 0) + ((feeStructure!['vanFee'] as num?)?.toDouble() ?? 0)),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                              SizedBox(width: 8),
+                              Expanded(child: Text('No fee structure found for this class', style: TextStyle(color: Colors.red, fontSize: 12))),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      
+                      // Concession and Arrears Section
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Fee Adjustments', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w600, fontSize: 13)),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(child: _formField('Concession', concessionCtrl, Icons.discount_outlined, 
+                                  onChanged: (value) => setDialogState(() {}))),
+                                const SizedBox(width: 12),
+                                Expanded(child: _formField('Arrear Tuition', arrearTuitionCtrl, Icons.money_off_outlined,
+                                  onChanged: (value) => setDialogState(() {}))),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(child: _formField('Arrear Exam', arrearExamCtrl, Icons.money_off_outlined,
+                                  onChanged: (value) => setDialogState(() {}))),
+                                const SizedBox(width: 12),
+                                Expanded(child: _formField('Arrear Van', arrearVanCtrl, Icons.money_off_outlined,
+                                  onChanged: (value) => setDialogState(() {}))),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // Fee Summary with Arrears (only show if fee structure exists)
+                            if (feeStructure != null) ...[
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: _bgDark, 
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: _accentBlue.withValues(alpha: 0.3))
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(Icons.calculate_outlined, color: _accentBlue, size: 16),
+                                        const SizedBox(width: 6),
+                                        const Text('Fee Summary (Live Calculation)', style: TextStyle(color: _accentBlue, fontWeight: FontWeight.w600, fontSize: 12)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _buildTransportAwareFeeSummary(feeStructure!, vanAvailed, concessionCtrl, arrearTuitionCtrl, arrearExamCtrl, arrearVanCtrl, vanFeeCtrl),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 16, color: Colors.blue),
+                          SizedBox(width: 8),
+                          Expanded(child: Text('Parent email is used as login ID. Default password = mobile number.', style: TextStyle(color: Colors.blue, fontSize: 11))),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: _textSecondary))),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Student name is required'), backgroundColor: Colors.red));
-                  return;
-                }
-                try {
-                  final repo = ref.read(studentRepositoryProvider);
-                  final now = DateTime.now();
-                  if (isEditing) {
-                    final updated = existingStudent.copyWith(
-                      name: nameController.text.trim(),
-                      className: selectedClass,
-                      section: selectedSection,
-                      phoneNumber: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
-                      parentName: parentNameController.text.trim().isEmpty ? null : parentNameController.text.trim(),
-                      parentPhone: parentPhoneController.text.trim().isEmpty ? null : parentPhoneController.text.trim(),
-                      parentEmail: parentEmailController.text.trim().isEmpty ? null : parentEmailController.text.trim(),
-                      updatedAt: now,
-                    );
-                    await repo.updateStudent(schoolId, existingStudent.id, updated);
-                  } else {
-                    final nextId = await repo.getNextStudentId(schoolId);
-                    final newStudent = Student(
-                      id: '',
-                      schoolId: schoolId,
-                      studentId: nextId,
-                      name: nameController.text.trim(),
-                      className: selectedClass,
-                      section: selectedSection,
-                      phoneNumber: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
-                      parentName: parentNameController.text.trim().isEmpty ? null : parentNameController.text.trim(),
-                      parentPhone: parentPhoneController.text.trim().isEmpty ? null : parentPhoneController.text.trim(),
-                      parentEmail: parentEmailController.text.trim().isEmpty ? null : parentEmailController.text.trim(),
-                      status: StudentStatus.ACTIVE,
-                      createdAt: now,
-                      updatedAt: now,
-                    );
-                    await repo.createStudent(schoolId, newStudent);
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: _textSecondary))),
+              ElevatedButton(
+                onPressed: () async {
+                  if (nameController.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Student name is required'), backgroundColor: Colors.red));
+                    return;
                   }
-                  if (ctx.mounted) {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEditing ? 'Student updated' : 'Student added'), backgroundColor: _accentBlue));
+                  
+                  // Validate concession and arrears are valid numbers
+                  final concession = concessionCtrl.text.trim();
+                  final arrearTuition = arrearTuitionCtrl.text.trim();
+                  final arrearExam = arrearExamCtrl.text.trim();
+                  final arrearVan = arrearVanCtrl.text.trim();
+                  
+                  if (concession.isNotEmpty && double.tryParse(concession) == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Concession must be a valid number'), backgroundColor: Colors.red));
+                    return;
                   }
-                } catch (e) {
-                  if (ctx.mounted) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                  if (arrearTuition.isNotEmpty && double.tryParse(arrearTuition) == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Arrear Tuition must be a valid number'), backgroundColor: Colors.red));
+                    return;
                   }
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: _accentBlue),
-              child: Text(isEditing ? 'Update' : 'Add Student', style: const TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
+                  if (arrearExam.isNotEmpty && double.tryParse(arrearExam) == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Arrear Exam must be a valid number'), backgroundColor: Colors.red));
+                    return;
+                  }
+                  if (arrearVan.isNotEmpty && double.tryParse(arrearVan) == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Arrear Van must be a valid number'), backgroundColor: Colors.red));
+                    return;
+                  }
+                  
+                  // Validate fee structure exists when adding new student
+                  if (!isEditing && feeStructure == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Fee structure not found for selected class'), backgroundColor: Colors.red));
+                    return;
+                  }
+                  
+                  try {
+                    final repo = ref.read(studentRepositoryProvider);
+                    final now = DateTime.now();
+                    if (isEditing) {
+                      final updated = existingStudent.copyWith(
+                        name: nameController.text.trim(),
+                        className: selectedClass,
+                        section: selectedSection,
+                        phoneNumber: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
+                        parentName: parentNameController.text.trim().isEmpty ? null : parentNameController.text.trim(),
+                        parentPhone: parentPhoneController.text.trim().isEmpty ? null : parentPhoneController.text.trim(),
+                        parentEmail: parentEmailController.text.trim().isEmpty ? null : parentEmailController.text.trim(),
+                        updatedAt: now,
+                      );
+                      await repo.updateStudent(schoolId, existingStudent.id, updated);
+                    } else {
+                      final nextId = await repo.getNextStudentId(schoolId);
+                      final newStudent = Student(
+                        id: '',
+                        schoolId: schoolId,
+                        studentId: nextId,
+                        name: nameController.text.trim(),
+                        className: selectedClass,
+                        section: selectedSection,
+                        phoneNumber: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
+                        parentName: parentNameController.text.trim().isEmpty ? null : parentNameController.text.trim(),
+                        parentPhone: parentPhoneController.text.trim().isEmpty ? null : parentPhoneController.text.trim(),
+                        parentEmail: parentEmailController.text.trim().isEmpty ? null : parentEmailController.text.trim(),
+                        isVanAvailed: vanAvailed == 'Yes',
+                        status: StudentStatus.ACTIVE,
+                        academicYearCode: selectedAcademicYear, // Use selected academic year
+                        createdAt: now,
+                        updatedAt: now,
+                      );
+                      await repo.createStudent(schoolId, newStudent);
+                      
+                      // Create student fee details with concession and arrears
+                      if (feeStructure != null) {
+                        await _createStudentFeeDetails(schoolId, nextId.toString(), feeStructure!, 
+                            concessionCtrl.text, arrearTuitionCtrl.text, arrearExamCtrl.text, arrearVanCtrl.text,
+                            nameController.text.trim(), selectedSection, selectedAcademicYear, vanAvailed, vanFeeCtrl.text);
+                      }
+                    }
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEditing ? 'Student updated' : 'Student added'), backgroundColor: _accentBlue));
+                    }
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: _accentBlue),
+                child: Text(isEditing ? 'Update' : 'Add Student', style: const TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1121,10 +1520,11 @@ class _StudentDirectoryScreenState extends ConsumerState<StudentDirectoryScreen>
 
   // ─── Helpers ──────────────────────────────────────────────────────
 
-  Widget _formField(String label, TextEditingController controller, IconData icon) {
+  Widget _formField(String label, TextEditingController controller, IconData icon, {Function(String)? onChanged}) {
     return TextField(
       controller: controller,
       style: const TextStyle(color: _textPrimary),
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: _textSecondary),
@@ -1157,6 +1557,96 @@ class _StudentDirectoryScreenState extends ConsumerState<StudentDirectoryScreen>
     );
   }
 
+
+  Future<void> _createStudentFeeDetails(String schoolId, String studentId, Map<String, dynamic> feeStructure, 
+    String concession, String arrearTuition, String arrearExam, String arrearVan, String studentName, String studentSection, String academicYear, String vanAvailed, String vanFeeText) async {
+    try {
+      final tuitionFee = (feeStructure['tuitionFee'] as num?)?.toDouble() ?? 0;
+      final examFee = (feeStructure['examFee'] as num?)?.toDouble() ?? 0;
+      final vanFee = vanAvailed == 'Yes' ? double.tryParse(vanFeeText) ?? 0 : 0;
+      final concessionAmount = double.tryParse(concession) ?? 0;
+      final arrearTuitionAmount = double.tryParse(arrearTuition) ?? 0;
+      final arrearExamAmount = double.tryParse(arrearExam) ?? 0;
+      final arrearVanAmount = vanAvailed == 'Yes' ? double.tryParse(arrearVan) ?? 0 : 0;
+      
+      final totalFee = tuitionFee + examFee + vanFee;
+      final totalPaid = 0.0;
+      final totalConcession = concessionAmount;
+      final totalArrears = arrearTuitionAmount + arrearExamAmount + arrearVanAmount;
+      
+      // Calculate balances for each fee type
+      final balTuition = (tuitionFee + arrearTuitionAmount) - totalConcession - totalPaid;
+      final balExam = (examFee + arrearExamAmount) - totalPaid;
+      final balVan = (vanFee + arrearVanAmount) - totalPaid;
+      final balTotal = totalFee + totalArrears - totalConcession - totalPaid;
+      
+      final feeData = {
+        'stuId': studentId,
+        'stuName': studentName, // Use actual student name
+        'stuClass': feeStructure['className'] ?? '',
+        'stuSection': studentSection, // Use actual student section
+        'stuConcessionFees': totalConcession,
+        'arrearTuitionFees': arrearTuitionAmount,
+        'arrearExamFees': arrearExamAmount,
+        'arrearVanFees': arrearVanAmount,
+        'isStuAvailVan': vanAvailed == 'Yes' ? 'y' : 'n',
+        'stuTotalVanFees': vanFee,
+        'stuTotalTutionFees': tuitionFee,
+        'stuTotalExamFees': examFee,
+        'stuTotalAdmissionFees': 0.0,
+        'stuTotalFees': totalFee,
+        'stuPaidTutionFees': 0.0,
+        'stuPaidExamFees': 0.0,
+        'studPaidVanFees': 0.0,
+        'stuPaidAdmissionFees': 0.0,
+        'stuPaidTotalFees': totalPaid,
+        'stuBalTutionFees': balTuition,
+        'stuBalExamFees': balExam,
+        'stuBalVanFees': balVan,
+        'stuBalAdmissionFees': 0.0,
+        'stuBalTotalFees': balTotal,
+        'academicYear': academicYear,
+        'fiscalYear': FiscalYear.getCurrentYearCode(),
+        'createdAt': DateTime.now(),
+        'updatedAt': DateTime.now(),
+      };
+      
+      await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('student_fee_details')
+          .add(feeData);
+          
+    } catch (e) {
+      print('Error creating student fee details: $e');
+      // Continue without failing the student creation
+    }
+  }
+
+  Future<String> _getCurrentAcademicYear(String schoolId) async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('schools').doc(schoolId).collection('academicYears')
+          .where('isActive', isEqualTo: true)
+          .limit(1)
+          .get();
+      
+      if (snapshot.docs.isNotEmpty) {
+        return snapshot.docs.first.id;
+      }
+      // Fallback to current academic year
+      final now = DateTime.now();
+      final currentYear = now.year;
+      final startYear = now.month >= 6 ? currentYear : currentYear - 1;
+      return '$startYear-${startYear + 1}';
+    } catch (e) {
+      // Fallback to current academic year
+      final now = DateTime.now();
+      final currentYear = now.year;
+      final startYear = now.month >= 6 ? currentYear : currentYear - 1;
+      return '$startYear-${startYear + 1}';
+    }
+  }
 
   Widget _buildEmptyState() {
     return Center(
@@ -1192,4 +1682,435 @@ class _StudentDirectoryScreenState extends ConsumerState<StudentDirectoryScreen>
     );
   }
 
+  void _viewStudentBills(BuildContext context, Student student, String schoolId) {
+    // Navigate to bills view for this student
+    // This would typically navigate to a bills screen showing payment history, receipts, etc.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Viewing bills for ${student.name} (${student.studentId})'),
+        backgroundColor: Colors.green,
+      ),
+    );
+    // TODO: Navigate to bills screen
+    // Navigator.push(context, MaterialPageRoute(builder: (context) => StudentBillsScreen(studentId: student.studentId, schoolId: schoolId)));
+  }
+
+  void _viewStudentFeeDetails(BuildContext context, Student student, String schoolId) {
+    showDialog(
+      context: context,
+      builder: (context) => _StudentFeeDetailsDialog(student: student, schoolId: schoolId),
+    );
+  }
+
+  Widget _buildFeeInfoRow(String label, dynamic value) {
+    final amt = (value as num?)?.toDouble() ?? 0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: _textPrimary, fontSize: 11)),
+          Text('₹${amt.toStringAsFixed(0)}', style: const TextStyle(color: _textPrimary, fontSize: 11, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransportAwareFeeSummary(Map<String, dynamic> feeStructure, String vanAvailed, 
+    TextEditingController concessionCtrl, TextEditingController arrearTuitionCtrl, 
+    TextEditingController arrearExamCtrl, TextEditingController arrearVanCtrl, TextEditingController vanFeeCtrl) {
+    
+    // Calculate base fees based on transport selection
+    final tuitionFee = (feeStructure['tuitionFee'] as num?)?.toDouble() ?? 0;
+    final examFee = (feeStructure['examFee'] as num?)?.toDouble() ?? 0;
+    final vanFee = vanAvailed == 'Yes' ? double.tryParse(vanFeeCtrl.text) ?? 0 : 0;
+    print('💰 Fee calculation - VanAvailed: $vanAvailed, VanFeeCtrl: "${vanFeeCtrl.text}", Calculated VanFee: $vanFee');
+    final baseFees = tuitionFee + examFee + vanFee;
+    
+    // Calculate arrears based on transport selection
+    final tuitionArrears = double.tryParse(arrearTuitionCtrl.text) ?? 0;
+    final examArrears = double.tryParse(arrearExamCtrl.text) ?? 0;
+    final vanArrears = vanAvailed == 'Yes' ? (double.tryParse(arrearVanCtrl.text) ?? 0) : 0;
+    final totalArrears = tuitionArrears + examArrears + vanArrears;
+    final concession = double.tryParse(concessionCtrl.text) ?? 0;
+    
+    return Column(
+      children: [
+        // Individual fee components
+        _buildFeeInfoRow('Tuition Fee', tuitionFee),
+        _buildFeeInfoRow('Exam Fee', examFee),
+        if (vanAvailed == 'Yes') _buildFeeInfoRow('Van Fee', vanFee),
+        
+        // Base fees total
+        const Divider(color: _borderColor, height: 4),
+        _buildFeeInfoRow('Base Fees Total', baseFees),
+        
+        // Arrears section
+        if (totalArrears > 0) ...[
+          const SizedBox(height: 4),
+          _buildFeeInfoRow('Tuition Arrears', tuitionArrears),
+          _buildFeeInfoRow('Exam Arrears', examArrears),
+          if (vanAvailed == 'Yes') _buildFeeInfoRow('Van Arrears', vanArrears),
+          _buildFeeInfoRow('Total Arrears', totalArrears),
+        ],
+        
+        // Concession
+        if (concession > 0) _buildFeeInfoRow('Concession', concession),
+        
+        // Final total
+        const Divider(color: _borderColor, height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: _accentBlue.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(4)
+          ),
+          child: _buildFeeInfoRow('Total Payable', baseFees + totalArrears - concession),
+        ),
+      ],
+    );
+  }
+
+}
+
+// Comprehensive Student Fee Details Dialog
+class _StudentFeeDetailsDialog extends StatefulWidget {
+  final Student student;
+  final String schoolId;
+
+  const _StudentFeeDetailsDialog({required this.student, required this.schoolId});
+
+  @override
+  State<_StudentFeeDetailsDialog> createState() => _StudentFeeDetailsDialogState();
+}
+
+class _StudentFeeDetailsDialogState extends State<_StudentFeeDetailsDialog> {
+  Map<String, dynamic>? _studentFeeData;
+  bool _isLoading = true;
+
+  static const Color _bgDark = Color(0xFF0D1117);
+  static const Color _cardDark = Color(0xFF161B22);
+  static const Color _accentBlue = Color(0xFF4CAF50);
+  static const Color _textPrimary = Color(0xFFE6EDF3);
+  static const Color _textSecondary = Color(0xFF8B949E);
+  static const Color _borderColor = Color(0xFF30363D);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStudentFeeData();
+  }
+
+  Future<void> _loadStudentFeeData() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(widget.schoolId)
+          .collection('student_fee_details')
+          .where('stuId', isEqualTo: widget.student.studentId)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isNotEmpty) {
+        setState(() {
+          _studentFeeData = snap.docs.first.data();
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading student fee data: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Widget _buildFeeBreakdownCard(String title, Color accent, Map<String, dynamic> data, String type) {
+    double tuition = 0, exam = 0, van = 0, admission = 0, total = 0;
+    double tuitionArr = 0, examArr = 0, vanArr = 0, admissionArr = 0;
+
+    switch (type) {
+      case 'Total':
+        tuition = (data['stuTotalTutionFees'] as num?)?.toDouble() ?? 0;
+        exam = (data['stuTotalExamFees'] as num?)?.toDouble() ?? 0;
+        van = (data['stuTotalVanFees'] as num?)?.toDouble() ?? 0;
+        admission = (data['stuTotalAdmissionFees'] as num?)?.toDouble() ?? 0;
+        tuitionArr = (data['arrearTuitionFees'] as num?)?.toDouble() ?? 0;
+        examArr = (data['arrearExamFees'] as num?)?.toDouble() ?? 0;
+        vanArr = (data['arrearVanFees'] as num?)?.toDouble() ?? 0;
+        admissionArr = (data['arrearAdmissionFees'] as num?)?.toDouble() ?? 0;
+        break;
+      case 'Paid':
+        tuition = (data['stuPaidTutionFees'] as num?)?.toDouble() ?? 0;
+        exam = (data['stuPaidExamFees'] as num?)?.toDouble() ?? 0;
+        van = (data['studPaidVanFees'] as num?)?.toDouble() ?? 0;
+        admission = (data['stuPaidAdmissionFees'] as num?)?.toDouble() ?? 0;
+        tuitionArr = (data['stuPaidArrearTutionFees'] as num?)?.toDouble() ?? 0;
+        examArr = (data['stuPaidArrearExamFees'] as num?)?.toDouble() ?? 0;
+        vanArr = (data['stuPaidArrearVanFees'] as num?)?.toDouble() ?? 0;
+        admissionArr = (data['stuPaidArrearAdmissionFees'] as num?)?.toDouble() ?? 0;
+        break;
+      case 'Balance':
+        tuition = (data['stuBalTutionFees'] as num?)?.toDouble() ?? 0;
+        exam = (data['stuBalExamFees'] as num?)?.toDouble() ?? 0;
+        van = (data['stuBalVanFees'] as num?)?.toDouble() ?? 0;
+        admission = (data['stuBalAdmissionFees'] as num?)?.toDouble() ?? 0;
+        tuitionArr = (data['balanceArrearTuitionFees'] as num?)?.toDouble() ?? 0;
+        examArr = (data['balanceArrearExamFees'] as num?)?.toDouble() ?? 0;
+        vanArr = (data['balanceArrearVanFees'] as num?)?.toDouble() ?? 0;
+        admissionArr = (data['balanceArrearAdmissionFees'] as num?)?.toDouble() ?? 0;
+        break;
+    }
+    total = tuition + exam + van + admission;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _bgDark,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accent.withOpacity(0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(color: accent.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+          child: Center(child: Text(title, style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 13))),
+        ),
+        const SizedBox(height: 10),
+        _feeRow('', 'Regular', 'Arrears', accent, isHeader: true),
+        _feeRow('Tuition Fees', '₹${tuition.toStringAsFixed(0)}', '₹${tuitionArr.toStringAsFixed(0)}', accent),
+        _feeRow('Exam Fees', '₹${exam.toStringAsFixed(0)}', '₹${examArr.toStringAsFixed(0)}', accent),
+        _feeRow('Van Fees', '₹${van.toStringAsFixed(0)}', '₹${vanArr.toStringAsFixed(0)}', accent),
+        _feeRow('Admission Fees', '₹${admission.toStringAsFixed(0)}', '₹${admissionArr.toStringAsFixed(0)}', accent),
+        Divider(color: _borderColor, height: 14),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('TOTAL', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+          Text('₹${total.toStringAsFixed(0)}', style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 14)),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _feeRow(String label, String regular, String arrears, Color accent, {bool isHeader = false}) {
+    final style = isHeader
+        ? TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 11)
+        : const TextStyle(color: _textPrimary, fontSize: 12);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      decoration: isHeader
+          ? null
+          : BoxDecoration(
+              color: accent.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: accent.withOpacity(0.15)),
+            ),
+      child: Row(children: [
+        if (!isHeader) Icon(Icons.circle, size: 5, color: accent),
+        if (!isHeader) const SizedBox(width: 6),
+        Expanded(
+            flex: 3,
+            child: Text(label,
+                style: TextStyle(
+                    color: isHeader ? _textSecondary : _textPrimary,
+                    fontSize: 12,
+                    fontWeight: isHeader ? FontWeight.normal : FontWeight.w500))),
+        Expanded(flex: 2, child: Text(regular, style: style, textAlign: TextAlign.right)),
+        const SizedBox(width: 8),
+        Expanded(flex: 2, child: Text(arrears, style: style, textAlign: TextAlign.right)),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _cardDark,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        constraints: const BoxConstraints(maxWidth: 800, maxHeight: 600),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: _accentBlue.withOpacity(0.1),
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.account_balance_wallet_rounded, color: _accentBlue, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Fee Details', style: TextStyle(color: _accentBlue, fontWeight: FontWeight.bold, fontSize: 18)),
+                            Text(widget.student.name, style: const TextStyle(color: _textPrimary, fontSize: 14)),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, color: _textSecondary),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _infoChip('Student ID', widget.student.studentId.toString()),
+                      const SizedBox(width: 8),
+                      _infoChip('Class', '${widget.student.className}-${widget.student.section}'),
+                      if (_studentFeeData != null) ...[
+                        const SizedBox(width: 8),
+                        _infoChip('Academic Year', (_studentFeeData!['academicYear'] ?? 'N/A').toString()),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            
+            // Content
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator(color: _accentBlue))
+                    : _studentFeeData == null
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.info_outline, color: _textSecondary, size: 48),
+                                const SizedBox(height: 16),
+                                const Text('No fee data found', style: TextStyle(color: _textSecondary, fontSize: 16)),
+                                const SizedBox(height: 8),
+                                const Text('This student may not have fee details recorded yet.', style: TextStyle(color: _textSecondary, fontSize: 12)),
+                              ],
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Fee Management Cards
+                                Row(
+                                  children: [
+                                    Expanded(child: _buildFeeBreakdownCard('TOTAL FEES', const Color(0xFFF59E0B), _studentFeeData!, 'Total')),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: _buildFeeBreakdownCard('PAID FEES', const Color(0xFF10B981), _studentFeeData!, 'Paid')),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(child: _buildFeeBreakdownCard('BALANCE FEES', const Color(0xFFEF4444), _studentFeeData!, 'Balance')),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Container(
+                                        padding: const EdgeInsets.all(14),
+                                        decoration: BoxDecoration(
+                                          color: _bgDark,
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: _accentBlue.withOpacity(0.3)),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Container(
+                                              width: double.infinity,
+                                              padding: const EdgeInsets.symmetric(vertical: 8),
+                                              decoration: BoxDecoration(color: _accentBlue.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                                              child: Center(child: Text('CONCESSION', style: TextStyle(color: _accentBlue, fontWeight: FontWeight.bold, fontSize: 13))),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Text('₹${(_studentFeeData!['stuConcessionFees'] as num?)?.toDouble() ?? 0}', 
+                                                style: const TextStyle(color: _accentBlue, fontWeight: FontWeight.bold, fontSize: 16)),
+                                            const SizedBox(height: 4),
+                                            Text('Total concession applied', style: TextStyle(color: _textSecondary, fontSize: 11)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                
+                                // Additional Info
+                                const SizedBox(height: 16),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: _bgDark,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: _borderColor),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Additional Information', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+                                      const SizedBox(height: 8),
+                                      _infoRow('Van Facility', _studentFeeData!['isStuAvailVan'] == 'y' ? 'Available' : 'Not Available'),
+                                      _infoRow('Fiscal Year', (_studentFeeData!['fiscalYear'] ?? 'N/A').toString()),
+                                      _infoRow('Last Updated', _formatDate(_studentFeeData!['updatedAt'])),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoChip(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: _bgDark,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Text('$label: $value', style: const TextStyle(color: _textSecondary, fontSize: 11)),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: _textSecondary, fontSize: 11)),
+          Text(value, style: const TextStyle(color: _textPrimary, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(dynamic date) {
+    if (date == null) return 'N/A';
+    if (date is Timestamp) {
+      return DateTime.fromMillisecondsSinceEpoch(date.millisecondsSinceEpoch)
+          .toString()
+          .split(' ')[0];
+    }
+    return date.toString();
+  }
 }

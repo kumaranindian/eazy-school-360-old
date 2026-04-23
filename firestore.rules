@@ -535,6 +535,59 @@ service cloud.firestore {
         );
         allow update, delete: if false;
       }
+      
+      // ACADEMIC YEARS SUBCOLLECTION
+      match /academicYears/{yearId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // FISCAL YEARS SUBCOLLECTION
+      match /fiscalYears/{yearId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // ARREARS SUBCOLLECTION
+      match /arrears/{arrearsId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isAdminOrFinance());
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // STUDENT LEAVES SUBCOLLECTION
+      match /studentLeaves/{leaveId} {
+        allow read: if isSignedIn() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isStaff() && belongsToSchool(schoolId))
+        );
+        allow create: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow update: if isSignedIn() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isStaff() && belongsToSchool(schoolId))
+        );
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // FEE STRUCTURES SUBCOLLECTION (alternative path)
+      match /feeStructures/{structureId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // FEE COLLECTIONS SUBCOLLECTION
+      match /feeCollections/{collectionId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isAdminOrFinance());
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
     }
     
     // ============================================================
@@ -701,19 +754,28 @@ service cloud.firestore {
     // USERS COLLECTION
     // ============================================================
     match /users/{userId} {
-      // CREATE: User can create their own document
+      // CREATE: User can create their own document OR admin can create finance/staff users
       // When admin creates a staff user via createUserWithEmailAndPassword,
       // Firebase auto-signs in as the new user. So the new user creates their own doc.
       // We allow this if:
       // 1. User is creating their own document (request.auth.uid == userId)
-      // 2. AND either it's a regular signup OR it's admin-created (createdByAdmin flag)
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      // 2. OR admin is creating a finance/staff user (with proper role validation)
+      allow create: if isSignedIn() && (
+        request.auth.uid == userId ||
+        (isTenantAdmin() && request.resource.data.role in ['FINANCE', 'STAFF'] && request.resource.data.schoolId == getUserData().schoolId)
+      );
       
       // READ: User can read their own data, super admin can read all, tenant admin can read users from their school
+      // Also allow tenant admins to query users collection for email validation
       allow read: if isSignedIn() && (
         request.auth.uid == userId || 
         isSuperAdmin() ||
-        (isTenantAdmin() && resource.data.schoolId == getUserData().schoolId)
+        (isTenantAdmin() && (
+          resource.data.schoolId == getUserData().schoolId ||
+          request.query != null
+        )) ||
+        // Allow admin users to query for email validation
+        (isSignedIn() && request.query != null && request.query.limit <= 5)
       );
       
       // UPDATE: User can update their own data, super admin can update all, tenant admin can update users from their school
@@ -732,6 +794,36 @@ service cloud.firestore {
         allow create: if isSignedIn() && (isSuperAdmin() || isTenantAdmin());
         allow update, delete: if isSignedIn() && request.auth.uid == userId;
       }
+    }
+    
+    // ============================================================
+    // MEMBERSHIPS COLLECTION
+    // ============================================================
+    match /memberships/{membershipId} {
+      // CREATE: Admin can create memberships for finance/staff users
+      allow create: if isSignedIn() && (
+        isSuperAdmin() ||
+        (isTenantAdmin() && request.resource.data.schoolId == getUserData().schoolId)
+      );
+      
+      // READ: User can read their own memberships, super admin can read all, tenant admin can read from their school
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.uid ||
+        isSuperAdmin() ||
+        (isTenantAdmin() && resource.data.schoolId == getUserData().schoolId)
+      );
+      
+      // UPDATE: Super admin or tenant admin can update memberships
+      allow update: if isSignedIn() && (
+        isSuperAdmin() ||
+        (isTenantAdmin() && resource.data.schoolId == getUserData().schoolId)
+      );
+      
+      // DELETE: Super admin or tenant admin can delete memberships
+      allow delete: if isSignedIn() && (
+        isSuperAdmin() ||
+        (isTenantAdmin() && resource.data.schoolId == getUserData().schoolId)
+      );
     }
   }
 }

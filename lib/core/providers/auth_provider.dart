@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,7 +6,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:eazy_school_360/core/models/user_session.dart';
+import 'package:eazy_school_360/data/services/membership_service.dart';
 import 'package:eazy_school_360/domain/entities/app_user.dart';
+import 'package:eazy_school_360/domain/entities/membership.dart';
 
 /// Authentication state enum
 enum AuthState {
@@ -41,9 +44,16 @@ class AuthResult {
 class AuthNotifier extends StateNotifier<AuthState> {
   final FirebaseAuth _firebaseAuth;
   final FirebaseFirestore _firestore;
+  final MembershipService _membershipService;
   UserSession? _currentSession;
 
-  AuthNotifier(this._firebaseAuth, this._firestore) : super(AuthState.initial) {
+  AuthNotifier(
+    this._firebaseAuth,
+    this._firestore, {
+    MembershipService? membershipService,
+  })  : _membershipService =
+            membershipService ?? MembershipService(firestore: _firestore),
+        super(AuthState.initial) {
     _initializeAuth();
   }
 
@@ -87,8 +97,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// Sign in with email and password
-  Future<AuthResult> signIn(String email, String password) async {
+  /// Sign in with email and password.
+  ///
+  /// [preferredSchoolId] is optional — pass it when resuming a session that
+  /// already knew which school it wanted (e.g. after the user picks one
+  /// on the School Chooser screen).
+  Future<AuthResult> signIn(
+    String email,
+    String password, {
+    String? preferredSchoolId,
+  }) async {
     try {
       state = AuthState.loading;
 
@@ -104,7 +122,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       // Fetch user profile from Firestore
-      final authResult = await _fetchUserProfile(credential.user!.uid);
+      final authResult = await _fetchUserProfile(
+        credential.user!.uid,
+        preferredSchoolId: preferredSchoolId,
+      );
       if (!authResult.success) {
         await _firebaseAuth.signOut();
         state = AuthState.unauthenticated;
@@ -113,11 +134,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       // Validate user status and permissions
       final session = authResult.session!;
-      if (!session.isActive) {
-        await _firebaseAuth.signOut();
-        state = AuthState.unauthenticated;
-        return AuthResult.failure('Account is disabled. Please contact your administrator.');
-      }
+      
+      // Allow inactive users to proceed to login screen - the UI will route them to waiting activation
+      // Don't sign them out here, let the login screen handle routing based on session.isActive
 
       // Update last login time
       await _updateLastLogin(session.uid);
@@ -137,6 +156,55 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Switch the active school for the currently-signed-in user.
+  ///
+  /// Rebuilds the session around [schoolId], updates
+  /// `users/{uid}.defaultSchoolId` so next login lands in the same place,
+  /// and returns an [AuthResult]. Fails if the user has no active
+  /// membership at [schoolId].
+  Future<AuthResult> switchSchool(String schoolId) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null || _currentSession == null) {
+      return AuthResult.failure('Not signed in.');
+    }
+
+    // Guard: user must have an active membership at the target school.
+    final target = _currentSession!.memberships.firstWhere(
+      (m) => m.schoolId == schoolId,
+      orElse: () => Membership(
+        schoolId: '',
+        schoolName: '',
+        roles: const [],
+        joinedAt: DateTime.now(),
+      ),
+    );
+    if (target.schoolId.isEmpty || !target.isActive || !target.schoolIsActive) {
+      return AuthResult.failure(
+          'You do not have access to that school anymore.');
+    }
+
+    final result = await _fetchUserProfile(
+      user.uid,
+      preferredSchoolId: schoolId,
+    );
+    if (!result.success || result.session == null) return result;
+
+    _currentSession = result.session;
+    await _persistSession(_currentSession!);
+    // Persist the preference so the next cold start opens this school.
+    try {
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .set({'defaultSchoolId': schoolId}, SetOptions(merge: true));
+    } catch (_) {/* non-critical */}
+    // Keep the state the same (still authenticated) but notify listeners.
+    state = AuthState.authenticated;
+    // ignore: invalid_use_of_protected_member
+    super.state = AuthState.authenticated; // force notify
+    return result;
+  }
+
   /// Sign out user
   Future<void> signOut() async {
     await _signOut();
@@ -153,8 +221,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// Fetch user profile from Firestore with security validation
-  Future<AuthResult> _fetchUserProfile(String uid) async {
+  /// Fetch user profile from Firestore with security validation.
+  ///
+  /// [preferredSchoolId] picks which membership becomes active in the
+  /// session. If null we fall back to the user's `defaultSchoolId`, then to
+  /// the legacy `users/{uid}.schoolId`, then to the single membership (when
+  /// there's only one).
+  Future<AuthResult> _fetchUserProfile(
+    String uid, {
+    String? preferredSchoolId,
+  }) async {
     try {
       final userDoc = await _firestore.collection('users').doc(uid).get();
       
@@ -169,11 +245,43 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       final appUser = AppUser.fromFirestore(userDoc);
-      final session = UserSession.fromAppUser(appUser);
 
-      // Additional security checks
-      if (!session.isValid()) {
-        return AuthResult.failure('Invalid user session. Please contact support.');
+      // Load all memberships up-front so the session knows every school
+      // this user can act in. Legacy single-school users without a
+      // membership doc still work — UserSession falls back to appUser.
+      final memberships = await _membershipService.listForUser(uid);
+      final activeMemberships =
+          memberships.where((m) => m.isActive && m.schoolIsActive).toList();
+
+      // Choose which school this session is scoped to.
+      final resolvedSchoolId = _resolveActiveSchoolId(
+        preferredSchoolId: preferredSchoolId,
+        userDocData: userDoc.data() ?? const <String, dynamic>{},
+        appUser: appUser,
+        activeMemberships: activeMemberships,
+      );
+
+      final session = UserSession.fromAppUser(
+        appUser,
+        memberships: memberships,
+        activeSchoolId: resolvedSchoolId,
+      );
+
+      // Only fail on hard integrity issues (missing uid/email). Activation
+      // status is intentionally allowed through here so the UI can route the
+      // user to the WaitingActivationScreen instead of showing a confusing
+      // "invalid session" error right after signup.
+      if (session.uid.isEmpty || session.email.isEmpty) {
+        return AuthResult.failure(
+            'Your user profile is incomplete. Please contact support.');
+      }
+
+      // Best-effort: mark the chosen school's membership as most-recently used.
+      if (resolvedSchoolId != null) {
+        unawaited(_membershipService.touchLastAccessed(
+          uid: uid,
+          schoolId: resolvedSchoolId,
+        ));
       }
 
       return AuthResult.success(session);
@@ -181,6 +289,32 @@ class AuthNotifier extends StateNotifier<AuthState> {
       debugPrint('Error fetching user profile: $e');
       return AuthResult.failure('Failed to load user profile. Please try again.');
     }
+  }
+
+  String? _resolveActiveSchoolId({
+    required String? preferredSchoolId,
+    required Map<String, dynamic> userDocData,
+    required AppUser appUser,
+    required List<Membership> activeMemberships,
+  }) {
+    if (activeMemberships.isEmpty) return appUser.schoolId;
+    bool has(String sid) => activeMemberships.any((m) => m.schoolId == sid);
+
+    if (preferredSchoolId != null && has(preferredSchoolId)) {
+      return preferredSchoolId;
+    }
+    final def = userDocData['defaultSchoolId'] as String?;
+    if (def != null && def.isNotEmpty && has(def)) return def;
+
+    if (appUser.schoolId != null && has(appUser.schoolId!)) {
+      return appUser.schoolId;
+    }
+    if (activeMemberships.length == 1) {
+      return activeMemberships.first.schoolId;
+    }
+    // >1 memberships and nothing preferred — leave unresolved so the UI
+    // can route to the School Chooser screen.
+    return null;
   }
 
   /// Update last login timestamp

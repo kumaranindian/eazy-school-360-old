@@ -1,16 +1,41 @@
 import 'package:eazy_school_360/domain/entities/app_user.dart';
+import 'package:eazy_school_360/domain/entities/membership.dart';
 
-/// Global session model that holds authenticated user state
+/// Global session model that holds authenticated user state.
+///
+/// Multi-tenant model
+/// ------------------
+/// A single Firebase Auth account can belong to many schools (memberships)
+/// and can hold several roles within a single school. The session therefore
+/// tracks:
+///   * [memberships]   — every school this user can act in
+///   * [activeSchoolId]/[activeRoles] — the school currently in scope
+///   * [schoolId]/[role]              — legacy single-school aliases
+///     that delegate to the active values so existing callers keep working.
 class UserSession {
   final String uid;
   final String email;
   final String displayName;
+
+  /// Active membership's primary role (or the legacy single role for a
+  /// user with no memberships yet). Kept as an alias for back-compat.
   final UserRole role;
+
+  /// Active school's id — also exposed under the original `schoolId`
+  /// getter that the rest of the codebase reads.
   final String? schoolId;
+
   final UserStatus status;
   final OnboardingStatus onboardingStatus;
   final UserPermissions permissions;
   final DateTime lastLoginAt;
+
+  /// All memberships for this user across every school.
+  final List<Membership> memberships;
+
+  /// All roles the user holds at [activeSchoolId]. Contains at least one
+  /// value when a school is active; empty for super-admin / setup flows.
+  final List<UserRole> activeRoles;
 
   const UserSession({
     required this.uid,
@@ -22,20 +47,64 @@ class UserSession {
     required this.onboardingStatus,
     required this.permissions,
     required this.lastLoginAt,
+    this.memberships = const [],
+    this.activeRoles = const [],
   });
 
-  /// Create session from AppUser entity
-  factory UserSession.fromAppUser(AppUser user) {
+  /// Alias for [schoolId], for code that wants to be explicit about
+  /// "the school currently in scope".
+  String? get activeSchoolId => schoolId;
+
+  Membership? get activeMembership {
+    if (activeSchoolId == null) return null;
+    for (final m in memberships) {
+      if (m.schoolId == activeSchoolId) return m;
+    }
+    return null;
+  }
+
+  /// Build a session from an [AppUser] (legacy single-school) plus optional
+  /// [memberships]. When memberships are provided, [activeSchoolId] determines
+  /// which one is in scope; otherwise we fall back to the user's own
+  /// `schoolId` / `role` for backward compatibility.
+  factory UserSession.fromAppUser(
+    AppUser user, {
+    List<Membership> memberships = const [],
+    String? activeSchoolId,
+  }) {
+    // Pick the active membership (if any).
+    Membership? active;
+    if (activeSchoolId != null) {
+      for (final m in memberships) {
+        if (m.schoolId == activeSchoolId) {
+          active = m;
+          break;
+        }
+      }
+    }
+    // If caller didn't specify, auto-select single-membership users.
+    if (active == null && memberships.length == 1) {
+      active = memberships.first;
+    }
+
+    final effRoles = active?.roles ?? const <UserRole>[];
+    final effRole = active?.primaryRole ?? user.role;
+    final effSchoolId = active?.schoolId ?? user.schoolId;
+    final effPermissions =
+        active?.effectivePermissions ?? user.permissions;
+
     return UserSession(
       uid: user.uid,
       email: user.email,
       displayName: user.displayName,
-      role: user.role,
-      schoolId: user.schoolId,
+      role: effRole,
+      schoolId: effSchoolId,
       status: user.status,
       onboardingStatus: user.onboardingStatus,
-      permissions: user.permissions,
+      permissions: effPermissions,
       lastLoginAt: DateTime.now(),
+      memberships: memberships,
+      activeRoles: effRoles,
     );
   }
 
@@ -51,11 +120,46 @@ class UserSession {
       'onboardingStatus': onboardingStatus.name,
       'permissions': permissions.toMap(),
       'lastLoginAt': lastLoginAt.toIso8601String(),
+      'activeRoles': activeRoles.map((r) => r.name).toList(),
+      // Memberships are re-hydrated from Firestore on the next boot so we
+      // only persist a minimal projection (schoolId + schoolName + roles)
+      // to keep SharedPreferences light and avoid stale role/permission
+      // data sticking across logins.
+      'memberships': memberships
+          .map((m) => {
+                'schoolId': m.schoolId,
+                'schoolName': m.schoolName,
+                'schoolShortCode': m.schoolShortCode,
+                'roles': m.roles.map((r) => r.name).toList(),
+                'isActive': m.isActive,
+                'isOwner': m.isOwner,
+                'schoolIsActive': m.schoolIsActive,
+                'joinedAt': m.joinedAt.toIso8601String(),
+              })
+          .toList(),
     };
   }
 
   /// Create from JSON for persistence
   factory UserSession.fromJson(Map<String, dynamic> json) {
+    final rawMemberships = (json['memberships'] as List?) ?? const [];
+    final memberships = <Membership>[];
+    for (final raw in rawMemberships) {
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      final sid = (map['schoolId'] as String?) ?? '';
+      if (sid.isEmpty) continue;
+      memberships.add(Membership.fromMap(sid, map));
+    }
+    final activeRolesRaw = (json['activeRoles'] as List?) ?? const [];
+    final activeRoles = activeRolesRaw
+        .map((r) => UserRole.values.firstWhere(
+              (e) => e.name == r,
+              orElse: () => UserRole.NONE,
+            ))
+        .where((r) => r != UserRole.NONE)
+        .toList();
+
     return UserSession(
       uid: json['uid'] as String,
       email: json['email'] as String,
@@ -66,11 +170,26 @@ class UserSession {
       onboardingStatus: OnboardingStatus.values.firstWhere((e) => e.name == json['onboardingStatus']),
       permissions: UserPermissions.fromMap(json['permissions'] as Map<String, dynamic>),
       lastLoginAt: DateTime.parse(json['lastLoginAt'] as String),
+      memberships: memberships,
+      activeRoles: activeRoles,
     );
   }
 
   /// Convenience getters
-  bool get isActive => status == UserStatus.ACTIVE;
+  bool get isActive {
+    // For legacy single-school users, check user status
+    if (memberships.isEmpty) {
+      return status == UserStatus.ACTIVE;
+    }
+    
+    // For multi-tenant users, check if user is active AND has at least one active membership
+    if (status != UserStatus.ACTIVE) {
+      return false;
+    }
+    
+    // Check if there's at least one active membership
+    return memberships.any((m) => m.isActive && m.schoolIsActive);
+  }
   bool get isSuperAdmin => role == UserRole.SUPER_ADMIN;
   bool get isAdmin => role == UserRole.ADMIN;
   bool get isStaff => role == UserRole.STAFF;

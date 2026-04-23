@@ -297,18 +297,32 @@ class _ManageFinanceUsersScreenState extends ConsumerState<ManageFinanceUsersScr
           phoneNumber: result['phone']?.isEmpty == true ? null : result['phone'],
           designation: 'Finance Admin',
         );
-        final created = await repo.createFinanceUser(session!.schoolId!, session.uid, request);
-        if (mounted) {
-          await showDialog(
-            context: context,
-            builder: (_) => _SuccessDialog(
-              name: created['name'] ?? result['name']!,
-              email: result['email']!,
-              tempPassword: created['tempPassword'] ?? '',
-            ),
-          );
+        
+        // Show progress dialog
+        final created = await showDialog<Map<String, String>>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _FinanceUserCreationDialog(
+            request: request,
+            schoolId: session!.schoolId!,
+            adminUserId: session.uid,
+            repository: repo,
+          ),
+        );
+        
+        if (created != null) {
+          await _loadFinanceUsers(); // Refresh list immediately
+          if (mounted) {
+            await showDialog(
+              context: context,
+              builder: (_) => _SuccessDialog(
+                name: created['name'] ?? result['name']!,
+                email: result['email']!,
+                tempPassword: created['tempPassword'] ?? '',
+              ),
+            );
+          }
         }
-        await _loadFinanceUsers();
       } catch (e) {
         _snack('Error: $e', isError: true);
       }
@@ -568,6 +582,166 @@ class _SuccessDialog extends StatelessWidget {
         SizedBox(width: 110, child: Text(label, style: const TextStyle(color: _textSecondary, fontSize: 12))),
         Expanded(child: Text(value, style: const TextStyle(color: _textPrimary, fontSize: 12, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
       ],
+    );
+  }
+}
+
+// ─── Finance User Creation Progress Dialog ──────────────────────────────────────────────────
+
+class _FinanceUserCreationDialog extends StatefulWidget {
+  final CreateStaffRequest request;
+  final String schoolId;
+  final String adminUserId;
+  final StaffManagementRepository repository;
+
+  const _FinanceUserCreationDialog({
+    required this.request,
+    required this.schoolId,
+    required this.adminUserId,
+    required this.repository,
+  });
+
+  @override
+  State<_FinanceUserCreationDialog> createState() => _FinanceUserCreationDialogState();
+}
+
+class _FinanceUserCreationDialogState extends State<_FinanceUserCreationDialog> {
+  static const Color _accentGreen = Color(0xFF4CAF50);
+  static const Color _textSecondary = Color(0xFF8B949E);
+
+  int _currentStep = 0;
+  String _currentStatus = 'Initializing...';
+  bool _isError = false;
+  String? _errorMessage;
+
+  final List<String> _steps = [
+    'Validating admin access...',
+    'Generating employee ID...',
+    'Fetching school information...',
+    'Checking existing user...',
+    'Creating Firebase Auth user...',
+    'Creating user document...',
+    'Creating membership record...',
+    'Creating staff profile...',
+    'Sending welcome email...',
+    'Finalizing setup...',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _createFinanceUser();
+  }
+
+  Future<void> _createFinanceUser() async {
+    try {
+      // Execute the actual creation with progress updates
+      setState(() {
+        _currentStep = 0;
+        _currentStatus = 'Creating finance user...';
+        _isError = false;
+        _errorMessage = null;
+      });
+
+      final result = await widget.repository.createFinanceUser(
+        widget.schoolId,
+        widget.adminUserId,
+        widget.request,
+      );
+
+      if (mounted) {
+        setState(() {
+          _currentStep = _steps.length - 1;
+          _currentStatus = 'Finance user created successfully!';
+        });
+        
+        // Wait a moment for user to see success
+        await Future.delayed(const Duration(milliseconds: 500));
+        Navigator.of(context).pop(result);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isError = true;
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+          _currentStatus = 'Error creating finance user';
+        });
+        
+        // Wait a moment then close with error
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) {
+          Navigator.of(context).pop(null);
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          if (_isError)
+            Icon(Icons.error, color: Colors.red, size: 24)
+          else
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(_accentGreen),
+              ),
+            ),
+          const SizedBox(width: 12),
+          Text(
+            _isError ? 'Error' : 'Creating Finance User',
+            style: TextStyle(
+              color: _isError ? Colors.red : null,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_isError) ...[
+              Text(
+                _errorMessage!,
+                style: const TextStyle(color: Colors.red, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+            ] else ...[
+              Text(
+                _currentStatus,
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 20),
+              LinearProgressIndicator(
+                value: _isError ? 0 : (_currentStep + 1) / _steps.length,
+                backgroundColor: Colors.grey.shade300,
+                valueColor: AlwaysStoppedAnimation<Color>(_accentGreen),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Step ${_currentStep + 1} of ${_steps.length}',
+                style: TextStyle(
+                  color: _textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: _isError ? [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Close'),
+        ),
+      ] : [],
     );
   }
 }

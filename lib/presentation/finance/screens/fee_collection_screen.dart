@@ -8,6 +8,7 @@ import '../../../data/repositories/student_repository.dart';
 import '../../../data/repositories/fee_repository.dart';
 import '../../../domain/entities/student.dart';
 import '../../../domain/entities/fee_payment.dart';
+import '../../../domain/entities/academic_year.dart';
 
 class FeeCollectionScreen extends ConsumerStatefulWidget {
   const FeeCollectionScreen({super.key});
@@ -401,7 +402,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         studentName: _selectedStudent!.name,
         className: _selectedStudent!.className,
         section: _selectedStudent!.section,
-        academicYear: '${now.year}-${now.year + 1}',
+        academicYear: AcademicYear.getCurrentYearCode(),
+        fiscalYear: FiscalYear.getCurrentYearCode(),
         admissionFeePaid: double.tryParse(_admissionFeeController.text) ?? 0,
         tuitionFeePaid: double.tryParse(_tuitionFeeController.text) ?? 0,
         examFeePaid: double.tryParse(_examFeeController.text) ?? 0,

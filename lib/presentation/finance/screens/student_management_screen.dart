@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/providers/auth_provider.dart';
 import '../../../data/repositories/student_repository.dart';
 import '../../../domain/entities/student.dart';
+import '../../../domain/entities/academic_year.dart';
+import '../../shared/widgets/searchable_dropdown.dart';
 
 class StudentManagementScreen extends ConsumerStatefulWidget {
   const StudentManagementScreen({super.key});
@@ -29,6 +32,24 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  String? get _schoolId => ref.read(currentSessionProvider)?.schoolId;
+
+  Future<String> _getCurrentAcademicYear(String schoolId) async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('schools').doc(schoolId).collection('academicYears')
+          .where('isCurrent', isEqualTo: true)
+          .limit(1)
+          .get();
+      if (snapshot.docs.isNotEmpty) {
+        return snapshot.docs.first.data()['yearCode'] as String;
+      }
+    } catch (e) {
+      debugPrint('[StudentManagement] Error getting current academic year: $e');
+    }
+    return AcademicYear.getCurrentYearCode();
   }
 
   @override
@@ -97,24 +118,14 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
                 ),
               ),
               const SizedBox(width: 12),
-              Container(
-                height: 44,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(10), border: Border.all(color: _borderColor)),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String?>(
-                    value: _filterClass,
-                    hint: const Text('All Classes', style: TextStyle(color: _textSecondary, fontSize: 14)),
-                    dropdownColor: _cardDark,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: _textSecondary),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('All Classes', style: TextStyle(color: _textPrimary))),
-                      ...['Pre-KG', 'LKG', 'UKG', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'].map((c) =>
-                        DropdownMenuItem(value: c, child: Text('Class $c', style: const TextStyle(color: _textPrimary))),
-                      ),
-                    ],
-                    onChanged: (value) => setState(() => _filterClass = value),
-                  ),
+              SizedBox(
+                width: 180,
+                child: SearchableDropdown<String>(
+                  value: _filterClass,
+                  hint: 'All Classes',
+                  items: const ['Pre-KG', 'LKG', 'UKG', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'],
+                  itemLabel: (c) => 'Class $c',
+                  onChanged: (value) => setState(() => _filterClass = value),
                 ),
               ),
             ],
@@ -435,6 +446,7 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
                     await repo.updateStudent(schoolId, existingStudent.id, updated);
                   } else {
                     final nextId = await repo.getNextStudentId(schoolId);
+                    final currentYearCode = await _getCurrentAcademicYear(schoolId);
                     final newStudent = Student(
                       id: '',
                       schoolId: schoolId,
@@ -447,6 +459,7 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
                       parentPhone: parentPhoneController.text.trim().isEmpty ? null : parentPhoneController.text.trim(),
                       parentEmail: parentEmailController.text.trim().isEmpty ? null : parentEmailController.text.trim(),
                       status: StudentStatus.ACTIVE,
+                      academicYearCode: currentYearCode,
                       createdAt: now,
                       updatedAt: now,
                     );
@@ -490,21 +503,13 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
   }
 
   Widget _buildDropdownField(String label, String value, List<String> items, void Function(String?) onChanged) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      dropdownColor: _cardDark,
-      style: const TextStyle(color: _textPrimary),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: _textSecondary),
-        filled: true,
-        fillColor: _bgDark,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _accentBlue)),
-      ),
-      items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+    return SearchableDropdown<String>(
+      value: items.contains(value) ? value : null,
+      hint: label,
+      items: items,
+      itemLabel: (i) => i,
       onChanged: onChanged,
     );
   }
+
 }

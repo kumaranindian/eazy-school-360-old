@@ -4,10 +4,12 @@ import 'package:eazy_school_360/core/providers/auth_provider.dart';
 import 'package:eazy_school_360/domain/entities/app_user.dart';
 
 import 'signup_screen.dart';
+import 'school_chooser_screen.dart';
 import '../../dashboard/screens/admin_dashboard_screen.dart';
 import '../../dashboard/screens/staff_dashboard_screen.dart';
 import '../../dashboard/screens/super_admin_dashboard_screen.dart';
 import '../../dashboard/screens/parent_dashboard_screen.dart';
+import '../../dashboard/screens/finance_dashboard_screen.dart';
 import 'waiting_activation_screen.dart';
 
 class EnhancedLoginScreen extends ConsumerStatefulWidget {
@@ -17,7 +19,8 @@ class EnhancedLoginScreen extends ConsumerStatefulWidget {
   ConsumerState<EnhancedLoginScreen> createState() => _EnhancedLoginScreenState();
 }
 
-class _EnhancedLoginScreenState extends ConsumerState<EnhancedLoginScreen> {
+class _EnhancedLoginScreenState extends ConsumerState<EnhancedLoginScreen>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -25,7 +28,7 @@ class _EnhancedLoginScreenState extends ConsumerState<EnhancedLoginScreen> {
   bool _obscurePassword = true;
   String? _errorMessage;
 
-  // Dark theme tokens (match dashboard)
+  // Dark theme colors - match main application
   static const Color _bgDark = Color(0xFF0D1117);
   static const Color _cardDark = Color(0xFF161B22);
   static const Color _accentBlue = Color(0xFF4CAF50);
@@ -33,8 +36,39 @@ class _EnhancedLoginScreenState extends ConsumerState<EnhancedLoginScreen> {
   static const Color _textSecondary = Color(0xFF8B949E);
   static const Color _borderColor = Color(0xFF30363D);
 
+  late final AnimationController _entryController;
+  late final Animation<double> _fadeAnimation;
+  late final Animation<Offset> _slideAnimation;
+  late final AnimationController _glowController;
+  late final Animation<double> _glowAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _entryController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+    _fadeAnimation =
+        CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(
+        CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic));
+
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    )..repeat(reverse: true);
+    _glowAnimation = Tween<double>(begin: 0.25, end: 0.55).animate(
+        CurvedAnimation(parent: _glowController, curve: Curves.easeInOut));
+  }
+
   @override
   void dispose() {
+    _entryController.dispose();
+    _glowController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -68,16 +102,102 @@ class _EnhancedLoginScreenState extends ConsumerState<EnhancedLoginScreen> {
 
       final session = authResult.session!;
 
+      // Debug: Print session info
+      print('Login Debug - User: ${session.email}');
+      print('Login Debug - Role: ${session.role}');
+      print('Login Debug - School ID: ${session.schoolId}');
+      print('Login Debug - Memberships: ${session.memberships.length}');
+      print('Login Debug - Is Active: ${session.isActive}');
+
       if (!session.isActive) {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const WaitingActivationScreen()));
         return;
       }
 
-      final role = session.role;
+      // Multi-tenant routing: if the user belongs to more than one school
+      // (active or inactive) and no preferred school was resolved, bounce them to the
+      // School Chooser. This allows users to see all their schools and activation status.
+      // Super admins skip this -- they aren't bound to a specific tenant.
+      final allMemberships = session.memberships;
+      final needsChooser = session.role != UserRole.SUPER_ADMIN &&
+          session.schoolId == null &&
+          allMemberships.length > 1;
+      
+      print('Login Debug - Needs Chooser: $needsChooser');
+      
+      if (needsChooser) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SchoolChooserScreen(
+              routeBuilder: (m) => _routeForRole(m.primaryRole),
+            ),
+          ),
+        );
+        return;
+      }
+
+      // Handle case where user has no valid role but has memberships
+      if (session.role == UserRole.NONE) {
+        if (session.memberships.isEmpty) {
+          setState(() {
+            _errorMessage = 'Your account does not have a valid role. Please contact your administrator.';
+            _isLoading = false;
+          });
+          return;
+        } else if (session.memberships.length == 1) {
+          // User has one membership, route using that role
+          final membership = session.memberships.first;
+          _routeByRole(membership.primaryRole);
+          return;
+        } else {
+          // User has multiple memberships, show chooser
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SchoolChooserScreen(
+                routeBuilder: (m) => _routeForRole(m.primaryRole),
+              ),
+            ),
+          );
+          return;
+        }
+      }
+
+      _routeByRole(session.role);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _routeForRole(UserRole role) {
+    switch (role) {
+      case UserRole.SUPER_ADMIN:
+        return '/super-admin-dashboard';
+      case UserRole.ADMIN:
+        return '/admin-dashboard';
+      case UserRole.FINANCE:
+        return '/finance-dashboard';
+      case UserRole.STAFF:
+        return '/staff-dashboard';
+      case UserRole.PARENT:
+        return '/parent-dashboard';
+      case UserRole.NONE:
+        return '/login';
+    }
+  }
+
+  void _routeByRole(UserRole role) {
       if (role == UserRole.SUPER_ADMIN) {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SuperAdminDashboardScreen()));
       } else if (role == UserRole.ADMIN) {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
+      } else if (role == UserRole.FINANCE) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const FinanceDashboardScreen()));
       } else if (role == UserRole.STAFF) {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const StaffDashboardScreen()));
       } else if (role == UserRole.PARENT) {
@@ -88,46 +208,101 @@ class _EnhancedLoginScreenState extends ConsumerState<EnhancedLoginScreen> {
           _isLoading = false;
         });
       }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-        _isLoading = false;
-      });
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bgDark,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+      body: Stack(
+        children: [
+          // Ambient radial glow behind the card
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (_, __) => DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0, -0.3),
+                    radius: 0.9,
+                    colors: [
+                      _accentBlue.withOpacity(_glowAnimation.value * 0.22),
+                      _bgDark,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24.0),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: SlideTransition(
+                      position: _slideAnimation,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                   const SizedBox(height: 40),
                   // Logo and Title
                   Column(
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.asset('assets/images/eazyschool.png', height: 100),
+                      AnimatedBuilder(
+                        animation: _glowAnimation,
+                        builder: (_, child) => Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _accentBlue
+                                    .withOpacity(_glowAnimation.value * 0.6),
+                                blurRadius: 32,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: child,
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Image.asset('assets/images/eazyschool.png',
+                              height: 96),
+                        ),
                       ),
-                      const SizedBox(height: 16),
-                      const Text('Eazy School 360', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: _textPrimary)),
+                      const SizedBox(height: 18),
+                      const Text('Eazy School 360', style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: _textPrimary,
+                        letterSpacing: 0.3,
+                      )),
                       const SizedBox(height: 6),
-                      const Text('School Management System', style: TextStyle(color: _textSecondary)),
+                      const Text('School Management System', style: TextStyle(
+                        color: _textSecondary,
+                        fontSize: 13,
+                        letterSpacing: 0.2,
+                      )),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
                   Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: _cardDark,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _borderColor),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.35),
+                          blurRadius: 28,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
                     child: Form(
                       key: _formKey,
                       child: Column(
@@ -152,7 +327,7 @@ class _EnhancedLoginScreenState extends ConsumerState<EnhancedLoginScreen> {
                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _accentBlue, width: 2)),
                         filled: true,
-                        fillColor: _cardDark,
+                        fillColor: _bgDark,
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -198,7 +373,7 @@ class _EnhancedLoginScreenState extends ConsumerState<EnhancedLoginScreen> {
                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _accentBlue, width: 2)),
                         filled: true,
-                        fillColor: _cardDark,
+                        fillColor: _bgDark,
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
@@ -283,25 +458,52 @@ class _EnhancedLoginScreenState extends ConsumerState<EnhancedLoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   Column(
                     children: [
-                      Text('© ${DateTime.now().year} Eazy School 360. All rights reserved.', textAlign: TextAlign.center, style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                      Text(
+                        '© ${DateTime.now().year} Eazy School 360. All rights reserved.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            color: _textSecondary, fontSize: 12),
+                      ),
                       const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text('Powered by ', style: TextStyle(color: _textSecondary, fontSize: 11)),
-                          Image.asset('assets/images/logo.png', height: 20),
+                          const Text('Powered by ',
+                              style: TextStyle(
+                                  color: _textSecondary, fontSize: 11)),
+                          ShaderMask(
+                            shaderCallback: (b) => const LinearGradient(
+                              colors: [
+                                Color(0xFF4CAF50),
+                                Color(0xFF8B5CF6),
+                              ],
+                            ).createShader(b),
+                            child: const Text(
+                              'Avail404',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.6,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ],
                   ),
-                ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

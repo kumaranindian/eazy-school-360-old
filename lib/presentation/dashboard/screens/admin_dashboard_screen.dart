@@ -9,8 +9,6 @@ import '../../../core/security/role_policy.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/fee_repository.dart';
 import '../../../data/repositories/expense_repository.dart';
-import '../../../data/repositories/student_repository.dart';
-import '../../../domain/entities/student.dart';
 import '../../admin/screens/staff_management_screen.dart';
 import '../../admin/screens/manage_finance_users_screen.dart';
 import '../../admin/screens/leave_policy_config_screen.dart';
@@ -21,6 +19,8 @@ import '../../admin/screens/holiday_management_screen.dart';
 import '../../admin/screens/student_directory_screen.dart';
 import '../../admin/screens/class_teacher_assignment_screen.dart';
 import '../../admin/screens/student_leave_approval_screen.dart';
+import '../../admin/screens/student_promotion_screen.dart';
+import '../../admin/screens/academic_year_management_screen.dart';
 import '../../finance/screens/expense_entry_screen.dart';
 import '../../finance/screens/financial_reports_screen.dart';
 import '../../finance/screens/bill_management_screen.dart';
@@ -30,6 +30,7 @@ import '../../finance/screens/student_fee_management_screen.dart';
 import '../../admin/screens/payroll_management_screen.dart';
 import '../../admin/screens/school_settings_screen.dart';
 import '../../auth/screens/enhanced_login_screen.dart';
+import '../../shared/widgets/school_switcher.dart';
 
 class MenuItem {
   final String id;
@@ -76,11 +77,11 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     MenuItem(id: 'holiday_management', icon: Icons.calendar_month_rounded, label: 'Holiday Management'),
     MenuItem(id: 'payroll_management', icon: Icons.payments_rounded, label: 'Payroll', isNew: true),
     MenuItem(id: 'divider1', icon: Icons.remove, label: ''),
-    MenuItem(id: 'student_ops', icon: Icons.school_rounded, label: 'Students', children: [
-      MenuItem(id: 'student_management', icon: Icons.people_rounded, label: 'Student Directory'),
-      MenuItem(id: 'class_teacher_assign', icon: Icons.assignment_ind_rounded, label: 'Class Teachers'),
-      MenuItem(id: 'student_leave_approval', icon: Icons.event_busy_rounded, label: 'Student Leaves'),
-      MenuItem(id: 'delete_student', icon: Icons.person_remove_rounded, label: 'Delete Student'),
+    MenuItem(id: 'students', icon: Icons.people, label: 'Students', children: [
+      MenuItem(id: 'student_management', icon: Icons.list, label: 'Student Directory'),
+      MenuItem(id: 'class_teacher_assign', icon: Icons.assignment_ind, label: 'Class Teacher Assignment'),
+      MenuItem(id: 'student_leave_approval', icon: Icons.event_available, label: 'Student Leave Approval'),
+      MenuItem(id: 'student-promotion', icon: Icons.school, label: 'Student Promotion', isNew: true),
     ]),
     MenuItem(id: 'finance_management', icon: Icons.account_balance_wallet_rounded, label: 'Finance', children: [
       MenuItem(id: 'student_fee_mgmt', icon: Icons.account_balance_wallet_rounded, label: 'Fee Management', isNew: true),
@@ -92,6 +93,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     ]),
     MenuItem(id: 'divider2', icon: Icons.remove, label: ''),
     MenuItem(id: 'upload_sheet', icon: Icons.upload_file_rounded, label: 'Upload Sheet', isNew: true),
+    MenuItem(id: 'academic-year-mgmt', icon: Icons.calendar_month_rounded, label: 'Academic Year Management', isNew: true),
     MenuItem(id: 'settings', icon: Icons.settings_rounded, label: 'Settings'),
   ];
 
@@ -382,6 +384,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         ],
         Text(_getPageTitle(), style: TextStyle(fontSize: isDesktop ? 18 : 16, fontWeight: FontWeight.bold, color: _textPrimary)),
         const Spacer(),
+        // School switcher dropdown — only renders when the user has more
+        // than one active membership.
+        const SchoolSwitcher(textColor: _textPrimary),
+        const SizedBox(width: 12),
         Stack(children: [
           Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(8), border: Border.all(color: _borderColor)), child: const Icon(Icons.notifications_outlined, color: _textSecondary, size: 20)),
           Positioned(right: 4, top: 4, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle))),
@@ -434,6 +440,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       case 'student_management': return const StudentDirectoryScreen();
       case 'class_teacher_assign': return const ClassTeacherAssignmentScreen();
       case 'student_leave_approval': return const StudentLeaveApprovalScreen();
+      case 'student-promotion': return const StudentPromotionScreen();
+      case 'academic-year-mgmt': return const AcademicYearManagementScreen();
       case 'student_fee_mgmt': return const StudentFeeManagementScreen();
       case 'delete_student': return const DeleteStudentScreen();
       case 'expenses': return const ExpenseEntryScreen();
@@ -445,15 +453,6 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     }
   }
 
-  Widget _buildComingSoon(String feature) {
-    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: _accentBlue.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.rocket_launch_rounded, size: 48, color: _accentBlue)),
-      const SizedBox(height: 24),
-      Text(feature, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: _textPrimary)),
-      const SizedBox(height: 8),
-      const Text('This feature is coming soon!', style: TextStyle(color: _textSecondary, fontSize: 14)),
-    ]));
-  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // DASHBOARD HOME - Mock-matching UI
@@ -976,6 +975,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
+        // Skip system-seeded placeholder docs (legacy `_meta` seeds) so
+        // they don't show up as phantom "Unknown: 1" entries with no
+        // login on a freshly-provisioned school.
+        if (data['__system'] == true || data['isPlaceholder'] == true) continue;
         total++;
         final status = (data['status'] as String?)?.toUpperCase() ?? 'ACTIVE';
         if (status == 'ACTIVE') active++;
@@ -1009,10 +1012,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       final todayCollection = await feeRepo.getTodayCollection(schoolId);
       final todayExpenses = await expenseRepo.getTodayExpenses(schoolId);
       final feeSummary = await feeRepo.getFeeSummary(schoolId);
-      return {'totalStudents': feeSummary.totalStudents, 'todayCollection': todayCollection, 'todayExpenses': todayExpenses, 'pendingFees': feeSummary.pendingFees};
+      return {'totalStudents': feeSummary.totalStudents, 'todayCollection': todayCollection, 'todayExpenses': todayExpenses, 'outstandingFees': feeSummary.outstandingFees};
     } catch (e) {
       debugPrint('Error fetching finance stats: $e');
-      return {'totalStudents': 0, 'todayCollection': 0.0, 'todayExpenses': 0.0, 'pendingFees': 0.0};
+      return {'totalStudents': 0, 'todayCollection': 0.0, 'todayExpenses': 0.0, 'outstandingFees': 0.0};
     }
   }
 }

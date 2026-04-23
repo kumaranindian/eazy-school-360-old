@@ -6,6 +6,7 @@ import 'package:eazy_school_360/domain/entities/staff_profile.dart';
 import 'package:eazy_school_360/domain/entities/app_user.dart';
 import 'package:eazy_school_360/firebase_options.dart';
 import 'package:eazy_school_360/data/services/leave_balance_service.dart';
+import 'package:eazy_school_360/data/services/membership_service.dart';
 import 'package:eazy_school_360/core/services/id_generator_service.dart';
 
 class StaffManagementRepository {
@@ -563,10 +564,22 @@ class StaffManagementRepository {
     }
   }
 
-  /// Create a Finance Admin user (Admin only)
+  /// Create a Finance Admin user (Admin only).
+  ///
+  /// Multi-tenant behaviour:
+  ///   * If the email is NEW → create a Firebase Auth user and write a
+  ///     FINANCE membership at this school.
+  ///   * If the email already belongs to ANY Firebase Auth user (in this
+  ///     school or another) → DO NOT create a new Auth user. Reuse the
+  ///     existing uid and simply attach a FINANCE membership. This covers:
+  ///       - same user being granted FINANCE at a second school
+  ///       - an existing STAFF member in this school being promoted to
+  ///         STAFF+FINANCE (roles are merged, not replaced)
   Future<Map<String, String>> createFinanceUser(String schoolId, String adminUserId, CreateStaffRequest request) async {
     try {
+      print('🔍 [STAFF_REPO] Creating finance user: ${request.email}');
       await _validateAdminAccess(adminUserId, schoolId);
+      print('✅ [STAFF_REPO] Admin access validated');
 
       String employeeId = request.employeeId;
       if (employeeId.isEmpty) {
@@ -574,42 +587,83 @@ class StaffManagementRepository {
         employeeId = await idGenerator.generateStaffId(schoolId);
       }
 
+      // Fetch school name once — needed to populate the membership doc.
+      String schoolName = '';
+      try {
+        final schoolDoc =
+            await _firestore.collection('schools').doc(schoolId).get();
+        final data = schoolDoc.data();
+        if (data != null) {
+          schoolName =
+              (data['schoolName'] ?? data['name'] ?? '').toString();
+        }
+      } catch (_) {/* non-critical */}
+
+      String userId;
+      String? tempPassword;
+      bool isNewAuthUser;
+      print('🔍 [STAFF_REPO] Checking if user exists: ${request.email}');
       final existingUser = await _getUserByEmail(request.email);
+      print('🔍 [STAFF_REPO] User exists: ${existingUser != null}');
+
       if (existingUser != null) {
-        throw Exception('Email ${request.email} is already registered');
+        // Reuse the existing Firebase Auth account — no new credential is
+        // created, no temp password is issued. The user keeps signing in
+        // with their current email/password and gains FINANCE access.
+        userId = existingUser.uid;
+        isNewAuthUser = false;
+        print('✅ [STAFF_REPO] Using existing user: ${existingUser.uid}');
+      } else {
+        tempPassword = _generateTemporaryPassword();
+        final secondaryAuth = await _getSecondaryAuth();
+        final userCredential =
+            await secondaryAuth.createUserWithEmailAndPassword(
+          email: request.email,
+          password: tempPassword,
+        );
+        userId = userCredential.user!.uid;
+        isNewAuthUser = true;
+
+        // Top-level user doc only for brand new users — we don't want to
+        // overwrite an existing doc's role/schoolId here.
+        final userData = AppUser(
+          uid: userId,
+          email: request.email,
+          displayName: request.name,
+          role: UserRole.FINANCE,
+          schoolId: schoolId,
+          staffType: request.staffType,
+          status: UserStatus.ACTIVE,
+          onboardingStatus: OnboardingStatus.PENDING_ACTIVATION,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+          createdBy: adminUserId,
+          profile: UserProfile(
+            phoneNumber: request.phoneNumber,
+            department: request.department,
+            designation: request.designation,
+            joiningDate: request.joiningDate,
+          ),
+          permissions: UserPermissions.forRole(UserRole.FINANCE),
+        );
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .set(userData.toFirestore());
       }
 
-      final tempPassword = _generateTemporaryPassword();
-      final secondaryAuth = await _getSecondaryAuth();
-      final userCredential = await secondaryAuth.createUserWithEmailAndPassword(
-        email: request.email,
-        password: tempPassword,
-      );
-
-      final userId = userCredential.user!.uid;
-
-      final userData = AppUser(
+      // Membership (authoritative per-school). upsertRoles merges the
+      // FINANCE role into any existing memberships at this school so
+      // STAFF + FINANCE etc. works cleanly.
+      final membershipService = MembershipService(firestore: _firestore);
+      await membershipService.upsertRoles(
         uid: userId,
-        email: request.email,
-        displayName: request.name,
-        role: UserRole.FINANCE,
         schoolId: schoolId,
-        staffType: request.staffType,
-        status: UserStatus.ACTIVE,
-        onboardingStatus: OnboardingStatus.PENDING_ACTIVATION,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        schoolName: schoolName,
+        roles: const [UserRole.FINANCE],
+        ensureActive: true,
         createdBy: adminUserId,
-        profile: UserProfile(
-          phoneNumber: request.phoneNumber,
-          department: request.department,
-          designation: request.designation,
-          joiningDate: request.joiningDate,
-        ),
-        permissions: UserPermissions.forRole(UserRole.FINANCE),
       );
-
-      await _firestore.collection('users').doc(userId).set(userData.toFirestore());
 
       final staffProfile = StaffProfile(
         id: '',
@@ -637,14 +691,17 @@ class StaffManagementRepository {
           .collection('staff')
           .add(staffProfile.toFirestore());
 
-      await _sendWelcomeEmail(request.email, request.name, tempPassword);
+      if (isNewAuthUser && tempPassword != null) {
+        await _sendWelcomeEmail(request.email, request.name, tempPassword);
+      }
 
       return {
         'staffId': docRef.id,
         'employeeId': employeeId,
         'name': request.name,
         'email': request.email,
-        'tempPassword': tempPassword,
+        'tempPassword': tempPassword ?? '',
+        'reusedExistingAccount': existingUser != null ? 'true' : 'false',
       };
     } catch (e) {
       throw Exception('Failed to create finance user: $e');
@@ -685,7 +742,8 @@ class StaffManagementRepository {
     final userStatus = adminData['status'];
     print('🔍 [STAFF_REPO] User status: $userStatus');
     
-    if (userStatus != 'ACTIVE') {
+    // UserStatus is stored as enum string, check against ACTIVE
+    if (userStatus != 'ACTIVE' && userStatus != 'Active') {
       print('❌ [STAFF_REPO] Admin account is not active');
       throw Exception('Admin account is not active');
     }
@@ -693,21 +751,40 @@ class StaffManagementRepository {
     print('✅ [STAFF_REPO] Admin access validation passed');
   }
 
-  /// Get user by email
+  /// Get user by email - try multiple approaches
   Future<AppUser?> _getUserByEmail(String email) async {
+    // Method 1: Try querying users collection first
     try {
+      print('🔍 [STAFF_REPO] Querying users collection for email: $email');
       final querySnapshot = await _firestore
           .collection('users')
           .where('email', isEqualTo: email)
           .limit(1)
           .get();
 
+      print('🔍 [STAFF_REPO] Query completed, found ${querySnapshot.docs.length} documents');
       if (querySnapshot.docs.isNotEmpty) {
+        print('✅ [STAFF_REPO] User found: ${querySnapshot.docs.first.id}');
         return AppUser.fromFirestore(querySnapshot.docs.first);
       }
+      print('ℹ️ [STAFF_REPO] No user found with email: $email');
       return null;
     } catch (e) {
-      return null;
+      print('❌ [STAFF_REPO] Error querying user by email: $e');
+      print('⚠️ [STAFF_REPO] Trying alternative method using Firebase Auth...');
+      
+      // Method 2: Try Firebase Auth to check if user exists
+      try {
+        // Since we can't easily check email existence, we'll proceed with creation
+        // Firebase Auth will handle duplicate emails during createUserWithEmailAndPassword
+        print('⚠️ [STAFF_REPO] Cannot query users collection due to permissions. Proceeding with creation.');
+        print('ℹ️ [STAFF_REPO] Firebase Auth will handle duplicate email validation during user creation.');
+        return null;
+      } catch (authError) {
+        print('❌ [STAFF_REPO] Alternative check failed: $authError');
+        print('⚠️ [STAFF_REPO] Proceeding as if user does not exist. Firebase Auth will handle duplicates.');
+        return null;
+      }
     }
   }
 

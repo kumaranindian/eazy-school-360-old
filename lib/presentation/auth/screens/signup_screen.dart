@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_theme.dart';
-import '../../../core/utils/responsive_helper.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/services/tenant_provisioning_service.dart';
+import '../widgets/provisioning_progress_dialog.dart';
 import 'enhanced_login_screen.dart';
 import 'waiting_activation_screen.dart';
 
+/// Sign-up / school registration screen.
+///
+/// Intentionally mirrors the [EnhancedLoginScreen] look & feel:
+///   * centered single-card layout on a dark scaffold
+///   * Eazy School logo + tagline on top
+///   * dark, high-contrast form fields with a green accent
+///
+/// The flow is a two-step wizard (school info -> admin account) inside the
+/// same card, switched with a fade+slide animation.
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
 
@@ -14,9 +23,21 @@ class SignupScreen extends ConsumerStatefulWidget {
   ConsumerState<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _SignupScreenState extends ConsumerState<SignupScreen> with TickerProviderStateMixin {
-  final _formKey = GlobalKey<FormState>();
-  final _pageController = PageController();
+class _SignupScreenState extends ConsumerState<SignupScreen>
+    with SingleTickerProviderStateMixin {
+  // --- Dark theme tokens (match login / dashboard) ---------------------------
+  static const Color _bgDark = Color(0xFF0D1117);
+  static const Color _cardDark = Color(0xFF161B22);
+  static const Color _accentBlue = Color(0xFF4CAF50);
+  static const Color _textPrimary = Color(0xFFE6EDF3);
+  static const Color _textSecondary = Color(0xFF8B949E);
+  static const Color _borderColor = Color(0xFF30363D);
+  static const Color _errorRed = Color(0xFFEF4444);
+
+  // --- Form state ------------------------------------------------------------
+  final _step1Key = GlobalKey<FormState>();
+  final _step2Key = GlobalKey<FormState>();
+
   final _schoolNameController = TextEditingController();
   final _schoolAddressController = TextEditingController();
   final _schoolPhoneController = TextEditingController();
@@ -25,34 +46,30 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with TickerProvider
   final _adminEmailController = TextEditingController();
   final _adminPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  
+
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   int _currentStep = 0;
-  AnimationController? _animationController;
-  Animation<double>? _fadeAnimation;
+  String? _errorMessage;
 
-  // Dark theme tokens (match dashboard)
-  static const Color _bgDark = Color(0xFF0D1117);
-  static const Color _cardDark = Color(0xFF161B22);
-  static const Color _accentBlue = Color(0xFF4CAF50);
-  static const Color _textPrimaryDark = Color(0xFFE6EDF3);
-  static const Color _textSecondaryDark = Color(0xFF8B949E);
-  static const Color _borderColor = Color(0xFF30363D);
+  late final AnimationController _fadeController;
+  late final Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _animationController!, curve: Curves.easeOut));
-    _animationController?.forward();
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..forward();
+    _fadeAnimation =
+        CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
   }
 
   @override
   void dispose() {
-    _animationController?.dispose();
-    _pageController.dispose();
+    _fadeController.dispose();
     _schoolNameController.dispose();
     _schoolAddressController.dispose();
     _schoolPhoneController.dispose();
@@ -64,36 +81,44 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with TickerProvider
     super.dispose();
   }
 
-  void _nextStep() {
-    if (_currentStep == 0) {
-      if (_schoolNameController.text.isEmpty) { _showError('Please enter school name'); return; }
-      if (_schoolAddressController.text.isEmpty) { _showError('Please enter school address'); return; }
-    }
-    setState(() => _currentStep = 1);
-    _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+  // ---------------------------------------------------------------------------
+  // Step transitions
+  // ---------------------------------------------------------------------------
+
+  void _goToStep2() {
+    if (!(_step1Key.currentState?.validate() ?? false)) return;
+    setState(() {
+      _errorMessage = null;
+      _currentStep = 1;
+    });
   }
 
-  void _previousStep() {
-    setState(() => _currentStep = 0);
-    _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+  void _goToStep1() {
+    setState(() {
+      _errorMessage = null;
+      _currentStep = 0;
+    });
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: AppColors.error,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
-  }
+  // ---------------------------------------------------------------------------
+  // Business logic
+  // ---------------------------------------------------------------------------
 
   Future<void> _signup() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_adminPasswordController.text != _confirmPasswordController.text) { _showError('Passwords do not match'); return; }
-    setState(() => _isLoading = true);
+    if (!(_step2Key.currentState?.validate() ?? false)) return;
+    if (_adminPasswordController.text != _confirmPasswordController.text) {
+      setState(() => _errorMessage = 'Passwords do not match');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
     try {
       final authRepository = ref.read(authRepositoryProvider);
-      await authRepository.signUpWithEmailAndPassword(
+      final result = await authRepository.signUpWithEmailAndPassword(
         email: _adminEmailController.text.trim(),
         password: _adminPasswordController.text,
         schoolName: _schoolNameController.text.trim(),
@@ -102,197 +127,692 @@ class _SignupScreenState extends ConsumerState<SignupScreen> with TickerProvider
         schoolWebsite: _schoolWebsiteController.text.trim(),
         adminName: _adminNameController.text.trim(),
       );
-      if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const WaitingActivationScreen()));
+      if (!mounted) return;
+      await _runProvisioningThenContinue(result);
+    } on SchoolNameAlreadyExistsException catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+        _currentStep = 0; // bounce back to school-name field
+      });
+    } on EmailAlreadyRegisteredException catch (_) {
+      if (!mounted) return;
+      final accepted = await _promptAddSchoolToExistingAccount();
+      if (accepted == true) await _addSchoolToExistingAccount();
     } catch (e) {
-      _showError(e.toString());
+      setState(() => _errorMessage = _cleanError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  Future<void> _addSchoolToExistingAccount() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final authRepository = ref.read(authRepositoryProvider);
+      final result = await authRepository.signUpAdditionalSchool(
+        email: _adminEmailController.text.trim(),
+        password: _adminPasswordController.text,
+        schoolName: _schoolNameController.text.trim(),
+        schoolAddress: _schoolAddressController.text.trim(),
+        schoolPhone: _schoolPhoneController.text.trim(),
+        schoolWebsite: _schoolWebsiteController.text.trim(),
+        adminName: _adminNameController.text.trim(),
+      );
+      if (!mounted) return;
+      await _runProvisioningThenContinue(result);
+    } on SchoolNameAlreadyExistsException catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+        _currentStep = 0;
+      });
+    } catch (e) {
+      setState(() => _errorMessage = _cleanError(e));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Runs the per-tenant provisioning pipeline for a freshly created school
+  /// and shows a modal dialog with real-time per-step status. Once the dialog
+  /// is dismissed, the user is sent to the waiting-activation screen.
+  Future<void> _runProvisioningThenContinue(SignupResult result) async {
+    final service = TenantProvisioningService();
+    // Use a broadcast stream so the dialog can subscribe after the emission
+    // has started without losing events. [Stream.asBroadcastStream] caches
+    // the subscription for us.
+    final stream = service
+        .provisionSchool(
+          schoolId: result.schoolId,
+          createdByUid: result.uid,
+        )
+        .asBroadcastStream();
+
+    await ProvisioningProgressDialog.show(
+      context: context,
+      stream: stream,
+      schoolName: _schoolNameController.text.trim(),
+    );
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WaitingActivationScreen(
+          pendingSchoolId: result.schoolId,
+          pendingSchoolName: _schoolNameController.text.trim(),
+        ),
+      ),
+    );
+  }
+
+  Future<bool?> _promptAddSchoolToExistingAccount() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _cardDark,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: _borderColor),
+        ),
+        title: const Text(
+          'Email already registered',
+          style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          '"${_adminEmailController.text.trim()}" is already used by another '
+          'school on Eazy School 360.\n\nWould you like to add '
+          '"${_schoolNameController.text.trim()}" to the same account?',
+          style: const TextStyle(color: _textSecondary, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Use different email',
+                style: TextStyle(color: _textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _accentBlue,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Add school'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _cleanError(Object e) =>
+      e.toString().replaceAll('Exception: ', '').trim();
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
-    final responsive = context.responsive;
-    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: _bgDark,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          color: _bgDark,
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation ?? const AlwaysStoppedAnimation(1.0),
-            child: responsive.isWeb ? _buildWebLayout(responsive, colorScheme) : _buildMobileLayout(responsive, colorScheme),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 24),
+                    _buildHeader(),
+                    const SizedBox(height: 24),
+                    _buildStepIndicator(),
+                    const SizedBox(height: 20),
+                    _buildFormCard(),
+                    const SizedBox(height: 16),
+                    _buildSignInLink(),
+                    const SizedBox(height: 8),
+                    _buildFooter(),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildWebLayout(ResponsiveHelper responsive, ColorScheme colorScheme) {
-    return Row(children: [
-      Expanded(flex: 4, child: Container(
-        decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: AppColors.primaryGradient)),
-        child: Center(child: Padding(
-          padding: EdgeInsets.all(responsive.largeSpacing),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
-              child: Icon(Icons.school_rounded, size: responsive.responsive(mobile: 60, tablet: 80, desktop: 100), color: Colors.white),
-            ),
-            SizedBox(height: responsive.largeSpacing),
-            Text('Register Your School', style: TextStyle(fontSize: responsive.responsive(mobile: 24, tablet: 32, desktop: 40), fontWeight: FontWeight.bold, color: Colors.white)),
-            SizedBox(height: responsive.spacing),
-            Text('Join thousands of schools using\nEazy School 360', style: TextStyle(fontSize: responsive.responsive(mobile: 14, tablet: 16, desktop: 18), color: Colors.white.withOpacity(0.9)), textAlign: TextAlign.center),
-            SizedBox(height: responsive.largeSpacing * 2),
-            _buildStepIndicator(responsive, isWeb: true),
-          ]),
-        )),
-      )),
-      Expanded(flex: 5, child: Center(child: Container(
-        constraints: const BoxConstraints(maxWidth: 500),
-        padding: EdgeInsets.all(responsive.largeSpacing),
-        child: _buildFormCard(responsive, colorScheme),
-      ))),
-    ]);
-  }
+  // --- Header ----------------------------------------------------------------
 
-  Widget _buildMobileLayout(ResponsiveHelper responsive, ColorScheme colorScheme) {
-    return Column(children: [
-      _buildMobileHeader(responsive, colorScheme),
-      Padding(padding: EdgeInsets.symmetric(horizontal: responsive.spacing, vertical: responsive.smallSpacing), child: _buildStepIndicator(responsive, isWeb: false)),
-      Expanded(child: SingleChildScrollView(padding: EdgeInsets.all(responsive.spacing), child: _buildFormCard(responsive, colorScheme))),
-    ]);
-  }
-
-  Widget _buildMobileHeader(ResponsiveHelper responsive, ColorScheme colorScheme) {
-    return Container(
-      padding: EdgeInsets.all(responsive.spacing),
-      child: Row(children: [
-        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back_rounded), style: IconButton.styleFrom(backgroundColor: colorScheme.primary.withOpacity(0.1))),
-        SizedBox(width: responsive.spacing),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Register School', style: TextStyle(fontSize: responsive.responsive(mobile: 20, tablet: 24), fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-          Text(_currentStep == 0 ? 'School Information' : 'Admin Account', style: TextStyle(fontSize: responsive.responsive(mobile: 13, tablet: 14), color: AppColors.textSecondary)),
-        ])),
-      ]),
+  Widget _buildHeader() {
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.asset('assets/images/eazyschool.png', height: 84),
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'Register Your School',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: _textPrimary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Join thousands of schools using Eazy School 360',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: _textSecondary, fontSize: 13),
+        ),
+      ],
     );
   }
 
-  Widget _buildStepIndicator(ResponsiveHelper responsive, {required bool isWeb}) {
-    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      _buildStepDot(0, 'School Info', responsive, isWeb),
-      Container(width: responsive.responsive(mobile: 40, tablet: 60, desktop: 80), height: 2, color: _currentStep >= 1 ? (isWeb ? Colors.white : AppColors.primary) : (isWeb ? Colors.white.withOpacity(0.3) : AppColors.border)),
-      _buildStepDot(1, 'Admin Account', responsive, isWeb),
-    ]);
+  // --- Step indicator --------------------------------------------------------
+
+  Widget _buildStepIndicator() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _stepDot(1, active: _currentStep >= 0, done: _currentStep > 0),
+        _stepConnector(active: _currentStep > 0),
+        _stepDot(2, active: _currentStep >= 1, done: false),
+      ],
+    );
   }
 
-  Widget _buildStepDot(int step, String label, ResponsiveHelper responsive, bool isWeb) {
-    final isActive = _currentStep >= step;
-    final activeColor = isWeb ? Colors.white : AppColors.primary;
-    final inactiveColor = isWeb ? Colors.white.withOpacity(0.3) : AppColors.border;
-    return Column(children: [
-      Container(
-        width: 32, height: 32,
-        decoration: BoxDecoration(color: isActive ? activeColor : Colors.transparent, border: Border.all(color: isActive ? activeColor : inactiveColor, width: 2), shape: BoxShape.circle),
-        child: Center(child: isActive && _currentStep > step
-          ? Icon(Icons.check, size: 18, color: isWeb ? AppColors.primary : Colors.white)
-          : Text('${step + 1}', style: TextStyle(color: isActive ? (isWeb ? AppColors.primary : Colors.white) : (isWeb ? Colors.white.withOpacity(0.5) : AppColors.textSecondary), fontWeight: FontWeight.bold))),
-      ),
-      SizedBox(height: responsive.smallSpacing),
-      Text(label, style: TextStyle(fontSize: 12, color: isActive ? (isWeb ? Colors.white : AppColors.textPrimary) : (isWeb ? Colors.white.withOpacity(0.5) : AppColors.textSecondary), fontWeight: isActive ? FontWeight.w600 : FontWeight.normal)),
-    ]);
+  Widget _stepDot(int n, {required bool active, required bool done}) {
+    final color = active ? _accentBlue : _borderColor;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: active ? _accentBlue : _cardDark,
+            shape: BoxShape.circle,
+            border: Border.all(color: color, width: 1.5),
+          ),
+          alignment: Alignment.center,
+          child: done
+              ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+              : Text(
+                  '$n',
+                  style: TextStyle(
+                    color: active ? Colors.white : _textSecondary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          n == 1 ? 'School' : 'Admin',
+          style: TextStyle(
+            fontSize: 11,
+            color: active ? _textPrimary : _textSecondary,
+            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ],
+    );
   }
 
-  Widget _buildFormCard(ResponsiveHelper responsive, ColorScheme colorScheme) {
+  Widget _stepConnector({required bool active}) => Container(
+        width: 48,
+        height: 2,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        color: active ? _accentBlue : _borderColor,
+      );
+
+  // --- Form card (step 1 / step 2 with switcher) -----------------------------
+
+  Widget _buildFormCard() {
     return Container(
-      padding: EdgeInsets.all(responsive.largeSpacing),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: _cardDark,
-        borderRadius: BorderRadius.circular(responsive.borderRadius * 1.5),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _borderColor),
       ),
-      child: Form(key: _formKey, child: SizedBox(
-        height: responsive.responsive(mobile: 420, tablet: 440, desktop: 460),
-        child: PageView(controller: _pageController, physics: const NeverScrollableScrollPhysics(), children: [_buildSchoolInfoForm(responsive), _buildAdminInfoForm(responsive)]),
-      )),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        transitionBuilder: (child, animation) {
+          final slide = Tween<Offset>(
+            begin: Offset(_currentStep == 0 ? -0.05 : 0.05, 0),
+            end: Offset.zero,
+          ).animate(animation);
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(position: slide, child: child),
+          );
+        },
+        child: _currentStep == 0 ? _buildSchoolStep() : _buildAdminStep(),
+      ),
     );
   }
 
-  Widget _buildSchoolInfoForm(ResponsiveHelper responsive) {
-    return SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Text('School Information', style: TextStyle(fontSize: responsive.responsive(mobile: 20, tablet: 22), fontWeight: FontWeight.bold, color: _textPrimaryDark)),
-      SizedBox(height: responsive.smallSpacing),
-      Text('Enter your school details', style: TextStyle(fontSize: responsive.responsive(mobile: 14, tablet: 15), color: _textSecondaryDark)),
-      SizedBox(height: responsive.largeSpacing),
-      _buildTextField(controller: _schoolNameController, label: 'School Name', hint: 'Enter school name', icon: Icons.school_outlined, validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
-      SizedBox(height: responsive.spacing),
-      _buildTextField(controller: _schoolAddressController, label: 'Address', hint: 'Enter school address', icon: Icons.location_on_outlined, validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
-      SizedBox(height: responsive.spacing),
-      _buildTextField(controller: _schoolPhoneController, label: 'Phone (Optional)', hint: 'Enter phone number', icon: Icons.phone_outlined, keyboardType: TextInputType.phone),
-      SizedBox(height: responsive.spacing),
-      _buildTextField(controller: _schoolWebsiteController, label: 'Website (Optional)', hint: 'Enter website URL', icon: Icons.language_outlined, keyboardType: TextInputType.url),
-      SizedBox(height: responsive.largeSpacing),
-      SizedBox(height: responsive.buttonHeight, child: ElevatedButton(onPressed: _nextStep, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Text('Continue'), const SizedBox(width: 8), const Icon(Icons.arrow_forward_rounded, size: 20)]))),
-    ]));
+  Widget _buildSchoolStep() {
+    return Form(
+      key: _step1Key,
+      child: Column(
+        key: const ValueKey('step-school'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _SectionTitle(
+              title: 'School Information',
+              subtitle: 'Tell us about your school'),
+          const SizedBox(height: 16),
+          _textField(
+            controller: _schoolNameController,
+            label: 'School Name',
+            hint: 'Enter school name',
+            icon: Icons.school_outlined,
+            textInputAction: TextInputAction.next,
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'School name is required' : null,
+          ),
+          const SizedBox(height: 14),
+          _textField(
+            controller: _schoolAddressController,
+            label: 'Address',
+            hint: 'Enter school address',
+            icon: Icons.location_on_outlined,
+            textInputAction: TextInputAction.next,
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Address is required' : null,
+          ),
+          const SizedBox(height: 14),
+          _textField(
+            controller: _schoolPhoneController,
+            label: 'Phone (Optional)',
+            hint: 'Enter phone number',
+            icon: Icons.phone_outlined,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.next,
+          ),
+          const SizedBox(height: 14),
+          _textField(
+            controller: _schoolWebsiteController,
+            label: 'Website (Optional)',
+            hint: 'https://yourschool.com',
+            icon: Icons.language_outlined,
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.done,
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 14),
+            _buildErrorBanner(),
+          ],
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 50,
+            child: ElevatedButton(
+              onPressed: _goToStep2,
+              style: _primaryButtonStyle(),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Continue',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600)),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward_rounded, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildAdminInfoForm(ResponsiveHelper responsive) {
-    return SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Text('Admin Account', style: TextStyle(fontSize: responsive.responsive(mobile: 20, tablet: 22), fontWeight: FontWeight.bold, color: _textPrimaryDark)),
-      SizedBox(height: responsive.smallSpacing),
-      Text('Create your admin account', style: TextStyle(fontSize: responsive.responsive(mobile: 14, tablet: 15), color: _textSecondaryDark)),
-      SizedBox(height: responsive.largeSpacing),
-      _buildTextField(controller: _adminNameController, label: 'Full Name', hint: 'Enter your name', icon: Icons.person_outline, validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
-      SizedBox(height: responsive.spacing),
-      _buildTextField(controller: _adminEmailController, label: 'Email', hint: 'Enter your email', icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress, validator: (v) { if (v?.isEmpty ?? true) return 'Required'; if (!v!.contains('@')) return 'Invalid email'; return null; }),
-      SizedBox(height: responsive.spacing),
-      _buildTextField(controller: _adminPasswordController, label: 'Password', hint: 'Create a password', icon: Icons.lock_outline, obscureText: _obscurePassword, suffixIcon: IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)), validator: (v) { if (v?.isEmpty ?? true) return 'Required'; if (v!.length < 6) return 'Min 6 characters'; return null; }),
-      SizedBox(height: responsive.spacing),
-      _buildTextField(controller: _confirmPasswordController, label: 'Confirm Password', hint: 'Confirm your password', icon: Icons.lock_outline, obscureText: _obscureConfirmPassword, suffixIcon: IconButton(icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword)), validator: (v) { if (v?.isEmpty ?? true) return 'Required'; if (v != _adminPasswordController.text) return 'Passwords do not match'; return null; }),
-      SizedBox(height: responsive.largeSpacing),
-      Row(children: [
-        Expanded(child: SizedBox(height: responsive.buttonHeight, child: OutlinedButton(onPressed: _previousStep, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.arrow_back_rounded, size: 20), const SizedBox(width: 8), const Text('Back')])))),
-        SizedBox(width: responsive.spacing),
-        Expanded(flex: 2, child: SizedBox(height: responsive.buttonHeight, child: ElevatedButton(onPressed: _isLoading ? null : _signup, child: _isLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Create Account')))),
-      ]),
-      SizedBox(height: responsive.spacing),
-      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text('Already have an account? ', style: const TextStyle(color: _textSecondaryDark)),
-        TextButton(
-          onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const EnhancedLoginScreen())),
-          child: const Text('Sign In', style: TextStyle(color: _accentBlue)),
-        ),
-      ]),
-    ]));
+  Widget _buildAdminStep() {
+    return Form(
+      key: _step2Key,
+      child: Column(
+        key: const ValueKey('step-admin'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _SectionTitle(
+              title: 'Admin Account',
+              subtitle: 'Create your administrator login'),
+          const SizedBox(height: 16),
+          _textField(
+            controller: _adminNameController,
+            label: 'Full Name',
+            hint: 'Enter your name',
+            icon: Icons.person_outline,
+            textInputAction: TextInputAction.next,
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+          ),
+          const SizedBox(height: 14),
+          _textField(
+            controller: _adminEmailController,
+            label: 'Email',
+            hint: 'Enter your email',
+            icon: Icons.email_outlined,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return 'Email is required';
+              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                  .hasMatch(v.trim())) {
+                return 'Enter a valid email';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 14),
+          _textField(
+            controller: _adminPasswordController,
+            label: 'Password',
+            hint: 'Create a password',
+            icon: Icons.lock_outline,
+            obscureText: _obscurePassword,
+            textInputAction: TextInputAction.next,
+            suffixIcon: IconButton(
+              icon: Icon(
+                  _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                  color: _textSecondary),
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
+            ),
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Password is required';
+              if (v.length < 6) return 'Minimum 6 characters';
+              return null;
+            },
+          ),
+          const SizedBox(height: 14),
+          _textField(
+            controller: _confirmPasswordController,
+            label: 'Confirm Password',
+            hint: 'Re-enter your password',
+            icon: Icons.lock_outline,
+            obscureText: _obscureConfirmPassword,
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (_) => _signup(),
+            suffixIcon: IconButton(
+              icon: Icon(
+                  _obscureConfirmPassword
+                      ? Icons.visibility
+                      : Icons.visibility_off,
+                  color: _textSecondary),
+              onPressed: () => setState(
+                  () => _obscureConfirmPassword = !_obscureConfirmPassword),
+            ),
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Please confirm your password';
+              if (v != _adminPasswordController.text) {
+                return 'Passwords do not match';
+              }
+              return null;
+            },
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 14),
+            _buildErrorBanner(),
+          ],
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 50,
+                  child: OutlinedButton(
+                    onPressed: _isLoading ? null : _goToStep1,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _textPrimary,
+                      side: const BorderSide(color: _borderColor),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.arrow_back_rounded, size: 18),
+                        SizedBox(width: 6),
+                        Text('Back',
+                            style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: SizedBox(
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _signup,
+                    style: _primaryButtonStyle(),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text(
+                            'Create Account',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w600),
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildTextField({required TextEditingController controller, required String label, required String hint, required IconData icon, TextInputType? keyboardType, bool obscureText = false, Widget? suffixIcon, String? Function(String?)? validator}) {
+  // --- Shared field + styles -------------------------------------------------
+
+  Widget _textField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    TextInputType? keyboardType,
+    TextInputAction? textInputAction,
+    bool obscureText = false,
+    Widget? suffixIcon,
+    String? Function(String?)? validator,
+    void Function(String)? onFieldSubmitted,
+  }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
+      textInputAction: textInputAction,
       obscureText: obscureText,
-      validator: validator,
-      style: const TextStyle(color: _textPrimaryDark),
+      enabled: !_isLoading,
+      style: const TextStyle(color: _textPrimary),
       cursorColor: _accentBlue,
+      validator: validator,
+      onFieldSubmitted: onFieldSubmitted,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        labelStyle: const TextStyle(color: _textSecondaryDark),
-        floatingLabelStyle: const TextStyle(color: _textPrimaryDark),
-        hintStyle: const TextStyle(color: _textSecondaryDark),
-        prefixIcon: Icon(icon, color: _textSecondaryDark),
+        labelStyle: const TextStyle(color: _textSecondary),
+        floatingLabelStyle: const TextStyle(color: _textPrimary),
+        hintStyle: const TextStyle(color: _textSecondary),
+        prefixIcon: Icon(icon, color: _textSecondary, size: 20),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: _cardDark,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _accentBlue, width: 2)),
+        fillColor: _bgDark,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: _borderColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: _borderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: _accentBlue, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: _errorRed),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: _errorRed, width: 2),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
+    );
+  }
+
+  ButtonStyle _primaryButtonStyle() => ElevatedButton.styleFrom(
+        backgroundColor: _accentBlue,
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: _accentBlue.withOpacity(0.5),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      );
+
+  Widget _buildErrorBanner() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFB91C1C).withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFB91C1C).withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: _errorRed, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: const TextStyle(color: _textPrimary, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- Footer bits -----------------------------------------------------------
+
+  Widget _buildSignInLink() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text('Already have an account? ',
+            style: TextStyle(color: _textSecondary, fontSize: 13)),
+        TextButton(
+          onPressed: _isLoading
+              ? null
+              : () => Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const EnhancedLoginScreen()),
+                  ),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text(
+            'Sign In',
+            style: TextStyle(
+              color: _accentBlue,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFooter() {
+    return Column(
+      children: [
+        Text(
+          '© ${DateTime.now().year} Eazy School 360. All rights reserved.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: _textSecondary, fontSize: 11),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('Powered by ',
+                style: TextStyle(color: _textSecondary, fontSize: 11)),
+            ShaderMask(
+              shaderCallback: (b) => const LinearGradient(
+                colors: [Color(0xFF4CAF50), Color(0xFF8B5CF6)],
+              ).createShader(b),
+              child: const Text(
+                'Avail404',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  const _SectionTitle({required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFFE6EDF3),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E)),
+        ),
+      ],
     );
   }
 }

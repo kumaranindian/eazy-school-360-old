@@ -11,6 +11,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../../core/providers/auth_provider.dart';
+import '../../../domain/entities/academic_year.dart';
+import '../../../presentation/shared/widgets/searchable_dropdown.dart';
+import '../../shared/pdf/pdf_branding.dart';
 
 const Color _bgDark      = Color(0xFF0D1117);
 const Color _cardDark    = Color(0xFF161B22);
@@ -142,6 +145,16 @@ class _FeePaymentScreenState extends ConsumerState<FeePaymentScreen> {
           .collection('student_fee_details').doc(widget.studentDocId)
           .update(upd);
 
+      // For arrears, attribute payment to the originating academic year/class
+      // when available on the student record (populated during promotion).
+      // Falls back to current AY/class so regular payments keep working.
+      final currentAY = AcademicYear.getCurrentYearCode();
+      final currentFY = FiscalYear.getCurrentYearCode();
+      final prevAY = (d['previousAcademicYear'] ?? '').toString();
+      final prevClass = (d['previousClass'] ?? '').toString();
+      final originatingAY = _isArrear && prevAY.isNotEmpty ? prevAY : currentAY;
+      final originatingClass = _isArrear && prevClass.isNotEmpty ? prevClass : stuClass;
+
       await FirebaseFirestore.instance
           .collection('schools').doc(_schoolId).collection('bills').add({
         'billId': _billNumber, 'billType': 'Revenue',
@@ -150,6 +163,14 @@ class _FeePaymentScreenState extends ConsumerState<FeePaymentScreen> {
         'billDate': Timestamp.fromDate(DateTime.now()),
         'createdAt': FieldValue.serverTimestamp(),
         'isDeleted': false, 'isBillDeleted': false, 'remarks': '',
+        // Payment is recorded in the CURRENT AY/FY (money flow).
+        'academicYear': currentAY,
+        'fiscalYear': currentFY,
+        // But we keep track of where the unpaid fees originally came from,
+        // so historical reports can show "X paid in 2026-27 for Class III of 2025-26".
+        'originatingAcademicYear': originatingAY,
+        'originatingClass': originatingClass,
+        'isArrear': _isArrear,
       });
 
       setState(() => _isSaving = false);
@@ -174,23 +195,38 @@ class _FeePaymentScreenState extends ConsumerState<FeePaymentScreen> {
       final stuSection = (d['stuSection'] ?? d['section'] ?? '').toString();
       final stuId      = d['stuId']?.toString() ?? '';
 
+      final branding = _schoolId == null
+          ? const PdfBrandingContext(
+              schoolName: '',
+              schoolAddress: '',
+              schoolPhone: '',
+              schoolEmail: '',
+              logoImage: null,
+            )
+          : await PdfBranding.forSchool(_schoolId!);
+
       final pdf = pw.Document();
-      pdf.addPage(pw.Page(
+      pdf.addPage(pw.MultiPage(
         pageFormat: PdfPageFormat.a5,
-        build: (ctx) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-          pw.Center(child: pw.Text('FEE RECEIPT', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold))),
-          pw.SizedBox(height: 8), pw.Divider(), pw.SizedBox(height: 8),
-          _pr('Bill No', '#$_billNumber'), _pr('Date', _dateCtrl.text),
-          pw.SizedBox(height: 8), pw.Divider(), pw.SizedBox(height: 8),
+        margin: const pw.EdgeInsets.all(20),
+        header: (ctx) => PdfBranding.buildHeader(
+          branding,
+          title: 'FEE RECEIPT',
+          subtitle: 'Bill #$_billNumber • ${_dateCtrl.text}',
+        ),
+        footer: (ctx) => PdfBranding.buildFooter(branding, ctx),
+        build: (ctx) => [
+          pw.SizedBox(height: 4),
           _pr('Student Name', stuName), _pr('Student ID', stuId),
           _pr('Class & Section', '$stuClass - $stuSection'),
+          _pr('Academic Year', AcademicYear.getCurrentYearCode()),
           pw.SizedBox(height: 8), pw.Divider(), pw.SizedBox(height: 8),
           _pr('Fee Type', _selectedFeeType),
-          _pr('Amount Paid', '₹${_fmt.format(amount)}'),
-          _pr('Balance Due', '₹${_fmt.format(_balance - amount)}'),
-          pw.SizedBox(height: 16), pw.Divider(), pw.SizedBox(height: 8),
+          _pr('Amount Paid', 'Rs. ${_fmt.format(amount)}'),
+          _pr('Balance Due', 'Rs. ${_fmt.format(_balance - amount)}'),
+          pw.SizedBox(height: 20),
           pw.Center(child: pw.Text('Thank you!', style: const pw.TextStyle(fontSize: 12))),
-        ]),
+        ],
       ));
       final bytes = await pdf.save();
       _dl(bytes, 'receipt_$_billNumber.pdf', 'application/pdf');
@@ -396,27 +432,15 @@ class _FeePaymentScreenState extends ConsumerState<FeePaymentScreen> {
     );
   }
 
-  Widget _buildFeeTypeDropdown() => DropdownButtonFormField<String>(
-    value: _selectedFeeType,
-    dropdownColor: _cardDark,
-    style: const TextStyle(color: _textPrimary, fontSize: 14),
-    decoration: InputDecoration(
-      prefixIcon: Icon(_isArrear ? Icons.history : Icons.category_outlined, color: _isArrear ? _accentRed : _accentBlue, size: 18),
-      filled: true, fillColor: _bgDark,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _accentBlue, width: 2)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-    ),
-    items: _feeTypes.map((t) => DropdownMenuItem(
-      value: t,
-      child: Row(children: [
-        if (t.startsWith('Arrear')) ...[const Icon(Icons.history, color: _accentRed, size: 14), const SizedBox(width: 6)]
-        else if (t != 'Select Fees Type') ...[const Icon(Icons.payments_outlined, color: _accentBlue, size: 14), const SizedBox(width: 6)],
-        Text(t, style: TextStyle(color: t.startsWith('Arrear') ? _accentRed : _textPrimary, fontWeight: t.startsWith('Arrear') ? FontWeight.w600 : FontWeight.normal, fontSize: 13)),
-      ]),
-    )).toList(),
-    onChanged: (v) => setState(() { _selectedFeeType = v!; _amountCtrl.text = '0'; }),
+  Widget _buildFeeTypeDropdown() => SearchableDropdown<String>(
+    value: _selectedFeeType == 'Select Fees Type' ? null : _selectedFeeType,
+    items: _feeTypes.where((t) => t != 'Select Fees Type').toList(),
+    itemLabel: (t) => t,
+    hint: 'Select fees type',
+    onChanged: (v) => setState(() {
+      _selectedFeeType = v ?? 'Select Fees Type';
+      _amountCtrl.text = '0';
+    }),
   );
 
   Widget _roField(String label, String value, IconData icon) => Column(

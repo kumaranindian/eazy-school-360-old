@@ -21,6 +21,8 @@ class Student {
   final StudentStatus status;
   final bool isVanAvailed;
   final String? parentUserId;
+  final String academicYearCode; // e.g., "2024-25"
+  final double arrears; // Pending fees from previous years
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? createdBy;
@@ -44,6 +46,8 @@ class Student {
     required this.status,
     this.isVanAvailed = false,
     this.parentUserId,
+    required this.academicYearCode,
+    this.arrears = 0.0,
     required this.createdAt,
     required this.updatedAt,
     this.createdBy,
@@ -70,6 +74,8 @@ class Student {
       status: _parseStatus(data['status']),
       isVanAvailed: data['isVanAvailed'] as bool? ?? false,
       parentUserId: data['parentUserId'] as String?,
+      academicYearCode: data['academicYearCode'] as String? ?? '',
+      arrears: (data['arrears'] as num?)?.toDouble() ?? 0.0,
       createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
       updatedAt: _parseDateTime(data['updatedAt']) ?? DateTime.now(),
       createdBy: data['createdBy'] as String?,
@@ -114,6 +120,8 @@ class Student {
       'status': status.name,
       'isVanAvailed': isVanAvailed,
       'parentUserId': parentUserId,
+      'academicYearCode': academicYearCode,
+      'arrears': arrears,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'createdBy': createdBy,
@@ -139,6 +147,8 @@ class Student {
     StudentStatus? status,
     bool? isVanAvailed,
     String? parentUserId,
+    String? academicYearCode,
+    double? arrears,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? createdBy,
@@ -162,6 +172,8 @@ class Student {
       status: status ?? this.status,
       isVanAvailed: isVanAvailed ?? this.isVanAvailed,
       parentUserId: parentUserId ?? this.parentUserId,
+      academicYearCode: academicYearCode ?? this.academicYearCode,
+      arrears: arrears ?? this.arrears,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy ?? this.createdBy,

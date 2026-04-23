@@ -635,7 +635,8 @@ class PermissionRequestRepository {
       throw Exception('Access denied to this school');
     }
 
-    if (adminData['status'] != 'ACTIVE') {
+    // UserStatus is stored as enum string, check against ACTIVE
+    if (adminData['status'] != 'ACTIVE' && adminData['status'] != 'Active') {
       throw Exception('Admin account is not active');
     }
   }

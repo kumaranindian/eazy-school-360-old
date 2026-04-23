@@ -54,6 +54,8 @@ class Expense {
   final String? remarks;
   final String cashierName;
   final bool isDeleted;
+  final String academicYear; // e.g. "2025-2026"
+  final String fiscalYear;   // e.g. "2025-2026"
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? createdBy;
@@ -72,6 +74,8 @@ class Expense {
     this.remarks,
     required this.cashierName,
     this.isDeleted = false,
+    this.academicYear = '',
+    this.fiscalYear = '',
     required this.createdAt,
     required this.updatedAt,
     this.createdBy,
@@ -93,6 +97,8 @@ class Expense {
       remarks: data['remarks'] as String?,
       cashierName: (data['cashierName'] ?? data['billCashierName'])?.toString() ?? '',
       isDeleted: (data['isDeleted'] ?? data['isBillDeleted']) == true,
+      academicYear: data['academicYear'] as String? ?? '',
+      fiscalYear: data['fiscalYear'] as String? ?? '',
       createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
       updatedAt: _parseDateTime(data['updatedAt']) ?? DateTime.now(),
       createdBy: data['createdBy'] as String?,
@@ -142,6 +148,8 @@ class Expense {
       'billCashierName': cashierName,
       'isDeleted': isDeleted,
       'isBillDeleted': isDeleted,
+      'academicYear': academicYear,
+      'fiscalYear': fiscalYear,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'createdBy': createdBy,
@@ -167,6 +175,8 @@ class Expense {
     String? remarks,
     String? cashierName,
     bool? isDeleted,
+    String? academicYear,
+    String? fiscalYear,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? createdBy,
@@ -185,6 +195,8 @@ class Expense {
       remarks: remarks ?? this.remarks,
       cashierName: cashierName ?? this.cashierName,
       isDeleted: isDeleted ?? this.isDeleted,
+      academicYear: academicYear ?? this.academicYear,
+      fiscalYear: fiscalYear ?? this.fiscalYear,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy ?? this.createdBy,

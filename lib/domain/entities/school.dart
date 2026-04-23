@@ -80,6 +80,12 @@ class School {
   final SchoolSubscription subscription;
   final int staffCounter; // Auto-increment counter for staff IDs
   final int leaveCounter; // Auto-increment counter for leave IDs
+  // Contact / branding (used by PDF headers, receipts, etc.)
+  final String address;
+  final String phone;
+  final String email;
+  final String website;
+  final String logoUrl;
 
   const School({
     required this.schoolId,
@@ -95,6 +101,11 @@ class School {
     required this.subscription,
     this.staffCounter = 0,
     this.leaveCounter = 0,
+    this.address = '',
+    this.phone = '',
+    this.email = '',
+    this.website = '',
+    this.logoUrl = '',
   });
 
   factory School.fromFirestore(DocumentSnapshot doc) {
@@ -114,6 +125,12 @@ class School {
       subscription: SchoolSubscription.fromMap((data['subscription'] as Map<String, dynamic>?) ?? {}),
       staffCounter: data['staffCounter'] as int? ?? 0,
       leaveCounter: data['leaveCounter'] as int? ?? 0,
+      // Contact fields may be persisted under either shape; support both.
+      address: (data['address'] ?? data['schoolAddress'] ?? '').toString(),
+      phone: (data['phone'] ?? data['schoolPhone'] ?? '').toString(),
+      email: (data['email'] ?? data['schoolEmail'] ?? '').toString(),
+      website: (data['website'] ?? data['schoolWebsite'] ?? '').toString(),
+      logoUrl: (data['logoUrl'] ?? data['schoolLogoUrl'] ?? '').toString(),
     );
   }
 
@@ -153,6 +170,11 @@ class School {
       'subscription': subscription.toMap(),
       'staffCounter': staffCounter,
       'leaveCounter': leaveCounter,
+      'address': address,
+      'phone': phone,
+      'email': email,
+      'website': website,
+      'logoUrl': logoUrl,
     };
   }
 

@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/auth_provider.dart';
+import '../../shared/widgets/searchable_dropdown.dart';
 
-const Color _bgDark = Color(0xFF0D1117);
 const Color _cardDark = Color(0xFF161B22);
 const Color _accentGreen = Color(0xFF4CAF50);
 const Color _textPrimary = Color(0xFFE6EDF3);
@@ -268,20 +268,12 @@ class _DeleteStudentScreenState extends ConsumerState<DeleteStudentScreen> {
   }
 
   Widget _buildDropdown(String hint, String? value, List<String> items, Function(String?) onChanged, {String Function(String)? displayMapper}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(color: _bgDark, borderRadius: BorderRadius.circular(8), border: Border.all(color: _borderColor)),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          hint: Text(hint, style: const TextStyle(color: _textSecondary, fontSize: 14)),
-          isExpanded: true,
-          dropdownColor: _cardDark,
-          style: const TextStyle(color: _textPrimary, fontSize: 14),
-          items: items.map((v) => DropdownMenuItem(value: v, child: Text(displayMapper != null ? displayMapper(v) : v, overflow: TextOverflow.ellipsis))).toList(),
-          onChanged: onChanged,
-        ),
-      ),
+    return SearchableDropdown<String>(
+      value: (value != null && items.contains(value)) ? value : null,
+      hint: hint,
+      items: items,
+      itemLabel: (v) => displayMapper != null ? displayMapper(v) : v,
+      onChanged: onChanged,
     );
   }
 

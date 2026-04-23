@@ -51,18 +51,18 @@ final feeSummaryProvider = FutureProvider.family<FeeSummary, String>((ref, schoo
 class FeeSummary {
   final double totalFees;
   final double collectedFees;
-  final double pendingFees;
+  final double outstandingFees;
   final int totalStudents;
   final int paidStudents;
-  final int pendingStudents;
+  final int outstandingStudents;
 
   const FeeSummary({
     this.totalFees = 0.0,
     this.collectedFees = 0.0,
-    this.pendingFees = 0.0,
+    this.outstandingFees = 0.0,
     this.totalStudents = 0,
     this.paidStudents = 0,
-    this.pendingStudents = 0,
+    this.outstandingStudents = 0,
   });
 }
 
@@ -212,34 +212,39 @@ class FeeRepository {
     
     double totalFees = 0.0;
     double collectedFees = 0.0;
-    double pendingFees = 0.0;
+    double outstandingFees = 0.0;
     int paidStudents = 0;
-    int pendingStudents = 0;
+    int outstandingStudents = 0;
+    int realStudents = 0;
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
+      // Skip legacy `_meta` placeholder seeds so freshly-provisioned
+      // schools don't report phantom students.
+      if (data['__system'] == true || data['isPlaceholder'] == true) continue;
+      realStudents++;
       final total = (data['totalFees'] as num?)?.toDouble() ?? 0.0;
       final paid = (data['paidTotalFees'] as num?)?.toDouble() ?? 0.0;
       final balance = (data['balanceTotalFees'] as num?)?.toDouble() ?? 0.0;
 
       totalFees += total;
       collectedFees += paid;
-      pendingFees += balance;
+      outstandingFees += balance;
 
       if (balance <= 0) {
         paidStudents++;
       } else {
-        pendingStudents++;
+        outstandingStudents++;
       }
     }
 
     return FeeSummary(
       totalFees: totalFees,
       collectedFees: collectedFees,
-      pendingFees: pendingFees,
-      totalStudents: snapshot.docs.length,
+      outstandingFees: outstandingFees,
+      totalStudents: realStudents,
       paidStudents: paidStudents,
-      pendingStudents: pendingStudents,
+      outstandingStudents: outstandingStudents,
     );
   }
 

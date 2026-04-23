@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../data/repositories/expense_repository.dart';
 import '../../../domain/entities/expense.dart';
+import '../../../domain/entities/academic_year.dart';
+import '../../../presentation/shared/widgets/searchable_dropdown.dart';
 
 class ExpenseEntryScreen extends ConsumerStatefulWidget {
   const ExpenseEntryScreen({super.key});
@@ -135,23 +137,12 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
             // Expense Category
             const Text('Expense Category *', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w500)),
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(10), border: Border.all(color: _borderColor)),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<ExpenseCategory>(
-                  value: _selectedCategory,
-                  isExpanded: true,
-                  dropdownColor: _cardDark,
-                  style: const TextStyle(color: _textPrimary),
-                  icon: const Icon(Icons.keyboard_arrow_down, color: _textSecondary),
-                  items: ExpenseCategory.values.map((category) => DropdownMenuItem(
-                    value: category,
-                    child: Text(Expense.getCategoryDisplayName(category)),
-                  )).toList(),
-                  onChanged: (value) => setState(() => _selectedCategory = value!),
-                ),
-              ),
+            SearchableDropdown<ExpenseCategory>(
+              value: _selectedCategory,
+              items: ExpenseCategory.values,
+              itemLabel: (c) => Expense.getCategoryDisplayName(c),
+              hint: 'Select expense category',
+              onChanged: (v) => setState(() => _selectedCategory = v ?? ExpenseCategory.OTHER),
             ),
             const SizedBox(height: 16),
 
@@ -319,6 +310,8 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
         isMissedExpense: _isMissedExpense,
         remarks: _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
         cashierName: session?.displayName ?? 'Unknown',
+        academicYear: AcademicYear.getCurrentYearCode(),
+        fiscalYear: FiscalYear.getCurrentYearCode(),
         createdAt: now,
         updatedAt: now,
         createdBy: session?.uid,

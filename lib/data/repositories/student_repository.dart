@@ -39,12 +39,16 @@ class StudentRepository {
   }
 
   // Get all students for a school
+  // Note: Filter status client-side because legacy student records may not have
+  // the `status` field, and Firestore `where` would silently exclude them.
   Stream<List<Student>> getStudentsStream(String schoolId) {
     return _studentsCollection(schoolId)
-        .where('status', isEqualTo: 'ACTIVE')
         .snapshots()
         .map((snapshot) {
-          final list = snapshot.docs.map((doc) => Student.fromFirestore(doc)).toList();
+          final list = snapshot.docs
+              .map((doc) => Student.fromFirestore(doc))
+              .where((s) => s.status != StudentStatus.INACTIVE)
+              .toList();
           list.sort((a, b) {
             final c = a.className.compareTo(b.className);
             return c != 0 ? c : a.name.compareTo(b.name);
@@ -57,10 +61,12 @@ class StudentRepository {
   Stream<List<Student>> getStudentsByClassStream(String schoolId, String className) {
     return _studentsCollection(schoolId)
         .where('className', isEqualTo: className)
-        .where('status', isEqualTo: 'ACTIVE')
         .snapshots()
         .map((snapshot) {
-          final list = snapshot.docs.map((doc) => Student.fromFirestore(doc)).toList();
+          final list = snapshot.docs
+              .map((doc) => Student.fromFirestore(doc))
+              .where((s) => s.status != StudentStatus.INACTIVE)
+              .toList();
           list.sort((a, b) => a.name.compareTo(b.name));
           return list;
         });

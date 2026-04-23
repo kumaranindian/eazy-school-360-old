@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/providers/auth_provider.dart';
 import 'fee_payment_screen.dart';
+import '../../shared/widgets/searchable_dropdown.dart';
 
 const Color _bgDark = Color(0xFF0D1117);
 const Color _cardDark = Color(0xFF161B22);
@@ -253,7 +254,10 @@ class _StudentFeeManagementScreenState extends ConsumerState<StudentFeeManagemen
 
   Widget _buildFeesSummaryCard(bool isMobile) {
     final s = _studentData;
-    final pending = (s?['stuBalTotalFees'] as num?)?.toDouble() ?? 0;
+    final arrearTuition = (s?['arrearTuitionFees'] as num?)?.toDouble() ?? 0;
+    final arrearExam = (s?['arrearExamFees'] as num?)?.toDouble() ?? 0;
+    final arrearVan = (s?['arrearVanFees'] as num?)?.toDouble() ?? 0;
+    final totalArrears = arrearTuition + arrearExam + arrearVan;
     final concession = (s?['stuConcessionFees'] as num?)?.toDouble() ?? 0;
 
     return Container(
@@ -270,7 +274,7 @@ class _StudentFeeManagementScreenState extends ConsumerState<StudentFeeManagemen
           Text('Fees Summary', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: isMobile ? 14 : 16)),
         ]),
         SizedBox(height: isMobile ? 12 : 16),
-        _summaryRow('Pending Fees', '₹${pending.toStringAsFixed(0)}', pending > 0 ? const Color(0xFFEF4444) : _accentGreen, isMobile),
+        _summaryRow('Arrear Fees', '₹${totalArrears.toStringAsFixed(0)}', totalArrears > 0 ? const Color(0xFFEF4444) : _accentGreen, isMobile),
         SizedBox(height: isMobile ? 8 : 10),
         _summaryRow('Concession Fees', '₹${concession.toStringAsFixed(0)}', const Color(0xFF3B82F6), isMobile),
       ]),
@@ -565,25 +569,12 @@ class _StudentFeeManagementScreenState extends ConsumerState<StudentFeeManagemen
       required Function(String?) onChanged,
       String Function(String)? displayMapper,
       bool isMobile = false}) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 12, vertical: 2),
-      decoration: BoxDecoration(color: _bgDark, borderRadius: BorderRadius.circular(8), border: Border.all(color: _borderColor)),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          hint: Text(hint, style: TextStyle(color: _textSecondary, fontSize: isMobile ? 12 : 13)),
-          isExpanded: true,
-          dropdownColor: _cardDark,
-          style: TextStyle(color: _textPrimary, fontSize: isMobile ? 12 : 13),
-          items: items
-              .map((v) => DropdownMenuItem(
-                    value: v,
-                    child: Text(displayMapper != null ? displayMapper(v) : v, overflow: TextOverflow.ellipsis),
-                  ))
-              .toList(),
-          onChanged: onChanged,
-        ),
-      ),
+    return SearchableDropdown<String>(
+      value: (value != null && items.contains(value)) ? value : null,
+      hint: hint,
+      items: items,
+      itemLabel: (v) => displayMapper != null ? displayMapper(v) : v,
+      onChanged: onChanged,
     );
   }
 

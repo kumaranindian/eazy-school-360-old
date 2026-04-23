@@ -8,6 +8,7 @@ import '../../finance/screens/expense_entry_screen.dart';
 import '../../finance/screens/financial_reports_screen.dart';
 import '../../finance/screens/bill_management_screen.dart';
 import '../../finance/screens/student_fee_management_screen.dart';
+import 'finance_dashboard_home.dart';
 
 class FinanceDashboardScreen extends ConsumerStatefulWidget {
   const FinanceDashboardScreen({Key? key}) : super(key: key);
@@ -17,11 +18,12 @@ class FinanceDashboardScreen extends ConsumerStatefulWidget {
 }
 
 // Menu index mapping:
-// 0 = Student Directory
-// 1 = Fee Management
-// 2 = Expense Entry
-// 3 = Bill Management
-// 4 = Financial Reports
+// 0 = Dashboard Home
+// 1 = Student Directory
+// 2 = Fee Management
+// 3 = Expense Entry
+// 4 = Bill Management
+// 5 = Financial Reports
 
 class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen> {
   int _selectedIndex = 0;
@@ -100,14 +102,16 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
+                  _buildDrawerSectionHeader('Home'),
+                  _buildDrawerNavItem(context, Icons.dashboard_rounded, 'Dashboard', 0),
                   _buildDrawerSectionHeader('Students'),
-                  _buildDrawerNavItem(context, Icons.people_rounded, 'Student Directory', 0),
+                  _buildDrawerNavItem(context, Icons.people_rounded, 'Student Directory', 1),
                   _buildDrawerSectionHeader('Finance'),
-                  _buildDrawerNavItem(context, Icons.account_balance_wallet_rounded, 'Fee Management', 1),
-                  _buildDrawerNavItem(context, Icons.money_off_rounded, 'Expense Entry', 2),
-                  _buildDrawerNavItem(context, Icons.receipt_long_rounded, 'Bill Management', 3),
+                  _buildDrawerNavItem(context, Icons.account_balance_wallet_rounded, 'Fee Management', 2),
+                  _buildDrawerNavItem(context, Icons.money_off_rounded, 'Expense Entry', 3),
+                  _buildDrawerNavItem(context, Icons.receipt_long_rounded, 'Bill Management', 4),
                   _buildDrawerSectionHeader('Reports'),
-                  _buildDrawerNavItem(context, Icons.insights_rounded, 'Financial Reports', 4),
+                  _buildDrawerNavItem(context, Icons.insights_rounded, 'Financial Reports', 5),
                 ],
               ),
             ),
@@ -218,14 +222,16 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
+                _buildSideNavSectionHeader('Home'),
+                _buildSideNavItem(Icons.dashboard_rounded, 'Dashboard', 0),
                 _buildSideNavSectionHeader('Students'),
-                _buildSideNavItem(Icons.people_rounded, 'Student Directory', 0),
+                _buildSideNavItem(Icons.people_rounded, 'Student Directory', 1),
                 _buildSideNavSectionHeader('Finance'),
-                _buildSideNavItem(Icons.account_balance_wallet_rounded, 'Fee Management', 1),
-                _buildSideNavItem(Icons.money_off_rounded, 'Expense Entry', 2),
-                _buildSideNavItem(Icons.receipt_long_rounded, 'Bill Management', 3),
+                _buildSideNavItem(Icons.account_balance_wallet_rounded, 'Fee Management', 2),
+                _buildSideNavItem(Icons.money_off_rounded, 'Expense Entry', 3),
+                _buildSideNavItem(Icons.receipt_long_rounded, 'Bill Management', 4),
                 _buildSideNavSectionHeader('Reports'),
-                _buildSideNavItem(Icons.insights_rounded, 'Financial Reports', 4),
+                _buildSideNavItem(Icons.insights_rounded, 'Financial Reports', 5),
               ],
             ),
           ),
@@ -314,12 +320,13 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
 
   String _getPageTitle() {
     switch (_selectedIndex) {
-      case 0: return 'Student Directory';
-      case 1: return 'Fee Management';
-      case 2: return 'Expense Entry';
-      case 3: return 'Bill Management';
-      case 4: return 'Financial Reports';
-      default: return 'Student Directory';
+      case 0: return 'Dashboard';
+      case 1: return 'Student Directory';
+      case 2: return 'Fee Management';
+      case 3: return 'Expense Entry';
+      case 4: return 'Bill Management';
+      case 5: return 'Financial Reports';
+      default: return 'Dashboard';
     }
   }
 
@@ -388,15 +395,31 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
 
   Widget _buildContent(BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
     switch (_selectedIndex) {
-      case 0: return const StudentManagementScreen();
-      case 1: return const StudentFeeManagementScreen();
-      case 2: return const ExpenseEntryScreen();
-      case 3: return const BillManagementScreen();
-      case 4: return const FinancialReportsScreen();
-      default: return const StudentManagementScreen();
+      case 0:
+        return FinanceDashboardHome(
+          onNavigateToStudents: () => setState(() => _selectedIndex = 1),
+          onNavigateToFees: () => setState(() => _selectedIndex = 2),
+          onNavigateToExpenses: () => setState(() => _selectedIndex = 3),
+          onNavigateToBills: () => setState(() => _selectedIndex = 4),
+          onNavigateToReports: () => setState(() => _selectedIndex = 5),
+        );
+      case 1: return const StudentManagementScreen();
+      case 2: return const StudentFeeManagementScreen();
+      case 3: return const ExpenseEntryScreen();
+      case 4: return const BillManagementScreen();
+      case 5: return const FinancialReportsScreen();
+      default:
+        return FinanceDashboardHome(
+          onNavigateToStudents: () => setState(() => _selectedIndex = 1),
+          onNavigateToFees: () => setState(() => _selectedIndex = 2),
+          onNavigateToExpenses: () => setState(() => _selectedIndex = 3),
+          onNavigateToBills: () => setState(() => _selectedIndex = 4),
+          onNavigateToReports: () => setState(() => _selectedIndex = 5),
+        );
     }
   }
 
+  // ignore: unused_element
   Widget _buildUnusedDashboardContent(BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
     return SingleChildScrollView(
       padding: EdgeInsets.all(isDesktop ? 24 : 16),
@@ -451,7 +474,7 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
             children: [
               _buildStatCard('Total Students', '0', Icons.people_rounded, const Color(0xFF3B82F6)),
               _buildStatCard('Fees Collected', '₹0', Icons.account_balance_wallet_rounded, const Color(0xFF10B981)),
-              _buildStatCard('Pending Fees', '₹0', Icons.pending_rounded, const Color(0xFFF59E0B)),
+              _buildStatCard('Outstanding Fees', '₹0', Icons.account_balance_rounded, const Color(0xFFF59E0B)),
               _buildStatCard('Total Expenses', '₹0', Icons.money_off_rounded, const Color(0xFFEF4444)),
             ],
           ),

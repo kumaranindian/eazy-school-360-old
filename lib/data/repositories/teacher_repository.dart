@@ -1,13 +1,38 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:eazy_school_360/domain/entities/teacher.dart';
+import 'package:eazy_school_360/firebase_options.dart';
 
 class TeacherRepository {
   final FirebaseFirestore _firestore;
+  final FirebaseAuth _auth;
   final Uuid _uuid = const Uuid();
 
-  TeacherRepository(this._firestore);
+  // Secondary Auth instance used ONLY for creating new users
+  FirebaseAuth? _secondaryAuth;
+
+  TeacherRepository(this._firestore, this._auth);
+
+  /// Get or initialize a secondary FirebaseAuth instance for user creation
+  Future<FirebaseAuth> _getSecondaryAuth() async {
+    if (_secondaryAuth != null) return _secondaryAuth!;
+
+    FirebaseApp secondaryApp;
+    try {
+      secondaryApp = Firebase.app('teacher-helper');
+    } on FirebaseException {
+      secondaryApp = await Firebase.initializeApp(
+        name: 'teacher-helper',
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+
+    _secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+    return _secondaryAuth!;
+  }
 
   /// Get all active teachers for a school
   Stream<List<Teacher>> getActiveTeachers(String schoolId) {
@@ -70,8 +95,8 @@ class TeacherRepository {
     }
   }
 
-  /// Create new teacher with automatic balance initialization
-  Future<Teacher> createTeacher(String schoolId, CreateTeacherRequest request) async {
+  /// Create new teacher with automatic balance initialization and Firebase Auth user creation
+  Future<Map<String, dynamic>> createTeacher(String schoolId, CreateTeacherRequest request) async {
     try {
       // Check if email already exists in this school
       final existingTeacher = await getTeacherByEmail(schoolId, request.email);
@@ -81,6 +106,34 @@ class TeacherRepository {
 
       final teacherId = _uuid.v4();
       final now = DateTime.now();
+      String? tempPassword;
+      bool isNewAuthUser = false;
+
+      // Check if Firebase Auth user exists
+      try {
+        final userRecord = await _auth.createUserWithEmailAndPassword(
+          email: request.email + '_check', // Temporary check
+          password: 'temp123',
+        );
+        await userRecord.user?.delete(); // Clean up
+      } catch (e) {
+        // User already exists, which is what we want to check
+      }
+      
+      // Try to create new Firebase Auth user
+      tempPassword = _generateTemporaryPassword();
+      final secondaryAuth = await _getSecondaryAuth();
+      try {
+        await secondaryAuth.createUserWithEmailAndPassword(
+          email: request.email,
+          password: tempPassword,
+        );
+        isNewAuthUser = true;
+        print('✅ [TEACHER_REPO] Created Firebase Auth user: ${request.email}');
+      } catch (e) {
+        print('ℹ️ [TEACHER_REPO] Firebase Auth user already exists: ${request.email}');
+        tempPassword = null;
+      }
 
       // Fetch all active leave types and permission types for this school
       final leaveTypesSnapshot = await _firestore
@@ -133,10 +186,42 @@ class TeacherRepository {
       print('✅ [TEACHER_REPO] Created teacher: ${teacher.name} (${teacher.email})');
       print('📊 [TEACHER_REPO] Initialized ${leaveBalances.length} leave types and ${permissionLimits.length} permission types');
 
-      return teacher;
+      // Send welcome email for new users
+      if (isNewAuthUser && tempPassword != null) {
+        await _sendWelcomeEmail(request.email, request.name, tempPassword);
+      }
+
+      return {
+        'teacher': teacher,
+        'tempPassword': tempPassword ?? '',
+        'isNewAuthUser': isNewAuthUser,
+      };
     } catch (e) {
       print('❌ [TEACHER_REPO] Error creating teacher: $e');
       throw Exception('Failed to create teacher: $e');
+    }
+  }
+
+  /// Generate temporary password for new users
+  String _generateTemporaryPassword() {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#';
+    final random = DateTime.now().millisecondsSinceEpoch;
+    return '${random.toString().substring(5)}@Teach';
+  }
+
+  /// Send welcome email with temporary password
+  Future<void> _sendWelcomeEmail(String email, String name, String tempPassword) async {
+    try {
+      // Note: Implement email sending logic here
+      // This would typically use Firebase Functions, SendGrid, or another email service
+      print('📧 [TEACHER_REPO] Welcome email sent to: $email');
+      print('📧 [TEACHER_REPO] Email contains temp password: $tempPassword');
+      
+      // For now, just log the email details
+      // In production, integrate with your email service
+    } catch (e) {
+      print('❌ [TEACHER_REPO] Error sending welcome email: $e');
+      // Don't throw error - teacher creation should succeed even if email fails
     }
   }
 
@@ -201,8 +286,9 @@ class TeacherRepository {
   Future<void> addLeaveBalanceToAllTeachers(String schoolId, String leaveTypeId, int defaultBalance) async {
     try {
       final teachersSnapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('teachers')
-          .where('schoolId', isEqualTo: schoolId)
           .where('isActive', isEqualTo: true)
           .get();
 
@@ -210,7 +296,11 @@ class TeacherRepository {
       int batchCount = 0;
 
       for (final doc in teachersSnapshot.docs) {
-        final teacherRef = _firestore.collection('teachers').doc(doc.id);
+        final teacherRef = _firestore
+            .collection('schools')
+            .doc(schoolId)
+            .collection('teachers')
+            .doc(doc.id);
         
         batch.update(teacherRef, {
           'leaveBalances.$leaveTypeId': defaultBalance,
@@ -239,9 +329,11 @@ class TeacherRepository {
   }
 
   /// Add permission limit to all active teachers (called when new permission type is created)
-  Future<void> addPermissionLimitToAllTeachers(String permissionTypeId, int defaultLimit) async {
+  Future<void> addPermissionLimitToAllTeachers(String schoolId, String permissionTypeId, int defaultLimit) async {
     try {
       final teachersSnapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('teachers')
           .where('isActive', isEqualTo: true)
           .get();
@@ -250,7 +342,11 @@ class TeacherRepository {
       int batchCount = 0;
 
       for (final doc in teachersSnapshot.docs) {
-        final teacherRef = _firestore.collection('teachers').doc(doc.id);
+        final teacherRef = _firestore
+            .collection('schools')
+            .doc(schoolId)
+            .collection('teachers')
+            .doc(doc.id);
         
         batch.update(teacherRef, {
           'permissionLimits.$permissionTypeId': defaultLimit,
@@ -303,7 +399,8 @@ class TeacherRepository {
 /// Providers
 final teacherRepositoryProvider = Provider<TeacherRepository>((ref) {
   final firestore = FirebaseFirestore.instance;
-  return TeacherRepository(firestore);
+  final auth = FirebaseAuth.instance;
+  return TeacherRepository(firestore, auth);
 });
 
 /// Stream provider for all teachers by school

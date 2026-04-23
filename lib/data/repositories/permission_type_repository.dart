@@ -89,6 +89,7 @@ class PermissionTypeRepository {
 
       // Add this permission type to all existing active teachers
       await _teacherRepository.addPermissionLimitToAllTeachers(
+        schoolId,
         permissionTypeId,
         request.defaultLimit,
       );
