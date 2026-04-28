@@ -8,6 +8,8 @@ import '../../finance/screens/expense_entry_screen.dart';
 import '../../finance/screens/financial_reports_screen.dart';
 import '../../finance/screens/bill_management_screen.dart';
 import '../../finance/screens/student_fee_management_screen.dart';
+import '../../finance/screens/fee_structure_list_screen.dart';
+import '../../finance/screens/student_fee_ledger_list_screen.dart';
 import 'finance_dashboard_home.dart';
 
 class FinanceDashboardScreen extends ConsumerStatefulWidget {
@@ -20,10 +22,12 @@ class FinanceDashboardScreen extends ConsumerStatefulWidget {
 // Menu index mapping:
 // 0 = Dashboard Home
 // 1 = Student Directory
-// 2 = Fee Management
+// 2 = Fee Management (legacy)
 // 3 = Expense Entry
 // 4 = Bill Management
 // 5 = Financial Reports
+// 6 = Fee Structures (term-wise)
+// 7 = Student Fee Ledgers
 
 class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen> {
   int _selectedIndex = 0;
@@ -110,6 +114,9 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
                   _buildDrawerNavItem(context, Icons.account_balance_wallet_rounded, 'Fee Management', 2),
                   _buildDrawerNavItem(context, Icons.money_off_rounded, 'Expense Entry', 3),
                   _buildDrawerNavItem(context, Icons.receipt_long_rounded, 'Bill Management', 4),
+                  _buildDrawerSectionHeader('Term-wise Fees'),
+                  _buildDrawerNavItem(context, Icons.receipt_long_outlined, 'Fee Structures', 6),
+                  _buildDrawerNavItem(context, Icons.assignment_ind_outlined, 'Student Ledgers', 7),
                   _buildDrawerSectionHeader('Reports'),
                   _buildDrawerNavItem(context, Icons.insights_rounded, 'Financial Reports', 5),
                 ],
@@ -230,6 +237,9 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
                 _buildSideNavItem(Icons.account_balance_wallet_rounded, 'Fee Management', 2),
                 _buildSideNavItem(Icons.money_off_rounded, 'Expense Entry', 3),
                 _buildSideNavItem(Icons.receipt_long_rounded, 'Bill Management', 4),
+                _buildSideNavSectionHeader('Term-wise Fees'),
+                _buildSideNavItem(Icons.receipt_long_outlined, 'Fee Structures', 6),
+                _buildSideNavItem(Icons.assignment_ind_outlined, 'Student Ledgers', 7),
                 _buildSideNavSectionHeader('Reports'),
                 _buildSideNavItem(Icons.insights_rounded, 'Financial Reports', 5),
               ],
@@ -326,6 +336,8 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
       case 3: return 'Expense Entry';
       case 4: return 'Bill Management';
       case 5: return 'Financial Reports';
+      case 6: return 'Fee Structures';
+      case 7: return 'Student Fee Ledgers';
       default: return 'Dashboard';
     }
   }
@@ -408,6 +420,8 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
       case 3: return const ExpenseEntryScreen();
       case 4: return const BillManagementScreen();
       case 5: return const FinancialReportsScreen();
+      case 6: return const FeeStructureListScreen();
+      case 7: return const StudentFeeLedgerListScreen();
       default:
         return FinanceDashboardHome(
           onNavigateToStudents: () => setState(() => _selectedIndex = 1),

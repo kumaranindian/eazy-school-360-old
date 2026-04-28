@@ -27,6 +27,8 @@ import '../../finance/screens/bill_management_screen.dart';
 import '../../finance/screens/delete_student_screen.dart';
 import '../../finance/screens/upload_sheet_screen.dart';
 import '../../finance/screens/student_fee_management_screen.dart';
+import '../../finance/screens/fee_structure_list_screen.dart';
+import '../../finance/screens/student_fee_ledger_list_screen.dart';
 import '../../admin/screens/payroll_management_screen.dart';
 import '../../admin/screens/school_settings_screen.dart';
 import '../../auth/screens/enhanced_login_screen.dart';
@@ -85,6 +87,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     ]),
     MenuItem(id: 'finance_management', icon: Icons.account_balance_wallet_rounded, label: 'Finance', children: [
       MenuItem(id: 'student_fee_mgmt', icon: Icons.account_balance_wallet_rounded, label: 'Fee Management', isNew: true),
+      MenuItem(id: 'fee_structures_v2', icon: Icons.receipt_long_outlined, label: 'Fee Structures', isNew: true),
+      MenuItem(id: 'student_fee_ledgers', icon: Icons.assignment_ind_outlined, label: 'Student Ledgers', isNew: true),
       MenuItem(id: 'expenses', icon: Icons.money_off_rounded, label: 'Expense Entry'),
       MenuItem(id: 'bill_management', icon: Icons.receipt_long_rounded, label: 'Bill Management', isNew: true),
     ]),
@@ -354,6 +358,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       case 'class_teacher_assign': return 'Class Teacher Assignment';
       case 'student_leave_approval': return 'Student Leave Approval';
       case 'student_fee_mgmt': return 'Student Fee Management';
+      case 'fee_structures_v2': return 'Fee Structures';
+      case 'student_fee_ledgers': return 'Student Fee Ledgers';
       case 'delete_student': return 'Delete Student';
       case 'fee_collection': return 'Fee Collection';
       case 'expenses': return 'Expense Entry';
@@ -443,6 +449,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       case 'student-promotion': return const StudentPromotionScreen();
       case 'academic-year-mgmt': return const AcademicYearManagementScreen();
       case 'student_fee_mgmt': return const StudentFeeManagementScreen();
+      case 'fee_structures_v2': return const FeeStructureListScreen();
+      case 'student_fee_ledgers': return const StudentFeeLedgerListScreen();
       case 'delete_student': return const DeleteStudentScreen();
       case 'expenses': return const ExpenseEntryScreen();
       case 'bill_management': return const BillManagementScreen();
