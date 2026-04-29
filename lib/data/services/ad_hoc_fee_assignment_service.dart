@@ -116,10 +116,9 @@ class AdHocFeeAssignmentService {
       await _feeItemRepo.createBatch(schoolId, feeItems);
       print('[AdHocFeeAssignment] Fee items created successfully');
 
-      // Step 5: Update assignment progress
-      print('[AdHocFeeAssignment] Updating assignment progress...');
-      await _assignmentRepo.updateProgress(schoolId, assignmentId, targetStudents.length);
-      await _assignmentRepo.markComplete(schoolId, assignmentId);
+      // Step 5: Update assignment progress and mark complete in one operation
+      print('[AdHocFeeAssignment] Updating assignment progress and marking complete...');
+      await _assignmentRepo.updateProgressAndComplete(schoolId, assignmentId, targetStudents.length);
       print('[AdHocFeeAssignment] Assignment completed successfully');
 
       return AssignmentResult(

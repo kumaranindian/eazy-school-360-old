@@ -98,6 +98,14 @@ class _AdHocFeeAssignmentScreenState
       final session = ref.read(currentSessionProvider);
       final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0;
 
+      print('[AdHocFeeAssignmentScreen] Creating assignment...');
+      print('[AdHocFeeAssignmentScreen] School ID: ${widget.schoolId}');
+      print('[AdHocFeeAssignmentScreen] Academic Year: ${widget.academicYear}');
+      print('[AdHocFeeAssignmentScreen] User ID: ${session?.uid}');
+      print('[AdHocFeeAssignmentScreen] User Role: ${session?.role}');
+      print('[AdHocFeeAssignmentScreen] Category: $_selectedCategory');
+      print('[AdHocFeeAssignmentScreen] Scope: $_scope');
+
       final result = await service.createAndAssign(
         schoolId: widget.schoolId,
         academicYear: widget.academicYear,

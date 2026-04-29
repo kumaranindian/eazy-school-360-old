@@ -71,6 +71,19 @@ class AdHocFeeAssignmentRepository {
     });
   }
 
+  /// Update progress and mark complete in one operation
+  Future<void> updateProgressAndComplete(
+    String schoolId,
+    String assignmentId,
+    int assignedCount,
+  ) async {
+    await _col(schoolId).doc(assignmentId).update({
+      'assignedCount': assignedCount,
+      'status': 'completed',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   /// Cancel an assignment
   Future<void> cancel(String schoolId, String assignmentId, String reason) async {
     await _col(schoolId).doc(assignmentId).update({

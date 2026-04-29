@@ -437,7 +437,10 @@ service cloud.firestore {
       // AD-HOC FEE ASSIGNMENTS — bulk fee assignments for events
       match /adHocFeeAssignments/{assignmentId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
-        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow create: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+                      && request.resource.data.schoolId == schoolId;
+        allow update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+                      && resource.data.schoolId == schoolId;
         allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
       }
 
