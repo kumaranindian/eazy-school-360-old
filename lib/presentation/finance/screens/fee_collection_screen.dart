@@ -4,11 +4,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/auth_provider.dart';
+import '../../../data/repositories/fee_category_repository.dart';
 import '../../../data/repositories/student_repository.dart';
 import '../../../data/repositories/fee_repository.dart';
+import '../../../domain/entities/fee_category.dart';
 import '../../../domain/entities/student.dart';
 import '../../../domain/entities/fee_payment.dart';
+import '../../../domain/entities/fee_structure_v2.dart';
+import '../../../domain/entities/fee_term.dart';
 import '../../../domain/entities/academic_year.dart';
+import '../../../data/services/fee_structure_to_payment_mapper.dart';
+import '../../../data/services/student_fee_rows_from_structure_service.dart';
 
 class FeeCollectionScreen extends ConsumerStatefulWidget {
   const FeeCollectionScreen({super.key});
@@ -20,18 +26,28 @@ class FeeCollectionScreen extends ConsumerStatefulWidget {
 class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
   final _formKey = GlobalKey<FormState>();
   final _searchController = TextEditingController();
-  final _admissionFeeController = TextEditingController(text: '0');
-  final _tuitionFeeController = TextEditingController(text: '0');
-  final _examFeeController = TextEditingController(text: '0');
-  final _vanFeeController = TextEditingController(text: '0');
+
+  /// One TextEditingController per fee-category code (e.g. TUITION,
+  /// SPORTS_FEE). Built dynamically from the school catalog filtered by
+  /// the selected student's class.
+  final Map<String, TextEditingController> _categoryControllers = {};
+
+  /// Categories applicable to the currently selected student, in the order
+  /// they should be rendered.
+  List<FeeCategory> _activeCategories = const [];
+
   final _arrearsController = TextEditingController(text: '0');
   final _remarksController = TextEditingController();
-  
+
   Student? _selectedStudent;
   PaymentMode _paymentMode = PaymentMode.CASH;
   bool _isLoading = false;
   List<Student> _searchResults = [];
   bool _showSearchResults = false;
+
+  // FeeStructureV2 integration
+  FeeStructureV2? _activeStructure;
+  FeeTerm? _nextDueTerm;
 
   // Dark theme colors
   static const Color _bgDark = Color(0xFF0D1117);
@@ -42,20 +58,26 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
   static const Color _borderColor = Color(0xFF30363D);
 
   double get _totalAmount {
-    return (double.tryParse(_admissionFeeController.text) ?? 0) +
-        (double.tryParse(_tuitionFeeController.text) ?? 0) +
-        (double.tryParse(_examFeeController.text) ?? 0) +
-        (double.tryParse(_vanFeeController.text) ?? 0) +
-        (double.tryParse(_arrearsController.text) ?? 0);
+    double sum = double.tryParse(_arrearsController.text) ?? 0;
+    for (final c in _categoryControllers.values) {
+      sum += double.tryParse(c.text) ?? 0;
+    }
+    return sum;
   }
+
+  /// Returns the controller for a category code, creating it on first
+  /// access. Defaults the text to '0'.
+  TextEditingController _controllerFor(String code) =>
+      _categoryControllers.putIfAbsent(
+          code, () => TextEditingController(text: '0'));
 
   @override
   void dispose() {
     _searchController.dispose();
-    _admissionFeeController.dispose();
-    _tuitionFeeController.dispose();
-    _examFeeController.dispose();
-    _vanFeeController.dispose();
+    for (final c in _categoryControllers.values) {
+      c.dispose();
+    }
+    _categoryControllers.clear();
     _arrearsController.dispose();
     _remarksController.dispose();
     super.dispose();
@@ -215,25 +237,53 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             ],
             const SizedBox(height: 24),
 
+            // Helper buttons
+            if (_selectedStudent != null) ...[
+              Row(
+                children: [
+                  if (_nextDueTerm != null)
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _autoFillFromNextTerm,
+                        icon: const Icon(Icons.auto_awesome, size: 16),
+                        label: const Text('Auto‑fill from Next Term'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _accentBlue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  if (_nextDueTerm != null && _activeStructure != null) const SizedBox(width: 12),
+                  if (_activeStructure != null)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _downloadClassFeeRows,
+                        icon: const Icon(Icons.download, size: 16),
+                        label: const Text('Download Class Rows'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _accentBlue,
+                          side: const BorderSide(color: _accentBlue),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // Fee Breakdown
-            const Text('Fee Breakdown', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+            Row(children: [
+              const Text('Fee Breakdown', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(width: 8),
+              if (_activeCategories.isEmpty && _selectedStudent != null)
+                const Text('(no categories — defaulting to legacy buckets)',
+                    style: TextStyle(color: _textSecondary, fontSize: 11)),
+            ]),
             const SizedBox(height: 12),
-            
-            Row(
-              children: [
-                Expanded(child: _buildFeeField('Admission Fee', _admissionFeeController)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildFeeField('Tuition Fee', _tuitionFeeController)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _buildFeeField('Exam Fee', _examFeeController)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildFeeField('Van Fee', _vanFeeController)),
-              ],
-            ),
+
+            _buildCategoryGrid(),
             const SizedBox(height: 12),
             _buildFeeField('Arrears', _arrearsController),
             const SizedBox(height: 16),
@@ -300,6 +350,37 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         ),
       ),
     );
+  }
+
+  /// Renders a 2-column grid of fee inputs, one per active category.
+  /// Falls back to the four standard buckets when no catalog is loaded yet
+  /// (so the screen is never empty).
+  Widget _buildCategoryGrid() {
+    final categories = _activeCategories.isEmpty
+        ? FeeCategory.defaults
+        : _activeCategories;
+
+    final widgets = <Widget>[];
+    for (var i = 0; i < categories.length; i += 2) {
+      final left = categories[i];
+      final right = (i + 1 < categories.length) ? categories[i + 1] : null;
+      widgets.add(Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(children: [
+          Expanded(
+              child: _buildFeeField(left.name, _controllerFor(left.code))),
+          const SizedBox(width: 12),
+          if (right != null)
+            Expanded(
+                child:
+                    _buildFeeField(right.name, _controllerFor(right.code)))
+          else
+            const Expanded(child: SizedBox.shrink()),
+        ]),
+      ));
+    }
+    return Column(
+        crossAxisAlignment: CrossAxisAlignment.start, children: widgets);
   }
 
   Widget _buildFeeField(String label, TextEditingController controller) {
@@ -374,13 +455,121 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     }
   }
 
-  void _selectStudent(Student student) {
+  void _selectStudent(Student student) async {
     setState(() {
       _selectedStudent = student;
       _searchController.text = student.name;
       _searchResults = [];
       _showSearchResults = false;
     });
+    await _loadActiveStructure(student);
+  }
+
+  Future<void> _loadActiveStructure(Student student) async {
+    final schoolId = ref.read(currentSessionProvider)!.schoolId!;
+    final repo = ref.read(feeRepositoryProvider);
+    final catRepo = ref.read(feeCategoryRepositoryProvider);
+    final ay = AcademicYear.getCurrentYearCode();
+
+    final structure =
+        await repo.getFeeStructureV2ByClass(schoolId, student.className, ay);
+    final nextTerm = structure != null
+        ? await repo.getNextDueTermForClass(schoolId, student.className, ay)
+        : null;
+
+    // Load the catalog and filter to categories applicable to this class.
+    final all = await catRepo.listCategories(schoolId);
+    final applicable = all
+        .where((c) => c.isActive && c.appliesTo(student.className))
+        .toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
+    // Reset controllers so previously selected student's values don't leak.
+    for (final c in _categoryControllers.values) {
+      c.dispose();
+    }
+    _categoryControllers.clear();
+    for (final c in applicable) {
+      _categoryControllers[c.code] = TextEditingController(text: '0');
+    }
+    _arrearsController.text = '0';
+
+    if (mounted) {
+      setState(() {
+        _activeStructure = structure;
+        _nextDueTerm = nextTerm;
+        _activeCategories = applicable;
+      });
+    }
+  }
+
+  /// Auto‑fill the fee breakdown fields from the next due term. Whichever
+  /// category the term maps to gets the term amount; everything else stays
+  /// at 0.
+  void _autoFillFromNextTerm() {
+    if (_nextDueTerm == null) return;
+    // Reset all category fields first.
+    for (final c in _categoryControllers.values) {
+      c.text = '0';
+    }
+    final components =
+        FeeStructureToPaymentMapper.mapTermToComponents(_nextDueTerm!);
+    components.forEach((key, value) {
+      final code = _categoryCodeForComponentKey(key);
+      final ctrl = _controllerFor(code);
+      ctrl.text = value.toStringAsFixed(0);
+    });
+    setState(() {}); // refresh total
+  }
+
+  /// Translates a mapper component key (e.g. `tuitionFeePaid`) back into the
+  /// matching category code (e.g. `TUITION`). Custom keys are passed through
+  /// unchanged.
+  String _categoryCodeForComponentKey(String key) {
+    switch (key) {
+      case 'admissionFeePaid':
+        return 'ADMISSION';
+      case 'tuitionFeePaid':
+        return 'TUITION';
+      case 'examFeePaid':
+        return 'EXAM';
+      case 'vanFeePaid':
+        return 'VAN';
+      default:
+        return key; // custom category code
+    }
+  }
+
+  /// Download an Excel file with one row per student‑term for the selected student's class.
+  Future<void> _downloadClassFeeRows() async {
+    if (_activeStructure == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No fee structure assigned to this class.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    final studentRepo = ref.read(studentRepositoryProvider);
+    final studentsAsync = await studentRepo.getStudentsByClassStream(
+      ref.read(currentSessionProvider)!.schoolId!,
+      _selectedStudent!.className,
+    ).first;
+    final svc = StudentFeeRowsFromStructureService();
+    final bytes = svc.build(
+      structure: _activeStructure!,
+      students: studentsAsync,
+      defaultPaymentMode: _paymentMode,
+      defaultRemarks: _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
+    );
+    // TODO: trigger download via file_picker or a web download helper
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Generated ${studentsAsync.length * _activeStructure!.terms.length} rows for download.'),
+        backgroundColor: _accentBlue,
+      ),
+    );
   }
 
   Future<void> _submitPayment(String schoolId) async {
@@ -394,6 +583,31 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       final billId = await repo.getNextBillId(schoolId);
       final now = DateTime.now();
 
+      // Split the dynamic category map into the four standard fields and a
+      // residual map of custom category amounts.
+      double admission = 0, tuition = 0, exam = 0, van = 0;
+      final customAmounts = <String, double>{};
+      _categoryControllers.forEach((code, ctrl) {
+        final v = double.tryParse(ctrl.text) ?? 0;
+        if (v <= 0) return;
+        switch (code) {
+          case 'ADMISSION':
+            admission = v;
+            break;
+          case 'TUITION':
+            tuition = v;
+            break;
+          case 'EXAM':
+            exam = v;
+            break;
+          case 'VAN':
+            van = v;
+            break;
+          default:
+            customAmounts[code] = v;
+        }
+      });
+
       final payment = FeePayment(
         id: '',
         schoolId: schoolId,
@@ -404,11 +618,12 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         section: _selectedStudent!.section,
         academicYear: AcademicYear.getCurrentYearCode(),
         fiscalYear: FiscalYear.getCurrentYearCode(),
-        admissionFeePaid: double.tryParse(_admissionFeeController.text) ?? 0,
-        tuitionFeePaid: double.tryParse(_tuitionFeeController.text) ?? 0,
-        examFeePaid: double.tryParse(_examFeeController.text) ?? 0,
-        vanFeePaid: double.tryParse(_vanFeeController.text) ?? 0,
+        admissionFeePaid: admission,
+        tuitionFeePaid: tuition,
+        examFeePaid: exam,
+        vanFeePaid: van,
         arrearsPaid: double.tryParse(_arrearsController.text) ?? 0,
+        customCategoryAmounts: customAmounts,
         totalAmount: _totalAmount,
         paymentMode: _paymentMode,
         remarks: _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
@@ -440,15 +655,17 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
 
   void _clearForm() {
     _searchController.clear();
-    _admissionFeeController.text = '0';
-    _tuitionFeeController.text = '0';
-    _examFeeController.text = '0';
-    _vanFeeController.text = '0';
+    for (final c in _categoryControllers.values) {
+      c.text = '0';
+    }
     _arrearsController.text = '0';
     _remarksController.clear();
     setState(() {
       _selectedStudent = null;
       _paymentMode = PaymentMode.CASH;
+      _activeStructure = null;
+      _nextDueTerm = null;
+      _activeCategories = const [];
     });
   }
 

@@ -6,10 +6,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import '../../../core/providers/auth_provider.dart';
+import '../../../data/repositories/fee_repository.dart';
+import '../../../data/repositories/student_fee_ledger_repository.dart';
 import '../../../data/repositories/student_repository.dart';
-import '../../../domain/entities/student.dart';
-import '../../../domain/entities/app_user.dart';
 import '../../../domain/entities/academic_year.dart';
+import '../../../domain/entities/app_user.dart';
+import '../../../domain/entities/student.dart';
 import '../../../firebase_options.dart';
 
 class StudentDirectoryScreen extends ConsumerStatefulWidget {
@@ -1064,6 +1066,21 @@ class _StudentDirectoryScreenState extends ConsumerState<StudentDirectoryScreen>
                             concessionCtrl.text, arrearTuitionCtrl.text, arrearExamCtrl.text, arrearVanCtrl.text,
                             nameController.text.trim(), selectedSection, selectedAcademicYear, vanAvailed, vanFeeCtrl.text);
                       }
+
+                      // Also seed the V2 StudentFeeLedger from the active
+                      // FeeStructureV2 for this class+AY so the new Fee
+                      // Management screen renders immediately without a
+                      // manual assign step. Non-fatal on any failure.
+                      await _autoAssignLedgerV2(
+                        schoolId: schoolId,
+                        studentId: nextId.toString(),
+                        studentName: nameController.text.trim(),
+                        className: selectedClass,
+                        section: selectedSection,
+                        academicYear: selectedAcademicYear,
+                        parentName: parentNameController.text.trim(),
+                        parentPhone: parentPhoneController.text.trim(),
+                      );
                     }
                     if (ctx.mounted) {
                       Navigator.pop(ctx);
@@ -1557,6 +1574,47 @@ class _StudentDirectoryScreenState extends ConsumerState<StudentDirectoryScreen>
     );
   }
 
+
+  /// Seed a [StudentFeeLedger] from the active [FeeStructureV2] that
+  /// matches the student's class + academic year. Runs after the legacy
+  /// `student_fee_details` seed so both data models stay in sync during
+  /// the migration window. Non-fatal: any failure is logged and swallowed
+  /// so the student creation itself is never rolled back.
+  Future<void> _autoAssignLedgerV2({
+    required String schoolId,
+    required String studentId,
+    required String studentName,
+    required String className,
+    required String section,
+    required String academicYear,
+    String? parentName,
+    String? parentPhone,
+  }) async {
+    try {
+      final feeRepo = ref.read(feeRepositoryProvider);
+      final structure = await feeRepo.getFeeStructureV2ByClass(
+          schoolId, className, academicYear);
+      if (structure == null) {
+        print('⚠️ No FeeStructureV2 found for $className / $academicYear — skipping ledger seed.');
+        return;
+      }
+      final ledgerRepo = ref.read(studentFeeLedgerRepositoryProvider);
+      await ledgerRepo.assignToStudent(
+        schoolId: schoolId,
+        studentId: studentId,
+        studentName: studentName,
+        className: className,
+        section: section,
+        structureId: structure.id,
+        parentName: (parentName ?? '').isEmpty ? null : parentName,
+        parentPhone: (parentPhone ?? '').isEmpty ? null : parentPhone,
+        onConflict: ConflictAction.SKIP,
+      );
+      print('✅ Seeded StudentFeeLedger from "${structure.name}" for $studentName');
+    } catch (e) {
+      print('⚠️ _autoAssignLedgerV2 failed: $e');
+    }
+  }
 
   Future<void> _createStudentFeeDetails(String schoolId, String studentId, Map<String, dynamic> feeStructure, 
     String concession, String arrearTuition, String arrearExam, String arrearVan, String studentName, String studentSection, String academicYear, String vanAvailed, String vanFeeText) async {

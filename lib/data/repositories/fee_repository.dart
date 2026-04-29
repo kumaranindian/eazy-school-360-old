@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/fee_structure.dart';
+import '../../domain/entities/fee_structure_v2.dart';
+import '../../domain/entities/fee_term.dart';
 import '../../domain/entities/student_fee_details.dart';
 import '../../domain/entities/fee_payment.dart';
 
@@ -18,6 +20,17 @@ final feeStructuresProvider = StreamProvider.family<List<FeeStructure>, String>(
 final feeStructureByClassProvider = FutureProvider.family<FeeStructure?, ({String schoolId, String className, String academicYear})>((ref, params) {
   final repo = ref.watch(feeRepositoryProvider);
   return repo.getFeeStructureByClass(params.schoolId, params.className, params.academicYear);
+});
+
+// FeeStructureV2 Providers
+final feeStructuresV2Provider = StreamProvider.family<List<FeeStructureV2>, String>((ref, schoolId) {
+  final repo = ref.watch(feeRepositoryProvider);
+  return repo.getFeeStructuresV2Stream(schoolId);
+});
+
+final feeStructureV2ByClassProvider = FutureProvider.family<FeeStructureV2?, ({String schoolId, String className, String academicYear})>((ref, params) {
+  final repo = ref.watch(feeRepositoryProvider);
+  return repo.getFeeStructureV2ByClass(params.schoolId, params.className, params.academicYear);
 });
 
 // Student Fee Details Providers
@@ -80,6 +93,10 @@ class FeeRepository {
 
   CollectionReference<Map<String, dynamic>> _billsCollection(String schoolId) {
     return _firestore.collection('schools').doc(schoolId).collection('bills');
+  }
+
+  CollectionReference<Map<String, dynamic>> _feeStructuresV2Collection(String schoolId) {
+    return _firestore.collection('schools').doc(schoolId).collection('feeStructuresV2');
   }
 
   // ============ FEE STRUCTURES ============
@@ -147,6 +164,82 @@ class FeeRepository {
       ...details.toFirestore(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  // ============ FEE STRUCTURES V2 ============
+
+  Stream<List<FeeStructureV2>> getFeeStructuresV2Stream(String schoolId) {
+    return _feeStructuresV2Collection(schoolId)
+        .orderBy('name')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => FeeStructureV2.fromFirestore(doc)).toList());
+  }
+
+  /// Finds the active FeeStructureV2 for a given class and academic year.
+  /// If multiple are applicable to the class, the first is returned.
+  Future<FeeStructureV2?> getFeeStructureV2ByClass(String schoolId, String className, String academicYear) async {
+    final snapshot = await _feeStructuresV2Collection(schoolId)
+        .where('academicYear', isEqualTo: academicYear)
+        .where('applicableToClassIds', arrayContains: className)
+        .limit(1)
+        .get();
+    if (snapshot.docs.isEmpty) return null;
+    return FeeStructureV2.fromFirestore(snapshot.docs.first);
+  }
+
+  /// Lenient lookup: finds the most recent active FeeStructureV2 for the
+  /// class **regardless of academic year**. Used as a soft fallback when
+  /// importing a sheet whose target year has no structure yet — admins
+  /// almost always want to reuse last/this year's structure rather than
+  /// see "totals = 0". Returns the matching structure together with the
+  /// academic year it was actually loaded from so callers can surface a
+  /// notice to the user.
+  Future<({FeeStructureV2 structure, String academicYear})?>
+      getAnyActiveFeeStructureV2ByClass(
+          String schoolId, String className) async {
+    // Single-clause query keeps us off the composite-index code path.
+    // We filter `isActive` client-side. Most schools have only a handful
+    // of structures per class, so the extra docs read is negligible and
+    // we avoid silent failures when the school admin hasn't deployed the
+    // composite index.
+    final snapshot = await _feeStructuresV2Collection(schoolId)
+        .where('applicableToClassIds', arrayContains: className)
+        .get();
+    final activeDocs = snapshot.docs.where((d) {
+      final v = d.data()['isActive'];
+      // Treat missing field as active for backward compatibility with
+      // older docs written before the flag was introduced.
+      return v == null || v == true;
+    }).toList();
+    if (activeDocs.isEmpty) return null;
+    // Prefer the structure with the lexicographically largest academic
+    // year (e.g. "2026-27" > "2025-26"); good enough for school year
+    // codes which are monotonic.
+    activeDocs.sort((a, b) {
+      final ay = (a.data()['academicYear'] ?? '').toString();
+      final by = (b.data()['academicYear'] ?? '').toString();
+      return by.compareTo(ay);
+    });
+    final picked = activeDocs.first;
+    return (
+      structure: FeeStructureV2.fromFirestore(picked),
+      academicYear: (picked.data()['academicYear'] ?? '').toString(),
+    );
+  }
+
+  /// Returns the next upcoming term (dueDate >= today) for a class/AY.
+  /// If no upcoming term exists, returns null.
+  Future<FeeTerm?> getNextDueTermForClass(String schoolId, String className, String academicYear) async {
+    final structure = await getFeeStructureV2ByClass(schoolId, className, academicYear);
+    if (structure == null) return null;
+
+    final now = DateTime.now();
+    final upcoming = structure.terms.where((t) => !t.dueDate.isBefore(now)).toList();
+    if (upcoming.isEmpty) return null;
+
+    // Return the soonest upcoming term
+    upcoming.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    return upcoming.first;
   }
 
   // ============ FEE PAYMENTS (BILLS - REVENUE) ============

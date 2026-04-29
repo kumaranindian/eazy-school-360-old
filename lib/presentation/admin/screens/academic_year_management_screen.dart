@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../data/repositories/academic_year_repository.dart';
 import '../../../data/services/academic_year_migration_service.dart';
+import '../../../data/services/year_close_service.dart';
 import '../../../domain/entities/academic_year.dart';
 
 class AcademicYearManagementScreen extends ConsumerStatefulWidget {
@@ -325,9 +326,190 @@ class _AcademicYearManagementScreenState extends ConsumerState<AcademicYearManag
               onPressed: () => _setCurrentYear(schoolId, id, isAcademic),
               child: const Text('Set Current', style: TextStyle(fontSize: 12)),
             ),
+          if (isAcademic && !isCurrent)
+            TextButton.icon(
+              onPressed: () => _closeAcademicYear(schoolId, yearCode),
+              icon: const Icon(Icons.lock_clock_rounded,
+                  size: 14, color: Color(0xFFEF4444)),
+              label: const Text('Close Year',
+                  style: TextStyle(
+                      fontSize: 12, color: Color(0xFFEF4444))),
+            ),
         ],
       ),
     );
+  }
+
+  /// Run the year-close flow: pick a target AY, preview the impact,
+  /// confirm with the admin, then commit the rollover and surface the
+  /// per-student report.
+  Future<void> _closeAcademicYear(String schoolId, String fromYear) async {
+    final years = await ref.read(schoolAcademicYearsProvider(schoolId).future);
+    final candidates = years
+        .where((y) => y.yearCode != fromYear)
+        .toList()
+      ..sort((a, b) => a.yearCode.compareTo(b.yearCode));
+    if (candidates.isEmpty) {
+      _showInfo('Create the next academic year first, then close $fromYear.');
+      return;
+    }
+
+    // Default target = next AY lexicographically after fromYear.
+    final String target = candidates
+        .firstWhere((y) => y.yearCode.compareTo(fromYear) > 0,
+            orElse: () => candidates.last)
+        .yearCode;
+
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        String chosen = target;
+        return AlertDialog(
+          backgroundColor: _cardDark,
+          title: const Text('Close Academic Year',
+              style: TextStyle(color: _textPrimary)),
+          content: StatefulBuilder(
+            builder: (c, setS) => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    'Carry every student\'s outstanding balance from $fromYear into the chosen target year as ARREARS rows. The source year will be locked from further edits.',
+                    style: const TextStyle(
+                        color: _textSecondary, fontSize: 12)),
+                const SizedBox(height: 12),
+                DropdownButton<String>(
+                  value: chosen,
+                  dropdownColor: _cardDark,
+                  isExpanded: true,
+                  style: const TextStyle(color: _textPrimary),
+                  items: candidates
+                      .map((y) => DropdownMenuItem(
+                          value: y.yearCode, child: Text(y.yearCode)))
+                      .toList(),
+                  onChanged: (v) => setS(() => chosen = v ?? chosen),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, null),
+                child: const Text('Cancel')),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, chosen),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: _accentBlue,
+                    foregroundColor: Colors.white),
+                child: const Text('Continue')),
+          ],
+        );
+      },
+    );
+    if (selected == null) return;
+
+    // Preview.
+    final svc = ref.read(yearCloseServiceProvider);
+    Map<String, dynamic>? preview;
+    try {
+      final p = await svc.previewClose(
+          schoolId: schoolId,
+          fromAcademicYear: fromYear,
+          toAcademicYear: selected);
+      preview = {
+        'ledgerCount': p.ledgerCount,
+        'totalOutstanding': p.totalOutstanding,
+        'missingTargetCount': p.missingTargetCount,
+      };
+    } catch (e) {
+      _showInfo('Preview failed: $e', error: true);
+      return;
+    }
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _cardDark,
+        title: const Text('Confirm Year Close',
+            style: TextStyle(color: _textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('From: $fromYear  →  To: $selected',
+                style: const TextStyle(
+                    color: _textPrimary, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('Ledgers to process: ${preview!['ledgerCount']}',
+                style: const TextStyle(color: _textSecondary)),
+            Text(
+                'Total outstanding to carry: ₹${(preview['totalOutstanding'] as double).toStringAsFixed(0)}',
+                style: const TextStyle(color: _textSecondary)),
+            if ((preview['missingTargetCount'] as int) > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                    '${preview['missingTargetCount']} student(s) lack a $selected ledger and will be skipped — assign the new-year structure first.',
+                    style: const TextStyle(
+                        color: Color(0xFFF59E0B), fontSize: 12)),
+              ),
+            const SizedBox(height: 8),
+            const Text(
+                'This action is reversible only by manual intervention. Proceed?',
+                style: TextStyle(color: _textSecondary, fontSize: 11)),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF4444),
+                  foregroundColor: Colors.white),
+              child: const Text('Close Year')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    // Commit.
+    setState(() => _isMigrating = true);
+    try {
+      final session = ref.read(currentSessionProvider);
+      final report = await svc.closeYear(
+        schoolId: schoolId,
+        fromAcademicYear: fromYear,
+        toAcademicYear: selected,
+        actorUid: session?.uid,
+        actorName: session?.displayName,
+      );
+      if (!mounted) return;
+      setState(() {
+        _isMigrating = false;
+        _migrationResult = {
+          'success': report.errorCount == 0,
+          'message':
+              'Year close: $fromYear → $selected. Carried ₹${report.totalCarriedAmount.toStringAsFixed(0)} for ${report.successCount} student(s). Skipped: ${report.skippedCount}. Errors: ${report.errorCount}.',
+        };
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isMigrating = false;
+        _migrationResult = {'success': false, 'message': 'Year close failed: $e'};
+      });
+    }
+  }
+
+  void _showInfo(String msg, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: error ? Colors.red : _accentBlue,
+    ));
   }
 
   String _formatDate(DateTime date) {

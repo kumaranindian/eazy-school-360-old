@@ -10,6 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/auth_provider.dart';
 import '../../../domain/entities/academic_year.dart';
+import '../../../data/repositories/fee_repository.dart';
+import '../../../data/services/fee_structure_to_payment_mapper.dart';
 
 const Color _bgDark = Color(0xFF0D1117);
 const Color _cardDark = Color(0xFF161B22);
@@ -33,11 +35,34 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
   int _totalCount = 0;
   List<String> _errors = [];
   List<List<String>> _previewData = [];
+  /// Cached bytes of the most recently picked file. Reused by the
+  /// auto-detect upload so the user is not re-prompted to pick the file
+  /// again after they have already selected it for preview.
+  Uint8List? _fileBytes;
+
+  /// Bumped every time progress (count, status, errors) changes so the
+  /// modal progress dialog – which lives in a separate Overlay route and
+  /// therefore does NOT rebuild when the parent calls setState – can
+  /// listen and refresh.
+  final ValueNotifier<int> _progressTick = ValueNotifier<int>(0);
+  void _bumpProgress() => _progressTick.value++;
+
+  @override
+  void dispose() {
+    _progressTick.dispose();
+    super.dispose();
+  }
 
   /// Academic year the sheet data will be attached to. Defaults to the
   /// current year, but can be overridden manually (e.g. importing last
   /// year's rolls into a freshly-created school).
   String _selectedAcademicYear = AcademicYear.getCurrentYearCode();
+
+  /// Admin-configured active academic year (the doc with `isCurrent == true`
+  /// in `schools/{schoolId}/academicYears`). Drives which chip shows the
+  /// "CURRENT" badge. Falls back to the date-derived year until the
+  /// async load resolves.
+  String _activeAcademicYear = AcademicYear.getCurrentYearCode();
 
   /// Set to `true` when the parsed sheet already contains an
   /// `academicYear` / `yearCode` column per row. In that case the
@@ -45,6 +70,39 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
   bool _sheetProvidesAcademicYear = false;
 
   String? get _schoolId => ref.read(currentSessionProvider)?.schoolId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Defer until after first frame so `ref.read` is safe to use.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadActiveAcademicYear());
+  }
+
+  /// Reads the school's admin-configured active academic year from
+  /// `schools/{schoolId}/academicYears` (the doc with `isCurrent == true`).
+  /// Falls back silently to the date-derived current year if the school
+  /// hasn't configured one yet.
+  Future<void> _loadActiveAcademicYear() async {
+    if (_schoolId == null) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(_schoolId)
+          .collection('academicYears')
+          .where('isCurrent', isEqualTo: true)
+          .limit(1)
+          .get();
+      if (snap.docs.isEmpty || !mounted) return;
+      final code = (snap.docs.first.data()['yearCode'] ?? '').toString();
+      if (code.isEmpty) return;
+      setState(() {
+        _selectedAcademicYear = code;
+        _activeAcademicYear = code;
+      });
+    } catch (e) {
+      debugPrint('[UploadSheet] Could not load active academic year: $e');
+    }
+  }
 
   /// Resolves the academic-year for a single upload row. Priority:
   ///   1. Non-empty `academicYear`/`yearCode`/`year` value on the row.
@@ -76,6 +134,92 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
     }
     debugPrint('❌ _findYearColumn: no match');
     return null;
+  }
+
+  /// Builds a map from normalized header name (lowercase, alphanumerics
+  /// only) to column index. Lets row-level code resolve fields by header
+  /// regardless of position or punctuation/whitespace differences.
+  Map<String, int> _buildHeaderIndex(List<List<Data?>> rows) {
+    final out = <String, int>{};
+    if (rows.isEmpty) return out;
+    final header = rows.first;
+    for (int i = 0; i < header.length; i++) {
+      final raw = header[i]?.value?.toString().trim().toLowerCase() ?? '';
+      if (raw.isEmpty) continue;
+      // Keep two forms: original-lowercase and stripped (no underscores
+      // or spaces) so callers can use whichever is most natural.
+      out[raw] = i;
+      final stripped =
+          raw.replaceAll(RegExp(r'[\s_]+'), '');
+      out.putIfAbsent(stripped, () => i);
+    }
+    return out;
+  }
+
+  /// Resolves tuition + exam fees for a class. Tries FeeStructureV2 first
+  /// (the new model the user is migrating to), then falls back to the legacy
+  /// `fee_structures` collection so existing data and single-sheet uploads
+  /// keep producing correct totals.
+  ///
+  /// Returns a tuple `(tuitionFees, examFees, source)` where source is one of
+  /// 'v2', 'legacy', or 'none'. The source is used for diagnostic logging /
+  /// warnings shown to the user after upload.
+  Future<({double tuition, double exam, String source})> _resolveClassFees(
+      String className, String academicYear) async {
+    if (_schoolId == null || className.isEmpty) {
+      return (tuition: 0.0, exam: 0.0, source: 'none');
+    }
+
+    // 1. Try FeeStructureV2 for the requested academic year (preferred)
+    try {
+      final repo = ref.read(feeRepositoryProvider);
+      final v2 = await repo.getFeeStructureV2ByClass(
+          _schoolId!, className, academicYear);
+      if (v2 != null) {
+        final tuition = FeeStructureToPaymentMapper.totalAmountForStructure(v2);
+        return (tuition: tuition, exam: 0.0, source: 'v2');
+      }
+      // 1b. Soft fallback: pick any active V2 structure for the class
+      // even if the academic year doesn't match. Avoids "totals = 0"
+      // when admins upload last year's roll into a freshly created
+      // school whose only V2 structures are for the upcoming year.
+      final any = await repo.getAnyActiveFeeStructureV2ByClass(
+          _schoolId!, className);
+      if (any != null) {
+        final tuition = FeeStructureToPaymentMapper.totalAmountForStructure(
+            any.structure);
+        debugPrint(
+            'ℹ️ Reusing V2 structure for $className from AY ${any.academicYear} (requested $academicYear)');
+        return (tuition: tuition, exam: 0.0, source: 'v2-${any.academicYear}');
+      }
+    } catch (e) {
+      debugPrint('⚠️ V2 lookup failed for $className/$academicYear: $e');
+      // Surface to the visible errors panel so silent index/perm failures
+      // don't masquerade as "no fee structure exists" and produce 0 totals.
+      _errors.add('V2 lookup error for class "$className": $e');
+    }
+
+    // 2. Fallback: legacy fee_structures collection (what the FEE_STRUCTURE
+    //    sheet of the master template writes to).
+    try {
+      final feeSnap = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(_schoolId)
+          .collection('fee_structures')
+          .where('className', isEqualTo: className)
+          .limit(1)
+          .get();
+      if (feeSnap.docs.isNotEmpty) {
+        final fd = feeSnap.docs.first.data();
+        final tuition = (fd['tuitionFee'] as num?)?.toDouble() ?? 0;
+        final exam = (fd['examFee'] as num?)?.toDouble() ?? 0;
+        return (tuition: tuition, exam: exam, source: 'legacy');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Legacy lookup failed for $className: $e');
+    }
+
+    return (tuition: 0.0, exam: 0.0, source: 'none');
   }
 
   /// Builds the list of selectable academic years: current year +/- 3.
@@ -238,7 +382,13 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
       barrierDismissible: false,
       builder: (_) => WillPopScope(
         onWillPop: () async => false,
-        child: _buildUploadProgressDialog(),
+        // Rebuild the dialog body whenever progress changes. The dialog
+        // is in a separate overlay route that does not see parent state
+        // updates, so this listenable is what drives live progress.
+        child: ValueListenableBuilder<int>(
+          valueListenable: _progressTick,
+          builder: (_, __, ___) => _buildUploadProgressDialog(),
+        ),
       ),
     );
   }
@@ -353,7 +503,7 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
             runSpacing: 8,
             children: options.map((yr) {
               final isSelected = _selectedAcademicYear == yr;
-              final isCurrent = yr == AcademicYear.getCurrentYearCode();
+              final isCurrent = yr == _activeAcademicYear;
               return ChoiceChip(
                 label: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -686,6 +836,7 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
       final bytes = result.files.first.bytes;
       if (bytes == null) return;
 
+      _fileBytes = bytes;
       _parseExcel(bytes);
     } catch (e) {
       if (mounted) {
@@ -820,6 +971,7 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
       _errors = [];
       _statusMessage = 'Uploading $_selectedType...';
     });
+    _bumpProgress();
     _showUploadProgressDialog();
 
     try {
@@ -847,6 +999,7 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
             _processedCount = i + 1;
             _statusMessage = 'Uploading $_selectedType... (${i + 1}/$_totalCount)';
           });
+          _bumpProgress();
         } catch (e) {
           _errors.add('Row ${i + 2}: $e');
         }
@@ -886,37 +1039,43 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
       _errors = [];
       _statusMessage = 'Processing all sheets...';
     });
+    _bumpProgress();
     _showUploadProgressDialog();
 
     try {
-      // Re-pick the file to get all sheets
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['xlsx'],
-        withData: true,
-      );
-
-      if (result == null || result.files.isEmpty) {
-        setState(() {
-          _isUploading = false;
-          _statusMessage = 'No file selected';
-        });
-        _hideUploadProgressDialog();
-        return;
-      }
-
-      final bytes = result.files.first.bytes;
+      // Reuse the bytes captured at preview time. Only fall back to a
+      // re-pick if for some reason the cache is missing (e.g. hot reload
+      // wiped state).
+      Uint8List? bytes = _fileBytes;
       if (bytes == null) {
-        setState(() {
-          _isUploading = false;
-          _statusMessage = 'Failed to read file';
-        });
-        _hideUploadProgressDialog();
-        return;
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['xlsx'],
+          withData: true,
+        );
+
+        if (result == null || result.files.isEmpty) {
+          setState(() {
+            _isUploading = false;
+            _statusMessage = 'No file selected';
+          });
+          _hideUploadProgressDialog();
+          return;
+        }
+
+        bytes = result.files.first.bytes;
+        if (bytes == null) {
+          setState(() {
+            _isUploading = false;
+            _statusMessage = 'Failed to read file';
+          });
+          _hideUploadProgressDialog();
+          return;
+        }
+        _fileBytes = bytes;
       }
 
       final excel = Excel.decodeBytes(bytes);
-      final Map<String, dynamic> classWiseFeeDetails = {};
       final allSheets = excel.tables.keys.toList();
       debugPrint('🚀 Auto-Detect upload: sheets in file = $allSheets');
 
@@ -935,12 +1094,28 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
         _totalCount = totalRows;
         _processedCount = 0;
       });
+      _bumpProgress();
       debugPrint('📊 Total rows to process: $_totalCount');
 
       // Process FEE_STRUCTURE sheet first (to get class fees for student calculations)
       if (excel.tables.containsKey('FEE_STRUCTURE')) {
         setState(() => _statusMessage = 'Processing Fee Structure...');
+        _bumpProgress();
         final sheet = excel.tables['FEE_STRUCTURE']!;
+
+        final fsHeaderIdx = _buildHeaderIndex(sheet.rows);
+        debugPrint('📋 FEE_STRUCTURE headers: ${fsHeaderIdx.keys.toList()}');
+
+        String fsCell(List<dynamic> row, List<String> aliases) {
+          for (final a in aliases) {
+            final i = fsHeaderIdx[a.toLowerCase()];
+            if (i != null && i < row.length) {
+              final v = row[i]?.value?.toString();
+              if (v != null && v.trim().isNotEmpty) return v;
+            }
+          }
+          return '';
+        }
 
         // Detect optional academicYear column.
         final feeYearIdx = _findYearColumn(sheet.rows);
@@ -949,15 +1124,22 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
           if (row.first?.rowIndex == 0) continue; // Skip header
 
           try {
-            final className = row[0]?.value?.toString() ?? '';
+            final className = fsCell(row,
+                ['class', 'classinroman', 'classname', 'class_name']);
             if (className.isEmpty) continue;
 
-            final tuitionFee = double.tryParse(row[1]?.value?.toString() ?? '0') ?? 0;
-            final examFee = double.tryParse(row[2]?.value?.toString() ?? '0') ?? 0;
-
-            // Store for student calculations
-            classWiseFeeDetails['$className-tutionFees'] = tuitionFee;
-            classWiseFeeDetails['$className-examFees'] = examFee;
+            final tuitionFee = double.tryParse(fsCell(row, [
+                  'tutionfees',
+                  'tuitionfees',
+                  'tution_fees',
+                  'tuition_fees',
+                  'classtutionfees',
+                  'classtuitionfees'
+                ])) ??
+                0;
+            final examFee = double.tryParse(fsCell(row,
+                    ['examfees', 'exam_fees', 'classexamfees'])) ??
+                0;
 
             final rowYear = feeYearIdx != null && feeYearIdx < row.length
                 ? (row[feeYearIdx]?.value?.toString() ?? '')
@@ -976,12 +1158,14 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
               _processedCount++;
               _statusMessage = 'Processing Fee Structure... ($_processedCount/$_totalCount rows)';
             });
+            _bumpProgress();
           } catch (e) {
             _errors.add('FEE_STRUCTURE row ${row.first?.rowIndex}: $e');
             // Still increment progress for error rows
             setState(() {
               _processedCount++;
             });
+            _bumpProgress();
           }
         }
       }
@@ -989,7 +1173,30 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
       // Process STUDENT_FEE_DETAILS sheet
       if (excel.tables.containsKey('STUDENT_FEE_DETAILS')) {
         setState(() => _statusMessage = 'Processing Student Fee Details...');
+        _bumpProgress();
         final sheet = excel.tables['STUDENT_FEE_DETAILS']!;
+
+        // Build header → column-index map so we can resolve fields by name
+        // and tolerate different real-world sheet layouts (e.g. the bundled
+        // SAMPLE_FEE_SHEET.xlsx has a single PENDING_FEES column instead of
+        // separate per-category arrears).
+        final headerIdx = _buildHeaderIndex(sheet.rows);
+        debugPrint('📋 STUDENT_FEE_DETAILS headers: ${headerIdx.keys.toList()}');
+
+        String cellByName(List<dynamic> row, List<String> aliases,
+            {String fallback = ''}) {
+          for (final a in aliases) {
+            final i = headerIdx[a.toLowerCase()];
+            if (i != null && i < row.length) {
+              final v = row[i]?.value?.toString();
+              if (v != null && v.trim().isNotEmpty) return v;
+            }
+          }
+          return fallback;
+        }
+
+        double numByName(List<dynamic> row, List<String> aliases) =>
+            double.tryParse(cellByName(row, aliases, fallback: '0')) ?? 0;
 
         final stuYearIdx = _findYearColumn(sheet.rows);
 
@@ -997,38 +1204,78 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
           if (row.first?.rowIndex == 0) continue; // Skip header
 
           try {
-            final stuId = row[0]?.value?.toString() ?? '';
+            final stuId = cellByName(row, ['id', 'stuid', 'studentid']);
             if (stuId.isEmpty) {
-              // Still increment progress for empty rows
-              setState(() {
-                _processedCount++;
-              });
+              setState(() => _processedCount++);
+              _bumpProgress();
               continue;
             }
 
-            final stuName = row[1]?.value?.toString() ?? '';
-            final stuClass = row[2]?.value?.toString() ?? '';
-            final stuSection = row[3]?.value?.toString() ?? '';
-            final arrearTuitionFees = double.tryParse(row[4]?.value?.toString() ?? '0') ?? 0;
-            final arrearExamFees = double.tryParse(row[5]?.value?.toString() ?? '0') ?? 0;
-            final arrearVanFees = double.tryParse(row[6]?.value?.toString() ?? '0') ?? 0;
-            final stuConcessionFees = double.tryParse(row[7]?.value?.toString() ?? '0') ?? 0;
-            final isStuAvailVan = row[8]?.value?.toString().toLowerCase() ?? 'n';
-            final stuTotalVanFees = double.tryParse(row[9]?.value?.toString() ?? '0') ?? 0;
-            final stuPaidTutionFees = double.tryParse(row[10]?.value?.toString() ?? '0') ?? 0;
-            final stuPaidExamFees = double.tryParse(row[11]?.value?.toString() ?? '0') ?? 0;
-            final studPaidVanFees = double.tryParse(row[12]?.value?.toString() ?? '0') ?? 0;
-            final stuPaidTotalFees = double.tryParse(row[13]?.value?.toString() ?? '0') ?? 0;
-            final phoneNumber = row[14]?.value?.toString() ?? '';
-            final stuBillDetails = row[15]?.value?.toString() ?? 'NA';
+            final stuName =
+                cellByName(row, ['name', 'stuname', 'studentname']);
+            final stuClass =
+                cellByName(row, ['class', 'stuclass', 'classname']);
+            final stuSection =
+                cellByName(row, ['section', 'stusection']);
 
-            // Get class fees from previously loaded data
-            final classTuitionFees = (classWiseFeeDetails['$stuClass-tutionFees'] as double?) ?? 0;
-            final classExamFees = (classWiseFeeDetails['$stuClass-examFees'] as double?) ?? 0;
+            // Arrears: support both split layout (3 cols) and consolidated
+            // single PENDING_FEES column (sample sheet). When only the
+            // consolidated value is present we attribute it entirely to
+            // tuition arrears so the total stays correct.
+            double arrearTuitionFees =
+                numByName(row, ['arreartuitionfees', 'arrear_tuition_fees']);
+            double arrearExamFees =
+                numByName(row, ['arrearexamfees', 'arrear_exam_fees']);
+            double arrearVanFees =
+                numByName(row, ['arrearvanfees', 'arrear_van_fees']);
+            if (arrearTuitionFees == 0 &&
+                arrearExamFees == 0 &&
+                arrearVanFees == 0) {
+              final pending = numByName(row,
+                  ['pending_fees', 'pendingfees', 'totalarrears', 'arrears']);
+              arrearTuitionFees = pending;
+            }
+
+            final stuConcessionFees = numByName(
+                row, ['stuconcessionfees', 'concession_fees', 'concession']);
+            final isStuAvailVan = cellByName(
+                row, ['isstuavailvan', 'is_van_avail', 'isvanavailed'],
+                fallback: 'n')
+                .toLowerCase();
+            final stuTotalVanFees =
+                numByName(row, ['stutotalvanfees', 'van_fees', 'vanfees']);
+            final stuPaidTutionFees = numByName(row,
+                ['stupaidtutionfees', 'paid_tution_fess', 'paid_tuition_fees']);
+            final stuPaidExamFees = numByName(
+                row, ['stupaidexamfees', 'paid_exam_fees']);
+            final studPaidVanFees = numByName(
+                row, ['studpaidvanfees', 'paid_van_fees']);
+            final stuPaidTotalFees = numByName(
+                row, ['stupaidtotalfees', 'total_paid_fees']);
+            final phoneNumber = cellByName(
+                row, ['phonenumber', 'phone', 'mobile', 'mobilenumber']);
+            final stuBillDetails = cellByName(
+                row, ['stubilldetails', 'bill_details', 'billdetails'],
+                fallback: 'NA');
 
             final rowYear = stuYearIdx != null && stuYearIdx < row.length
                 ? (row[stuYearIdx]?.value?.toString() ?? '')
                 : '';
+
+            // Resolve tuition + exam fees: V2 first, fallback to legacy.
+            final ay = rowYear.isNotEmpty ? rowYear : _selectedAcademicYear;
+            final resolved = await _resolveClassFees(stuClass, ay);
+            final classTuitionFees = resolved.tuition;
+            final classExamFees = resolved.exam;
+            if (resolved.source == 'none') {
+              _errors.add(
+                  'No fee structure found for class "$stuClass" (AY $ay) — totals set to 0. Create one via Finance → Fee Structures.');
+            } else if (resolved.source.startsWith('v2-') &&
+                resolved.source != 'v2') {
+              final usedAy = resolved.source.substring(3);
+              _errors.add(
+                  'Class "$stuClass": no V2 structure for AY $ay; reused active structure from AY $usedAy.');
+            }
 
             // Upload student fee details with calculated values
             await _uploadStudentFeeDetailsWithClassFees({
@@ -1056,12 +1303,14 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
               _processedCount++;
               _statusMessage = 'Processing Student Fee Details... ($_processedCount/$_totalCount rows)';
             });
+            _bumpProgress();
           } catch (e) {
             _errors.add('STUDENT_FEE_DETAILS row ${row.first?.rowIndex}: $e');
             // Still increment progress for error rows
             setState(() {
               _processedCount++;
             });
+            _bumpProgress();
           }
         }
       }
@@ -1125,6 +1374,28 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
     final phoneNumber = (data['phoneNumber'] ?? '').toString();
     final academicYear = _resolveAcademicYear(data);
 
+    // Fetch next due date and reminder dates from FeeStructureV2
+    DateTime? nextDueDate;
+    DateTime? reminderDate1;
+    DateTime? reminderDate2;
+    if (_schoolId != null && stuClass.isNotEmpty) {
+      final repo = ref.read(feeRepositoryProvider);
+      final nextTerm = await repo.getNextDueTermForClass(_schoolId!, stuClass, academicYear);
+      if (nextTerm != null) {
+        nextDueDate = nextTerm.dueDate;
+        // Set reminder dates based on the term's reminder config
+        final reminderDays = nextTerm.reminderConfig.beforeDueDays;
+        if (reminderDays.isNotEmpty) {
+          // First reminder
+          reminderDate1 = nextDueDate.subtract(Duration(days: reminderDays[0]));
+          // Second reminder if available
+          if (reminderDays.length > 1) {
+            reminderDate2 = nextDueDate.subtract(Duration(days: reminderDays[1]));
+          }
+        }
+      }
+    }
+
     final feeData = <String, dynamic>{
       'stuId': int.tryParse(stuId) ?? 0,
       'stuName': stuName,
@@ -1135,6 +1406,10 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
       'section': stuSection,
       'phoneNumber': phoneNumber,
       'isStuAvailVan': isStuAvailVan,
+      // Add due date and reminder dates from FeeStructureV2
+      if (nextDueDate != null) 'nextDueDate': Timestamp.fromDate(nextDueDate),
+      if (reminderDate1 != null) 'reminderDate1': Timestamp.fromDate(reminderDate1),
+      if (reminderDate2 != null) 'reminderDate2': Timestamp.fromDate(reminderDate2),
       'stuConcessionFees': stuConcessionFees,
       'stuTotalTutionFees': stuTotalTutionFees,
       'stuTotalExamFees': stuTotalExamFees,
@@ -1273,19 +1548,20 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
     final studPaidVanFees = parseNum('studPaidVanFees');
     final stuPaidTotalFees = parseNum('stuPaidTotalFees');
 
-    // Look up fee structure for this class to compute totals/balances
-    double classTuitionFees = 0;
-    double classExamFees = 0;
-    if (_schoolId != null && stuClass.isNotEmpty) {
-      final feeSnap = await FirebaseFirestore.instance
-          .collection('schools').doc(_schoolId).collection('fee_structures')
-          .where('className', isEqualTo: stuClass)
-          .limit(1).get();
-      if (feeSnap.docs.isNotEmpty) {
-        final fd = feeSnap.docs.first.data();
-        classTuitionFees = (fd['tuitionFee'] as num?)?.toDouble() ?? 0;
-        classExamFees = (fd['examFee'] as num?)?.toDouble() ?? 0;
-      }
+    // Resolve tuition + exam fees: V2 first, fallback to legacy.
+    final resolved =
+        await _resolveClassFees(stuClass, _resolveAcademicYear(data));
+    final classTuitionFees = resolved.tuition;
+    final classExamFees = resolved.exam;
+    if (resolved.source == 'none' && stuClass.isNotEmpty) {
+      _errors.add(
+          'No fee structure found for class "$stuClass" (AY ${_resolveAcademicYear(data)}) — totals set to 0. Create one via Finance → Fee Structures.');
+    } else if (resolved.source.startsWith('v2-') &&
+        resolved.source != 'v2' &&
+        stuClass.isNotEmpty) {
+      final usedAy = resolved.source.substring(3);
+      _errors.add(
+          'Class "$stuClass": no V2 structure for AY ${_resolveAcademicYear(data)}; reused active structure from AY $usedAy.');
     }
 
     final stuTotalTutionFees = classTuitionFees;
@@ -1303,6 +1579,25 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
     final phoneNumber = (data['phoneNumber'] ?? '').toString();
     final academicYear = _resolveAcademicYear(data);
 
+    // Fetch next due date and reminder dates from FeeStructureV2
+    DateTime? nextDueDate;
+    DateTime? reminderDate1;
+    DateTime? reminderDate2;
+    if (_schoolId != null && stuClass.isNotEmpty) {
+      final repo = ref.read(feeRepositoryProvider);
+      final nextTerm = await repo.getNextDueTermForClass(_schoolId!, stuClass, academicYear);
+      if (nextTerm != null) {
+        nextDueDate = nextTerm.dueDate;
+        final reminderDays = nextTerm.reminderConfig.beforeDueDays;
+        if (reminderDays.isNotEmpty) {
+          reminderDate1 = nextDueDate.subtract(Duration(days: reminderDays[0]));
+          if (reminderDays.length > 1) {
+            reminderDate2 = nextDueDate.subtract(Duration(days: reminderDays[1]));
+          }
+        }
+      }
+    }
+
     final feeData = <String, dynamic>{
       'stuId': int.tryParse(stuId) ?? 0,
       'stuName': stuName,
@@ -1313,6 +1608,10 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
       'section': stuSection,
       'phoneNumber': phoneNumber,
       'isStuAvailVan': isStuAvailVan,
+      // Add due date and reminder dates from FeeStructureV2
+      if (nextDueDate != null) 'nextDueDate': Timestamp.fromDate(nextDueDate),
+      if (reminderDate1 != null) 'reminderDate1': Timestamp.fromDate(reminderDate1),
+      if (reminderDate2 != null) 'reminderDate2': Timestamp.fromDate(reminderDate2),
       'stuConcessionFees': stuConcessionFees,
       'stuTotalTutionFees': stuTotalTutionFees,
       'stuTotalExamFees': stuTotalExamFees,

@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/auth_provider.dart';
+import '../../../data/repositories/fee_category_repository.dart';
 import '../../../data/repositories/fee_structure_v2_repository.dart';
 import '../../../data/repositories/student_repository.dart';
 import '../../../domain/entities/academic_year.dart';
+import '../../../domain/entities/fee_category.dart';
 import '../../../domain/entities/fee_structure_v2.dart';
 import '../../../domain/entities/fee_term.dart';
 import 'assign_fee_structure_screen.dart';
@@ -85,6 +87,7 @@ class _FeeStructureEditorScreenState
 
   final List<FeeTerm> _terms = [];
   final Set<String> _selectedClasses = {};
+  Set<String> _originalClasses = {};
 
   bool get _isEditing => widget.structureId != null;
 
@@ -117,6 +120,7 @@ class _FeeStructureEditorScreenState
       _selectedClasses
         ..clear()
         ..addAll(detail.applicableToClassIds);
+      _originalClasses = detail.applicableToClassIds.toSet();
       _initialised = true;
     });
   }
@@ -217,6 +221,8 @@ class _FeeStructureEditorScreenState
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _TermEditorCard(
                       term: _terms[i],
+                      schoolId: widget.schoolId,
+                      selectedClasses: _selectedClasses,
                       onChanged: (t) => setState(() => _terms[i] = t),
                       onRemove: _terms.length > 1
                           ? () => setState(() => _terms.removeAt(i))
@@ -702,6 +708,7 @@ class _FeeStructureEditorScreenState
         normalized.add(t.copyWith(sequence: i + 1));
       }
 
+      String structureId;
       if (_isEditing) {
         final structure = FeeStructureV2(
           id: widget.structureId!,
@@ -719,6 +726,7 @@ class _FeeStructureEditorScreenState
         );
         await repo.update(
             widget.schoolId, widget.structureId!, structure, normalized);
+        structureId = widget.structureId!;
       } else {
         final structure = FeeStructureV2(
           id: '',
@@ -734,12 +742,30 @@ class _FeeStructureEditorScreenState
           createdAt: now,
           updatedAt: now,
         );
-        await repo.create(widget.schoolId, structure, normalized);
+        structureId = await repo.create(widget.schoolId, structure, normalized);
       }
 
       if (mounted) {
         _toast('Fee structure saved');
-        Navigator.of(context).pop();
+
+        // Detect new classes and offer auto-assignment
+        final newClasses = _selectedClasses.difference(_originalClasses);
+        if (newClasses.isNotEmpty && _selectedClasses.isNotEmpty) {
+          final assign = await _showAssignPrompt(newClasses);
+          if (assign == true && mounted) {
+            Navigator.of(context).pop();
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => AssignFeeStructureScreen(
+                schoolId: widget.schoolId,
+                structureId: structureId,
+              ),
+            ));
+          } else if (mounted) {
+            Navigator.of(context).pop();
+          }
+        } else {
+          Navigator.of(context).pop();
+        }
       }
     } catch (e) {
       _toast('Failed to save: $e', error: true);
@@ -757,21 +783,68 @@ class _FeeStructureEditorScreenState
       ),
     );
   }
+
+  Future<bool?> _showAssignPrompt(Set<String> newClasses) {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _cardDark,
+        title: const Row(children: [
+          Icon(Icons.group_add, color: _accentBlue),
+          SizedBox(width: 8),
+          Text('Assign to students?',
+              style: TextStyle(color: _textPrimary)),
+        ]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You added ${newClasses.length} new class(es): ${newClasses.join(", ")}.',
+              style: const TextStyle(color: _textPrimary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Would you like to assign this fee structure to students in these classes now?',
+              style: const TextStyle(color: _textSecondary, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Skip',
+                style: TextStyle(color: _textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Assign now',
+                style: TextStyle(color: _accentBlue)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _TermEditorCard extends StatelessWidget {
+class _TermEditorCard extends ConsumerWidget {
   const _TermEditorCard({
     required this.term,
+    required this.schoolId,
+    required this.selectedClasses,
     required this.onChanged,
     required this.onRemove,
   });
 
   final FeeTerm term;
+  final String schoolId;
+  final Set<String> selectedClasses;
   final ValueChanged<FeeTerm> onChanged;
   final VoidCallback? onRemove;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final money =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     return Container(
@@ -823,6 +896,8 @@ class _TermEditorCard extends StatelessWidget {
                 onPressed: onRemove,
               ),
           ]),
+          const SizedBox(height: 8),
+          _categoryRow(context, ref),
           const SizedBox(height: 8),
           Row(children: [
             Expanded(
@@ -907,6 +982,99 @@ class _TermEditorCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _categoryRow(BuildContext context, WidgetRef ref) {
+    final asyncCats = ref.watch(feeCategoriesProvider(schoolId));
+    return asyncCats.when(
+      loading: () => const SizedBox(
+          height: 36,
+          child: LinearProgressIndicator(color: _accentBlue)),
+      error: (e, _) => Text('Failed to load categories: $e',
+          style: const TextStyle(color: _accentRed, fontSize: 12)),
+      data: (all) {
+        // Filter to active categories applicable to at least one of the
+        // structure's selected classes (or available everywhere when the
+        // structure has no class assigned yet).
+        bool applies(FeeCategory c) {
+          if (!c.isActive) return false;
+          if (c.applicableClassIds.isEmpty) return true;
+          if (selectedClasses.isEmpty) return true;
+          return c.applicableClassIds
+              .any((cls) => selectedClasses.contains(cls));
+        }
+
+        final visible = all.where(applies).toList();
+        // If the term's current category isn't in the visible list (because
+        // categories changed or class list narrowed), keep it visible so the
+        // admin can still see and re-pick.
+        if (!visible.any((c) => c.code == term.category)) {
+          final orphan = all.firstWhere(
+            (c) => c.code == term.category,
+            orElse: () => FeeCategory(code: term.category, name: term.category),
+          );
+          visible.add(orphan);
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Category',
+                style: TextStyle(color: _textSecondary, fontSize: 11)),
+            const SizedBox(height: 4),
+            DropdownButtonFormField<String>(
+              value: term.category,
+              isDense: true,
+              dropdownColor: _cardDark,
+              iconEnabledColor: _textSecondary,
+              style: const TextStyle(color: _textPrimary, fontSize: 13),
+              decoration: InputDecoration(
+                isDense: true,
+                filled: true,
+                fillColor: _bgDark,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: _borderColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: _borderColor),
+                ),
+              ),
+              items: visible
+                  .map((c) => DropdownMenuItem(
+                        value: c.code,
+                        child: Row(children: [
+                          Icon(
+                              c.isStandard
+                                  ? Icons.lock_outline
+                                  : Icons.label_outline,
+                              size: 14,
+                              color: _textSecondary),
+                          const SizedBox(width: 6),
+                          Text(c.name,
+                              style: const TextStyle(
+                                  color: _textPrimary, fontSize: 13)),
+                          const SizedBox(width: 6),
+                          Text('(${c.code})',
+                              style: const TextStyle(
+                                  color: _textSecondary,
+                                  fontSize: 10,
+                                  fontFamily: 'monospace')),
+                        ]),
+                      ))
+                  .toList(),
+              onChanged: (v) {
+                if (v == null) return;
+                onChanged(term.copyWith(category: v));
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 

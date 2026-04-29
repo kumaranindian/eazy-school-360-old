@@ -14,6 +14,26 @@ class TermLedgerEntry {
   final DateTime? paidAt;
   final List<String> paymentIds;
 
+  /// Fee category code this term belongs to (e.g. 'TUITION', 'EXAM',
+  /// 'VAN', 'ADMISSION', 'SPORTS_FEE'). Lets the Fee Management UI
+  /// group rows dynamically without re-fetching the structure. Defaults
+  /// to 'TUITION' so legacy entries written before this field existed
+  /// continue to render correctly.
+  final String category;
+
+  /// True when this entry is an arrears row carried forward from a
+  /// previous academic year via the Year-Close action. Regular
+  /// current-AY entries have `isArrear == false`.
+  final bool isArrear;
+
+  /// For arrears entries: the academic year the original unpaid balance
+  /// came from (e.g. "2024-25"). Empty for regular entries.
+  final String sourceAcademicYear;
+
+  /// For arrears entries: the class the student was in when the original
+  /// balance was incurred. Empty for regular entries.
+  final String sourceClass;
+
   const TermLedgerEntry({
     required this.termId,
     required this.termName,
@@ -25,6 +45,10 @@ class TermLedgerEntry {
     this.status = TermPaymentStatus.UNPAID,
     this.paidAt,
     this.paymentIds = const [],
+    this.category = 'TUITION',
+    this.isArrear = false,
+    this.sourceAcademicYear = '',
+    this.sourceClass = '',
   });
 
   double get balanceAmount => (amount + lateFeeApplied - paidAmount).clamp(0, double.infinity);
@@ -41,6 +65,12 @@ class TermLedgerEntry {
       status: _parseStatus(data['status']),
       paidAt: _parseDate(data['paidAt']),
       paymentIds: (data['paymentIds'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      category: (data['category']?.toString().toUpperCase().trim().isNotEmpty ?? false)
+          ? data['category'].toString().toUpperCase().trim()
+          : 'TUITION',
+      isArrear: data['isArrear'] as bool? ?? false,
+      sourceAcademicYear: data['sourceAcademicYear']?.toString() ?? '',
+      sourceClass: data['sourceClass']?.toString() ?? '',
     );
   }
 
@@ -72,6 +102,11 @@ class TermLedgerEntry {
         'status': status.name,
         if (paidAt != null) 'paidAt': Timestamp.fromDate(paidAt!),
         'paymentIds': paymentIds,
+        'category': category,
+        'isArrear': isArrear,
+        if (sourceAcademicYear.isNotEmpty)
+          'sourceAcademicYear': sourceAcademicYear,
+        if (sourceClass.isNotEmpty) 'sourceClass': sourceClass,
       };
 
   TermLedgerEntry copyWith({
@@ -85,6 +120,10 @@ class TermLedgerEntry {
     TermPaymentStatus? status,
     DateTime? paidAt,
     List<String>? paymentIds,
+    String? category,
+    bool? isArrear,
+    String? sourceAcademicYear,
+    String? sourceClass,
   }) =>
       TermLedgerEntry(
         termId: termId ?? this.termId,
@@ -97,6 +136,10 @@ class TermLedgerEntry {
         status: status ?? this.status,
         paidAt: paidAt ?? this.paidAt,
         paymentIds: paymentIds ?? this.paymentIds,
+        category: category ?? this.category,
+        isArrear: isArrear ?? this.isArrear,
+        sourceAcademicYear: sourceAcademicYear ?? this.sourceAcademicYear,
+        sourceClass: sourceClass ?? this.sourceClass,
       );
 }
 

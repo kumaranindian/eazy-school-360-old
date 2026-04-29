@@ -134,6 +134,12 @@ class FeeTerm {
   final ReminderConfig reminderConfig;
   final List<FeeComponent> components;
 
+  /// Fee category code (e.g. 'TUITION', 'EXAM', 'VAN', 'ADMISSION', or any
+  /// custom category like 'SPORTS_FEE'). Used by the payment flow to decide
+  /// which input bucket this term contributes to. Defaults to 'TUITION' so
+  /// that legacy terms saved before this field existed keep working.
+  final String category;
+
   const FeeTerm({
     required this.id,
     required this.termName,
@@ -143,6 +149,7 @@ class FeeTerm {
     this.lateFee = const LateFeeRule(),
     this.reminderConfig = const ReminderConfig(),
     this.components = const [],
+    this.category = 'TUITION',
   });
 
   factory FeeTerm.fromFirestore(DocumentSnapshot doc) {
@@ -162,6 +169,9 @@ class FeeTerm {
       components: ((data['components'] as List?) ?? [])
           .map((e) => FeeComponent.fromMap(Map<String, dynamic>.from(e as Map)))
           .toList(),
+      category: (data['category']?.toString().toUpperCase().trim().isNotEmpty ?? false)
+          ? data['category'].toString().toUpperCase().trim()
+          : 'TUITION',
     );
   }
 
@@ -181,6 +191,7 @@ class FeeTerm {
         'lateFee': lateFee.toMap(),
         'reminderConfig': reminderConfig.toMap(),
         'components': components.map((c) => c.toMap()).toList(),
+        'category': category,
       };
 
   FeeTerm copyWith({
@@ -192,6 +203,7 @@ class FeeTerm {
     LateFeeRule? lateFee,
     ReminderConfig? reminderConfig,
     List<FeeComponent>? components,
+    String? category,
   }) =>
       FeeTerm(
         id: id ?? this.id,
@@ -202,5 +214,6 @@ class FeeTerm {
         lateFee: lateFee ?? this.lateFee,
         reminderConfig: reminderConfig ?? this.reminderConfig,
         components: components ?? this.components,
+        category: category ?? this.category,
       );
 }

@@ -4,8 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/auth_provider.dart';
+import '../../../data/repositories/fee_repository.dart';
+import '../../../data/services/fee_structure_to_payment_mapper.dart';
+import '../../../domain/entities/academic_year.dart';
 import 'fee_payment_screen.dart';
 import '../../shared/widgets/searchable_dropdown.dart';
+import '../widgets/ledger_fee_management_card.dart';
 
 const Color _bgDark = Color(0xFF0D1117);
 const Color _cardDark = Color(0xFF161B22);
@@ -96,13 +100,96 @@ class _StudentFeeManagementScreenState extends ConsumerState<StudentFeeManagemen
     } catch (_) {}
   }
 
+  /// Source of the displayed tuition value. Used to surface a small badge
+  /// so admins can tell whether the figure is coming from the V2 fee
+  /// structure or from the legacy sheet upload.
+  String _tuitionSource = 'stored';
+
+  /// Picks the academic year to use when loading the [StudentFeeLedger].
+  /// Prefers the value stored on the student record (set during sheet
+  /// upload / onboarding) and falls back to the date-derived current AY
+  /// so the screen still renders sensibly when the field is missing.
+  String _resolveStudentAcademicYear() {
+    final ay = _studentData?['academicYear']?.toString() ?? '';
+    if (ay.isNotEmpty) return ay;
+    return AcademicYear.getCurrentYearCode();
+  }
+
   void _onStudentSelected(String? docId) {
     if (docId == null || docId.isEmpty) return;
-    final student = _students.firstWhere((s) => s['docId'].toString() == docId, orElse: () => {});
+    final student = _students.firstWhere(
+        (s) => s['docId'].toString() == docId,
+        orElse: () => {});
     if (student.isEmpty) return;
     setState(() {
       _selectedStudentDocId = docId;
-      _studentData = student;
+      _studentData = Map<String, dynamic>.from(student);
+      _tuitionSource = 'stored';
+    });
+    // Asynchronously override tuition + totals from the active V2 structure.
+    _applyV2Override();
+  }
+
+  /// Looks up the active FeeStructureV2 for the selected student's class
+  /// and, when found, overrides the tuition figure with the sum of all V2
+  /// term amounts. Recomputes total/balance fields so the screen always
+  /// reflects the source-of-truth structure even when the stored
+  /// `student_fee_details` row was uploaded with stale values.
+  Future<void> _applyV2Override() async {
+    if (_schoolId == null || _studentData == null) return;
+    final className = (_studentData!['stuClass'] ??
+            _studentData!['className'] ??
+            '')
+        .toString();
+    if (className.isEmpty) return;
+    final ay = (_studentData!['academicYear']?.toString().isNotEmpty ?? false)
+        ? _studentData!['academicYear'].toString()
+        : AcademicYear.getCurrentYearCode();
+
+    final repo = ref.read(feeRepositoryProvider);
+    final v2 = await repo.getFeeStructureV2ByClass(_schoolId!, className, ay);
+    if (v2 == null || !mounted) return;
+
+    final v2Tuition = FeeStructureToPaymentMapper.totalAmountForStructure(v2);
+    final s = _studentData!;
+    final exam = (s['stuTotalExamFees'] as num?)?.toDouble() ?? 0;
+    final van = (s['stuTotalVanFees'] as num?)?.toDouble() ?? 0;
+    final admission =
+        (s['stuTotalAdmissionFees'] as num?)?.toDouble() ?? 0;
+    final concession = (s['stuConcessionFees'] as num?)?.toDouble() ?? 0;
+    final paidTuition = (s['stuPaidTutionFees'] as num?)?.toDouble() ?? 0;
+    final paidExam = (s['stuPaidExamFees'] as num?)?.toDouble() ?? 0;
+    final paidVan = (s['studPaidVanFees'] as num?)?.toDouble() ?? 0;
+    final paidAdmission =
+        (s['stuPaidAdmissionFees'] as num?)?.toDouble() ?? 0;
+    final arrearTuition = (s['arrearTuitionFees'] as num?)?.toDouble() ?? 0;
+    final arrearExam = (s['arrearExamFees'] as num?)?.toDouble() ?? 0;
+    final arrearVan = (s['arrearVanFees'] as num?)?.toDouble() ?? 0;
+    final arrearAdmission =
+        (s['arrearAdmissionFees'] as num?)?.toDouble() ?? 0;
+
+    final newTotal = v2Tuition + exam + van + admission;
+    final newBalTuition =
+        v2Tuition + arrearTuition - concession - paidTuition;
+    final newBalExam = exam + arrearExam - paidExam;
+    final newBalVan = van + arrearVan - paidVan;
+    final newBalAdmission =
+        admission + arrearAdmission - paidAdmission;
+    final newBalTotal =
+        newBalTuition + newBalExam + newBalVan + newBalAdmission;
+
+    setState(() {
+      _studentData = {
+        ..._studentData!,
+        'stuTotalTutionFees': v2Tuition,
+        'stuTotalFees': newTotal,
+        'stuBalTutionFees': newBalTuition,
+        'stuBalExamFees': newBalExam,
+        'stuBalVanFees': newBalVan,
+        'stuBalAdmissionFees': newBalAdmission,
+        'stuBalTotalFees': newBalTotal,
+      };
+      _tuitionSource = 'v2';
     });
   }
 
@@ -135,9 +222,29 @@ class _StudentFeeManagementScreenState extends ConsumerState<StudentFeeManagemen
                   const SizedBox(height: 12),
                   _buildFeesSummaryCard(isMobile),
                 ]),
-          if (_studentData != null) ...[
+          if (_studentData != null && _schoolId != null) ...[
             SizedBox(height: isMobile ? 16 : 20),
-            _buildFeeManagementSection(isDesktop, isMobile),
+            // New ledger-driven Fee Management card. Renders dynamic
+            // per-category rows for the current AY plus a separate group
+            // per prior-AY arrears block carried forward by Year Close.
+            LedgerFeeManagementCard(
+              key: ValueKey('ledger-${_selectedStudentDocId}-${_resolveStudentAcademicYear()}'),
+              schoolId: _schoolId!,
+              studentId: (_studentData!['stuId'] ?? '').toString(),
+              academicYear: _resolveStudentAcademicYear(),
+              studentName: (_studentData!['stuName'] ?? '').toString(),
+              className: (_studentData!['stuClass'] ?? '').toString(),
+              section: (_studentData!['stuSection'] ?? '').toString(),
+              parentName: (_studentData!['stuParentName'] ??
+                      _studentData!['parentName'] ??
+                      '')
+                  .toString(),
+              parentPhone: (_studentData!['stuParentMobile'] ??
+                      _studentData!['parentPhone'] ??
+                      '')
+                  .toString(),
+              onBillHistory: _showBillHistory,
+            ),
             SizedBox(height: isMobile ? 12 : 16),
             _buildActionButtons(isMobile),
           ],
@@ -272,150 +379,27 @@ class _StudentFeeManagementScreenState extends ConsumerState<StudentFeeManagemen
           Icon(Icons.receipt_long_rounded, color: _accentGreen, size: isMobile ? 18 : 20),
           SizedBox(width: isMobile ? 6 : 8),
           Text('Fees Summary', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: isMobile ? 14 : 16)),
+          const SizedBox(width: 8),
+          if (_tuitionSource == 'v2')
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: _accentGreen.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: _accentGreen.withValues(alpha: 0.4)),
+              ),
+              child: const Text('TUITION FROM V2',
+                  style: TextStyle(
+                      color: _accentGreen,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5)),
+            ),
         ]),
         SizedBox(height: isMobile ? 12 : 16),
         _summaryRow('Arrear Fees', '₹${totalArrears.toStringAsFixed(0)}', totalArrears > 0 ? const Color(0xFFEF4444) : _accentGreen, isMobile),
         SizedBox(height: isMobile ? 8 : 10),
         _summaryRow('Concession Fees', '₹${concession.toStringAsFixed(0)}', const Color(0xFF3B82F6), isMobile),
-      ]),
-    );
-  }
-
-  Widget _buildFeeManagementSection(bool isDesktop, bool isMobile) {
-    final s = _studentData;
-    if (s == null) return const SizedBox.shrink();
-
-    const totalColor = Color(0xFFF59E0B);
-    const paidColor = Color(0xFF10B981);
-    const balanceColor = Color(0xFFEF4444);
-
-    return Container(
-      padding: EdgeInsets.all(isMobile ? 14 : 18),
-      decoration: BoxDecoration(
-        color: _cardDark,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _borderColor),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(Icons.account_balance_wallet_rounded, color: _accentGreen, size: isMobile ? 18 : 20),
-          SizedBox(width: isMobile ? 6 : 8),
-          Text('Fee Management', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: isMobile ? 14 : 16)),
-        ]),
-        SizedBox(height: isMobile ? 12 : 16),
-        isDesktop
-            ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(child: _buildFeeBreakdownCard('TOTAL FEES', totalColor, s, 'Total', isMobile)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildFeeBreakdownCard('PAID FEES', paidColor, s, 'Paid', isMobile)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildFeeBreakdownCard('BALANCE FEES', balanceColor, s, 'Balance', isMobile)),
-              ])
-            : Column(children: [
-                _buildFeeBreakdownCard('TOTAL FEES', totalColor, s, 'Total', isMobile),
-                const SizedBox(height: 12),
-                _buildFeeBreakdownCard('PAID FEES', paidColor, s, 'Paid', isMobile),
-                const SizedBox(height: 12),
-                _buildFeeBreakdownCard('BALANCE FEES', balanceColor, s, 'Balance', isMobile),
-              ]),
-      ]),
-    );
-  }
-
-  Widget _buildFeeBreakdownCard(String title, Color accent, Map<String, dynamic> s, String type, bool isMobile) {
-    double tuition = 0, exam = 0, van = 0, admission = 0, total = 0;
-    double tuitionArr = 0, examArr = 0, vanArr = 0, admissionArr = 0;
-
-    switch (type) {
-      case 'Total':
-        tuition = (s['stuTotalTutionFees'] as num?)?.toDouble() ?? 0;
-        exam = (s['stuTotalExamFees'] as num?)?.toDouble() ?? 0;
-        van = (s['stuTotalVanFees'] as num?)?.toDouble() ?? 0;
-        admission = (s['stuTotalAdmissionFees'] as num?)?.toDouble() ?? 0;
-        tuitionArr = (s['arrearTuitionFees'] as num?)?.toDouble() ?? 0;
-        examArr = (s['arrearExamFees'] as num?)?.toDouble() ?? 0;
-        vanArr = (s['arrearVanFees'] as num?)?.toDouble() ?? 0;
-        admissionArr = (s['arrearAdmissionFees'] as num?)?.toDouble() ?? 0;
-        break;
-      case 'Paid':
-        tuition = (s['stuPaidTutionFees'] as num?)?.toDouble() ?? 0;
-        exam = (s['stuPaidExamFees'] as num?)?.toDouble() ?? 0;
-        van = (s['studPaidVanFees'] as num?)?.toDouble() ?? 0;
-        admission = (s['stuPaidAdmissionFees'] as num?)?.toDouble() ?? 0;
-        tuitionArr = (s['stuPaidArrearTutionFees'] as num?)?.toDouble() ?? 0;
-        examArr = (s['stuPaidArrearExamFees'] as num?)?.toDouble() ?? 0;
-        vanArr = (s['stuPaidArrearVanFees'] as num?)?.toDouble() ?? 0;
-        admissionArr = (s['stuPaidArrearAdmissionFees'] as num?)?.toDouble() ?? 0;
-        break;
-      case 'Balance':
-        tuition = (s['stuBalTutionFees'] as num?)?.toDouble() ?? 0;
-        exam = (s['stuBalExamFees'] as num?)?.toDouble() ?? 0;
-        van = (s['stuBalVanFees'] as num?)?.toDouble() ?? 0;
-        admission = (s['stuBalAdmissionFees'] as num?)?.toDouble() ?? 0;
-        tuitionArr = (s['balanceArrearTuitionFees'] as num?)?.toDouble() ?? 0;
-        examArr = (s['balanceArrearExamFees'] as num?)?.toDouble() ?? 0;
-        vanArr = (s['balanceArrearVanFees'] as num?)?.toDouble() ?? 0;
-        admissionArr = (s['balanceArrearAdmissionFees'] as num?)?.toDouble() ?? 0;
-        break;
-    }
-    total = tuition + exam + van + admission;
-
-    return Container(
-      padding: EdgeInsets.all(isMobile ? 12 : 14),
-      decoration: BoxDecoration(
-        color: _bgDark,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: accent.withOpacity(0.3)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(vertical: isMobile ? 6 : 8),
-          decoration: BoxDecoration(color: accent.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-          child: Center(child: Text(title, style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: isMobile ? 12 : 13))),
-        ),
-        SizedBox(height: isMobile ? 8 : 10),
-        _feeRow('', 'Regular', 'Arrears', accent, isHeader: true, isMobile: isMobile),
-        _feeRow('Tuition Fees', '₹${tuition.toStringAsFixed(0)}', '₹${tuitionArr.toStringAsFixed(0)}', accent, isMobile: isMobile),
-        _feeRow('Exam Fees', '₹${exam.toStringAsFixed(0)}', '₹${examArr.toStringAsFixed(0)}', accent, isMobile: isMobile),
-        _feeRow('Van Fees', '₹${van.toStringAsFixed(0)}', '₹${vanArr.toStringAsFixed(0)}', accent, isMobile: isMobile),
-        _feeRow('Admission Fees', '₹${admission.toStringAsFixed(0)}', '₹${admissionArr.toStringAsFixed(0)}', accent, isMobile: isMobile),
-        Divider(color: _borderColor, height: isMobile ? 12 : 14),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('TOTAL', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: isMobile ? 11 : 12)),
-          Text('₹${total.toStringAsFixed(0)}', style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: isMobile ? 13 : 14)),
-        ]),
-      ]),
-    );
-  }
-
-  Widget _feeRow(String label, String regular, String arrears, Color accent, {bool isHeader = false, bool isMobile = false}) {
-    final style = isHeader
-        ? TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: isMobile ? 10 : 11)
-        : TextStyle(color: _textPrimary, fontSize: isMobile ? 11 : 12);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      padding: EdgeInsets.symmetric(vertical: isMobile ? 5 : 6, horizontal: isMobile ? 6 : 8),
-      decoration: isHeader
-          ? null
-          : BoxDecoration(
-              color: accent.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: accent.withOpacity(0.15)),
-            ),
-      child: Row(children: [
-        if (!isHeader) Icon(Icons.circle, size: 5, color: accent),
-        if (!isHeader) const SizedBox(width: 6),
-        Expanded(
-            flex: 3,
-            child: Text(label,
-                style: TextStyle(
-                    color: isHeader ? _textSecondary : _textPrimary,
-                    fontSize: isMobile ? 11 : 12,
-                    fontWeight: isHeader ? FontWeight.normal : FontWeight.w500))),
-        Expanded(flex: 2, child: Text(regular, style: style, textAlign: TextAlign.right)),
-        const SizedBox(width: 8),
-        Expanded(flex: 2, child: Text(arrears, style: style, textAlign: TextAlign.right)),
       ]),
     );
   }
@@ -468,7 +452,11 @@ class _StudentFeeManagementScreenState extends ConsumerState<StudentFeeManagemen
           if (doc.exists && mounted) {
             final data = doc.data()!;
             data['docId'] = doc.id;
-            setState(() => _studentData = data);
+            setState(() {
+              _studentData = data;
+              _tuitionSource = 'stored';
+            });
+            _applyV2Override();
           }
         });
       }

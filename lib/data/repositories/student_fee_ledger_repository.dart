@@ -90,6 +90,7 @@ class StudentFeeLedgerRepository {
               sequence: t.sequence,
               amount: t.amount,
               dueDate: t.dueDate,
+              category: t.category,
             ))
         .toList();
 

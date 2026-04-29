@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/providers/auth_provider.dart';
+import '../../../data/repositories/fee_repository.dart';
+import '../../../data/repositories/student_fee_ledger_repository.dart';
 import '../../../data/repositories/student_repository.dart';
-import '../../../domain/entities/student.dart';
 import '../../../domain/entities/academic_year.dart';
+import '../../../domain/entities/student.dart';
 import '../../shared/widgets/searchable_dropdown.dart';
 
 class StudentManagementScreen extends ConsumerStatefulWidget {
@@ -35,6 +37,46 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
   }
 
   String? get _schoolId => ref.read(currentSessionProvider)?.schoolId;
+
+  /// After a student is created, look up the active FeeStructureV2 for
+  /// their class+AY and seed a [StudentFeeLedger] from it so the Fee
+  /// Management screen works out of the box. Non-fatal: any failure is
+  /// returned as a human-readable message for the snackbar instead of
+  /// propagating — the student record itself is already committed.
+  Future<String?> _autoAssignLedger({
+    required String schoolId,
+    required String studentId,
+    required String studentName,
+    required String className,
+    required String section,
+    required String academicYear,
+    String? parentName,
+    String? parentPhone,
+  }) async {
+    try {
+      final feeRepo = ref.read(feeRepositoryProvider);
+      final structure = await feeRepo.getFeeStructureV2ByClass(
+          schoolId, className, academicYear);
+      if (structure == null) {
+        return 'Student added but no fee structure found for $className / $academicYear — assign one from Fee Management.';
+      }
+      final ledgerRepo = ref.read(studentFeeLedgerRepositoryProvider);
+      await ledgerRepo.assignToStudent(
+        schoolId: schoolId,
+        studentId: studentId,
+        studentName: studentName,
+        className: className,
+        section: section,
+        structureId: structure.id,
+        parentName: parentName,
+        parentPhone: parentPhone,
+        onConflict: ConflictAction.SKIP,
+      );
+      return 'Fee ledger seeded from "${structure.name}".';
+    } catch (e) {
+      return 'Student added; fee ledger auto-assign failed: $e';
+    }
+  }
 
   Future<String> _getCurrentAcademicYear(String schoolId) async {
     try {
@@ -464,6 +506,27 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
                       updatedAt: now,
                     );
                     await repo.createStudent(schoolId, newStudent);
+
+                    // Auto-seed the student's fee ledger from the active
+                    // FeeStructureV2 for their class+AY. Non-fatal: student
+                    // stays created even if no structure matches (admin can
+                    // assign later from the Fee Management empty state).
+                    final ledgerMsg = await _autoAssignLedger(
+                      schoolId: schoolId,
+                      studentId: nextId.toString(),
+                      studentName: newStudent.name,
+                      className: newStudent.className,
+                      section: newStudent.section,
+                      academicYear: newStudent.academicYearCode,
+                      parentName: newStudent.parentName,
+                      parentPhone: newStudent.parentPhone,
+                    );
+                    if (mounted && ledgerMsg != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(ledgerMsg),
+                        backgroundColor: _accentBlue,
+                      ));
+                    }
                   }
                   
                   if (mounted) {

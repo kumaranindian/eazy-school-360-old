@@ -26,6 +26,12 @@ class FeePayment {
   final double vanFeePaid;
   final double arrearsPaid;
   final double totalAmount;
+
+  /// Per-category amounts for non-standard fee buckets (e.g. SPORTS_FEE,
+  /// LIBRARY_FEE). Keys are uppercase category codes; values are amounts.
+  /// The four standard categories (ADMISSION, TUITION, EXAM, VAN) keep
+  /// their dedicated fields above for backward compatibility.
+  final Map<String, double> customCategoryAmounts;
   
   // Payment details
   final PaymentMode paymentMode;
@@ -59,6 +65,7 @@ class FeePayment {
     this.examFeePaid = 0.0,
     this.vanFeePaid = 0.0,
     this.arrearsPaid = 0.0,
+    this.customCategoryAmounts = const {},
     required this.totalAmount,
     required this.paymentMode,
     this.transactionId,
@@ -91,6 +98,9 @@ class FeePayment {
       examFeePaid: (data['examFeePaid'] as num?)?.toDouble() ?? 0.0,
       vanFeePaid: (data['vanFeePaid'] as num?)?.toDouble() ?? 0.0,
       arrearsPaid: (data['arrearsPaid'] as num?)?.toDouble() ?? 0.0,
+      customCategoryAmounts: ((data['customCategoryAmounts'] as Map?) ?? {}).map(
+        (k, v) => MapEntry(k.toString(), (v as num?)?.toDouble() ?? 0.0),
+      ),
       totalAmount: ((data['totalAmount'] ?? data['revenueAmount']) as num?)?.toDouble() ?? 0.0,
       paymentMode: _parsePaymentMode(data['paymentMode']),
       transactionId: data['transactionId'] as String?,
@@ -145,6 +155,7 @@ class FeePayment {
       'examFeePaid': examFeePaid,
       'vanFeePaid': vanFeePaid,
       'arrearsPaid': arrearsPaid,
+      'customCategoryAmounts': customCategoryAmounts,
       'totalAmount': totalAmount,
       'revenueAmount': totalAmount,
       'revenueType': 'Fee Payment',
@@ -187,6 +198,7 @@ class FeePayment {
     double? examFeePaid,
     double? vanFeePaid,
     double? arrearsPaid,
+    Map<String, double>? customCategoryAmounts,
     double? totalAmount,
     PaymentMode? paymentMode,
     String? transactionId,
@@ -216,6 +228,7 @@ class FeePayment {
       examFeePaid: examFeePaid ?? this.examFeePaid,
       vanFeePaid: vanFeePaid ?? this.vanFeePaid,
       arrearsPaid: arrearsPaid ?? this.arrearsPaid,
+      customCategoryAmounts: customCategoryAmounts ?? this.customCategoryAmounts,
       totalAmount: totalAmount ?? this.totalAmount,
       paymentMode: paymentMode ?? this.paymentMode,
       transactionId: transactionId ?? this.transactionId,

@@ -420,6 +420,13 @@ service cloud.firestore {
         allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
       }
 
+      // FEE CATEGORIES SUBCOLLECTION — catalog of fee buckets (Tuition, Exam, Van, etc.)
+      match /feeCategories/{categoryId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
+      }
+
       // FEE STRUCTURES V2 (term-wise) — admin/finance manage; all signed-in school members can read.
       match /feeStructuresV2/{structureId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));

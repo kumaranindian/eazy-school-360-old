@@ -9,7 +9,6 @@ import '../../finance/screens/financial_reports_screen.dart';
 import '../../finance/screens/bill_management_screen.dart';
 import '../../finance/screens/student_fee_management_screen.dart';
 import '../../finance/screens/fee_structure_list_screen.dart';
-import '../../finance/screens/student_fee_ledger_list_screen.dart';
 import 'finance_dashboard_home.dart';
 
 class FinanceDashboardScreen extends ConsumerStatefulWidget {
@@ -27,7 +26,6 @@ class FinanceDashboardScreen extends ConsumerStatefulWidget {
 // 4 = Bill Management
 // 5 = Financial Reports
 // 6 = Fee Structures (term-wise)
-// 7 = Student Fee Ledgers
 
 class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen> {
   int _selectedIndex = 0;
@@ -337,7 +335,6 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
       case 4: return 'Bill Management';
       case 5: return 'Financial Reports';
       case 6: return 'Fee Structures';
-      case 7: return 'Student Fee Ledgers';
       default: return 'Dashboard';
     }
   }
@@ -421,7 +418,6 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
       case 4: return const BillManagementScreen();
       case 5: return const FinancialReportsScreen();
       case 6: return const FeeStructureListScreen();
-      case 7: return const StudentFeeLedgerListScreen();
       default:
         return FinanceDashboardHome(
           onNavigateToStudents: () => setState(() => _selectedIndex = 1),

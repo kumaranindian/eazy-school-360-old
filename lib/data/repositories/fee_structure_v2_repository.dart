@@ -92,25 +92,33 @@ class FeeStructureV2Repository {
   ) async {
     final total = terms.fold<double>(0, (s, t) => s + t.amount);
 
-    // 1) update parent doc
-    await _col(schoolId).doc(structureId).update({
-      ...structure.toFirestore(),
-      'totalAmount': total,
-      'termCount': terms.length,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      // 1) update parent doc
+      await _col(schoolId).doc(structureId).update({
+        ...structure.toFirestore(),
+        'totalAmount': total,
+        'termCount': terms.length,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Failed to update fee structure parent document: $e');
+    }
 
-    // 2) delete existing terms then write new ones in a batch
-    final existing = await _termsCol(schoolId, structureId).get();
-    final batch = _firestore.batch();
-    for (final d in existing.docs) {
-      batch.delete(d.reference);
+    try {
+      // 2) delete existing terms then write new ones in a batch
+      final existing = await _termsCol(schoolId, structureId).get();
+      final batch = _firestore.batch();
+      for (final d in existing.docs) {
+        batch.delete(d.reference);
+      }
+      for (final term in terms) {
+        final ref = _termsCol(schoolId, structureId).doc();
+        batch.set(ref, term.toFirestore());
+      }
+      await batch.commit();
+    } catch (e) {
+      throw Exception('Failed to update fee structure terms (batch operation): $e');
     }
-    for (final term in terms) {
-      final ref = _termsCol(schoolId, structureId).doc();
-      batch.set(ref, term.toFirestore());
-    }
-    await batch.commit();
   }
 
   Future<void> setActive(
