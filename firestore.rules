@@ -427,6 +427,20 @@ service cloud.firestore {
         allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
       }
 
+      // STUDENT FEE ITEMS — category-based fee tracking (new system)
+      match /studentFeeItems/{itemId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
+      }
+
+      // AD-HOC FEE ASSIGNMENTS — bulk fee assignments for events
+      match /adHocFeeAssignments/{assignmentId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
+      }
+
       // FEE STRUCTURES V2 (term-wise) — admin/finance manage; all signed-in school members can read.
       match /feeStructuresV2/{structureId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
