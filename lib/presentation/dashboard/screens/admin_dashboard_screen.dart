@@ -454,9 +454,18 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       case 'student_fee_mgmt': return const StudentFeeManagementScreen();
       case 'fee_structures_v2': return const FeeStructureListScreen();
       case 'fee_categories': return const ManageFeeCategoriesScreen();
-      case 'ad_hoc_fee_assignment': return AdHocFeeAssignmentScreen(
+      case 'ad_hoc_fee_assignment': {
+        final now = DateTime.now();
+        final currentYear = now.year;
+        final nextYear = currentYear + 1;
+        final academicYear = now.month >= 4 
+            ? '$currentYear-${nextYear.toString().substring(2)}' 
+            : '${currentYear - 1}-${currentYear.toString().substring(2)}';
+        return AdHocFeeAssignmentScreen(
           schoolId: (session?.schoolId as String?) ?? '',
-          academicYear: (session?.currentAcademicYear as String?) ?? DateTime.now().year.toString());
+          academicYear: academicYear,
+        );
+      }
       case 'delete_student': return const DeleteStudentScreen();
       case 'expenses': return const ExpenseEntryScreen();
       case 'bill_management': return const BillManagementScreen();
