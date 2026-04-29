@@ -437,11 +437,12 @@ service cloud.firestore {
       // AD-HOC FEE ASSIGNMENTS — bulk fee assignments for events
       match /adHocFeeAssignments/{assignmentId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
-        allow create: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+        allow create: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() || isAdmin() || isFinance())) 
                       && request.resource.data.schoolId == schoolId;
-        allow update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+        allow update: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() || isAdmin() || isFinance())) 
                       && resource.data.schoolId == schoolId;
-        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() || isAdmin())) 
+                      && resource.data.schoolId == schoolId;
       }
 
       // FEE STRUCTURES V2 (term-wise) — admin/finance manage; all signed-in school members can read.
