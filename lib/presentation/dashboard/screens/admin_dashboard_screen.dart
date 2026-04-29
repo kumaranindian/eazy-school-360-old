@@ -29,6 +29,7 @@ import '../../finance/screens/upload_sheet_screen.dart';
 import '../../finance/screens/student_fee_management_screen.dart';
 import '../../finance/screens/fee_structure_list_screen.dart';
 import '../../finance/screens/manage_fee_categories_screen.dart';
+import '../../finance/screens/ad_hoc_fee_assignment_screen.dart';
 import '../../admin/screens/payroll_management_screen.dart';
 import '../../admin/screens/school_settings_screen.dart';
 import '../../auth/screens/enhanced_login_screen.dart';
@@ -89,6 +90,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       MenuItem(id: 'student_fee_mgmt', icon: Icons.account_balance_wallet_rounded, label: 'Fee Management', isNew: true),
       MenuItem(id: 'fee_structures_v2', icon: Icons.receipt_long_outlined, label: 'Fee Structures', isNew: true),
       MenuItem(id: 'fee_categories', icon: Icons.category_outlined, label: 'Fee Categories', isNew: true),
+      MenuItem(id: 'ad_hoc_fee_assignment', icon: Icons.event_note_rounded, label: 'Ad-Hoc Fee Assignment', isNew: true),
       MenuItem(id: 'expenses', icon: Icons.money_off_rounded, label: 'Expense Entry'),
       MenuItem(id: 'bill_management', icon: Icons.receipt_long_rounded, label: 'Bill Management', isNew: true),
     ]),
@@ -360,6 +362,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       case 'student_fee_mgmt': return 'Student Fee Management';
       case 'fee_structures_v2': return 'Fee Structures';
       case 'fee_categories': return 'Fee Categories';
+      case 'ad_hoc_fee_assignment': return 'Ad-Hoc Fee Assignment';
       case 'delete_student': return 'Delete Student';
       case 'fee_collection': return 'Fee Collection';
       case 'expenses': return 'Expense Entry';
@@ -451,6 +454,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       case 'student_fee_mgmt': return const StudentFeeManagementScreen();
       case 'fee_structures_v2': return const FeeStructureListScreen();
       case 'fee_categories': return const ManageFeeCategoriesScreen();
+      case 'ad_hoc_fee_assignment': return AdHocFeeAssignmentScreen(
+          schoolId: (session?.schoolId as String?) ?? '',
+          academicYear: (session?.currentAcademicYear as String?) ?? DateTime.now().year.toString());
       case 'delete_student': return const DeleteStudentScreen();
       case 'expenses': return const ExpenseEntryScreen();
       case 'bill_management': return const BillManagementScreen();
