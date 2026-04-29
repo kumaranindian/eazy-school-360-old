@@ -37,44 +37,51 @@ class AdHocFeeAssignmentService {
     String? createdBy,
     String? notes,
   }) async {
-    // Step 1: Get target students based on scope
-    final targetStudents = await _getTargetStudents(
-      schoolId: schoolId,
-      academicYear: academicYear,
-      scope: scope,
-      classIds: classIds,
-      sections: sections,
-      studentIds: studentIds,
-    );
+    try {
+      print('[AdHocFeeAssignment] Starting assignment creation for school: $schoolId');
+      
+      // Step 1: Get target students based on scope
+      final targetStudents = await _getTargetStudents(
+        schoolId: schoolId,
+        academicYear: academicYear,
+        scope: scope,
+        classIds: classIds,
+        sections: sections,
+        studentIds: studentIds,
+      );
 
-    if (targetStudents.isEmpty) {
-      throw Exception('No students found matching the criteria');
-    }
+      print('[AdHocFeeAssignment] Found ${targetStudents.length} target students');
 
-    // Step 2: Create the assignment record
-    final assignment = AdHocFeeAssignment(
-      id: '',
-      schoolId: schoolId,
-      academicYear: academicYear,
-      categoryCode: categoryCode,
-      assignmentName: assignmentName,
-      description: description,
-      amount: amount,
-      dueDate: dueDate,
-      scope: scope,
-      classIds: classIds,
-      sections: sections,
-      studentIds: studentIds.isEmpty ? targetStudents.map((s) => s.id).toList() : studentIds,
-      studentCount: targetStudents.length,
-      assignedCount: 0,
-      totalAmount: amount * targetStudents.length,
-      createdBy: createdBy,
-      createdAt: DateTime.now(),
-      status: 'active',
-      notes: notes,
-    );
+      if (targetStudents.isEmpty) {
+        throw Exception('No students found matching the criteria');
+      }
 
-    final assignmentId = await _assignmentRepo.create(schoolId, assignment);
+      // Step 2: Create the assignment record
+      final assignment = AdHocFeeAssignment(
+        id: '',
+        schoolId: schoolId,
+        academicYear: academicYear,
+        categoryCode: categoryCode,
+        assignmentName: assignmentName,
+        description: description,
+        amount: amount,
+        dueDate: dueDate,
+        scope: scope,
+        classIds: classIds,
+        sections: sections,
+        studentIds: studentIds.isEmpty ? targetStudents.map((s) => s.id).toList() : studentIds,
+        studentCount: targetStudents.length,
+        assignedCount: 0,
+        totalAmount: amount * targetStudents.length,
+        createdBy: createdBy,
+        createdAt: DateTime.now(),
+        status: 'active',
+        notes: notes,
+      );
+
+      print('[AdHocFeeAssignment] Creating assignment record...');
+      final assignmentId = await _assignmentRepo.create(schoolId, assignment);
+      print('[AdHocFeeAssignment] Assignment created with ID: $assignmentId');
 
     // Step 3: Create fee items for each student
     final feeItems = <StudentFeeItem>[];
@@ -104,19 +111,28 @@ class AdHocFeeAssignmentService {
       feeItems.add(feeItem);
     }
 
-    // Step 4: Batch create fee items
-    await _feeItemRepo.createBatch(schoolId, feeItems);
+      // Step 4: Batch create fee items
+      print('[AdHocFeeAssignment] Creating ${feeItems.length} fee items...');
+      await _feeItemRepo.createBatch(schoolId, feeItems);
+      print('[AdHocFeeAssignment] Fee items created successfully');
 
-    // Step 5: Update assignment progress
-    await _assignmentRepo.updateProgress(schoolId, assignmentId, targetStudents.length);
-    await _assignmentRepo.markComplete(schoolId, assignmentId);
+      // Step 5: Update assignment progress
+      print('[AdHocFeeAssignment] Updating assignment progress...');
+      await _assignmentRepo.updateProgress(schoolId, assignmentId, targetStudents.length);
+      await _assignmentRepo.markComplete(schoolId, assignmentId);
+      print('[AdHocFeeAssignment] Assignment completed successfully');
 
-    return AssignmentResult(
-      assignmentId: assignmentId,
-      studentsAssigned: targetStudents.length,
-      totalAmount: amount * targetStudents.length,
-      success: true,
-    );
+      return AssignmentResult(
+        assignmentId: assignmentId,
+        studentsAssigned: targetStudents.length,
+        totalAmount: amount * targetStudents.length,
+        success: true,
+      );
+    } catch (e, stackTrace) {
+      print('[AdHocFeeAssignment] Error creating assignment: $e');
+      print('[AdHocFeeAssignment] Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   /// Get target students based on scope and filters
