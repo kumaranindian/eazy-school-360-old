@@ -28,15 +28,16 @@ class BillManagementScreen extends ConsumerStatefulWidget {
 }
 
 class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
-  // Default to the current week (Monday → Sunday) so the view is focused
-  // on recent activity instead of the entire year.
-  DateTime _startDate = _startOfCurrentWeek();
-  DateTime _endDate = _endOfCurrentWeek();
+  DateTime _startDate = DateTime(DateTime.now().year, 1, 1);
+  DateTime _endDate = DateTime(DateTime.now().year, 12, 31, 23, 59, 59);
   String _filterType = 'Both';
-  String _quickRange = 'week'; // 'today' | 'week' | 'month' | 'year' | 'custom'
-  List<Map<String, dynamic>> _bills = [];
+  String _quickRange = 'year';
+  List<Map<String, dynamic>> _revenueBills = [];
+  List<Map<String, dynamic>> _expenseBills = [];
   bool _isLoading = false;
   String? _schoolId;
+  final Set<String> _selectedRevenueBills = {};
+  final Set<String> _selectedExpenseBills = {};
 
   @override
   void initState() {
@@ -63,90 +64,186 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
 
   Future<void> _fetchBills() async {
     if (_schoolId == null) return;
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _selectedRevenueBills.clear();
+      _selectedExpenseBills.clear();
+    });
 
     try {
-      // Fetch ALL bills (including deleted) so we can show them with a highlight
-      Query<Map<String, dynamic>> query = FirebaseFirestore.instance
-          .collection('schools').doc(_schoolId).collection('bills')
-          .orderBy('billDate', descending: true);
+      final revenueResults = <Map<String, dynamic>>[];
+      final expenseResults = <Map<String, dynamic>>[];
+      final rangeStart = Timestamp.fromDate(DateTime(_startDate.year, _startDate.month, _startDate.day));
+      final rangeEnd = Timestamp.fromDate(DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59, 999));
+      
+      // Fetch Revenue bills (term fee payments)
+      if (_filterType == 'Both' || _filterType == 'Revenue') {
+        final termPayments = await FirebaseFirestore.instance
+            .collection('schools').doc(_schoolId).collection('termFeePayments')
+            .where('paidAt', isGreaterThanOrEqualTo: rangeStart)
+            .where('paidAt', isLessThanOrEqualTo: rangeEnd)
+            .orderBy('paidAt', descending: true)
+            .get();
 
-      if (_filterType == 'Revenue') {
-        query = FirebaseFirestore.instance
-            .collection('schools').doc(_schoolId).collection('bills')
-            .where('billType', isEqualTo: 'Revenue')
-            .orderBy('billDate', descending: true);
-      } else if (_filterType == 'Expense') {
-        query = FirebaseFirestore.instance
-            .collection('schools').doc(_schoolId).collection('bills')
-            .where('billType', isEqualTo: 'Expense')
-            .orderBy('billDate', descending: true);
-      }
-
-      final snap = await query.get();
-      final bills = <Map<String, dynamic>>[];
-      // Normalize the filter window so the whole first day and the whole
-      // last day are always included, regardless of the time component on the
-      // stored billDate timestamps.
-      final rangeStart = DateTime(_startDate.year, _startDate.month, _startDate.day);
-      final rangeEnd = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59, 999);
-      for (final doc in snap.docs) {
-        final d = doc.data();
-        d['docId'] = doc.id;
-        final billDate = (d['billDate'] as Timestamp?)?.toDate() ??
-            (d['paymentDate'] as Timestamp?)?.toDate() ??
-            (d['createdAt'] as Timestamp?)?.toDate();
-        if (billDate == null) continue;
-        if (!billDate.isBefore(rangeStart) && !billDate.isAfter(rangeEnd)) {
-          bills.add(d);
+        for (final doc in termPayments.docs) {
+          final d = doc.data();
+          d['docId'] = doc.id;
+          d['billType'] = 'Revenue';
+          if (d['isDeleted'] != true) {
+            revenueResults.add(d);
+          }
+        }
+        
+        // Fetch ad-hoc fee items with payments
+        try {
+          final adhocItems = await FirebaseFirestore.instance
+              .collection('schools').doc(_schoolId).collection('studentFeeItems')
+              .where('isActive', isEqualTo: true)
+              .where('paidAmount', isGreaterThan: 0)
+              .get();
+          
+          for (final doc in adhocItems.docs) {
+            final d = doc.data();
+            final updatedAt = (d['updatedAt'] as Timestamp?) ?? (d['assignedAt'] as Timestamp?);
+            if (updatedAt != null && 
+                updatedAt.compareTo(rangeStart) >= 0 && 
+                updatedAt.compareTo(rangeEnd) <= 0) {
+              revenueResults.add({
+                'id': doc.id,
+                'docId': doc.id,
+                'receiptNumber': 'ADH-${d['categoryCode'] ?? 'ADH'}',
+                'paidAt': updatedAt,
+                'amount': d['paidAmount'],
+                'termName': d['itemName'] ?? 'Ad-hoc Fee',
+                'studentId': d['studentId'] ?? '',
+                'studentName': d['studentName'] ?? 'N/A',
+                'isDeleted': false,
+                'isAdHoc': true,
+                'billType': 'Revenue',
+              });
+            }
+          }
+        } catch (e) {
+          print('Error fetching ad-hoc payments: $e');
         }
       }
-      setState(() { _bills = bills; _isLoading = false; });
+      
+      // Fetch Expense bills
+      if (_filterType == 'Both' || _filterType == 'Expense') {
+        final expenseBills = await FirebaseFirestore.instance
+            .collection('schools').doc(_schoolId).collection('bills')
+            .where('billType', isEqualTo: 'Expense')
+            .where('billDate', isGreaterThanOrEqualTo: rangeStart)
+            .where('billDate', isLessThanOrEqualTo: rangeEnd)
+            .orderBy('billDate', descending: true)
+            .get();
+
+        for (final doc in expenseBills.docs) {
+          final d = doc.data();
+          d['docId'] = doc.id;
+          if (d['isDeleted'] != true) {
+            expenseResults.add(d);
+          }
+        }
+      }
+      
+      setState(() {
+        _revenueBills = revenueResults;
+        _expenseBills = expenseResults;
+        _isLoading = false;
+      });
     } catch (e) {
+      debugPrint('❌ [BillManagement] Error fetching bills: $e');
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error fetching bills: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width > 1024;
+    final screenSize = MediaQuery.of(context).size;
+    final isDesktop = screenSize.width > 1024;
+    final isMobile = screenSize.width < 600;
 
     return SingleChildScrollView(
-      padding: EdgeInsets.all(isDesktop ? 28 : 16),
+      padding: EdgeInsets.all(isDesktop ? 28 : isMobile ? 12 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(),
-          const SizedBox(height: 20),
-          _buildFilterBar(isDesktop),
-          const SizedBox(height: 16),
-          _buildActionBar(),
-          const SizedBox(height: 16),
-          _isLoading ? const Center(child: CircularProgressIndicator(color: _accentGreen)) : _buildBillsTable(isDesktop),
+          _buildHeader(isMobile),
+          SizedBox(height: isMobile ? 12 : 20),
+          _buildFilterBar(isDesktop, isMobile),
+          SizedBox(height: isMobile ? 12 : 16),
+          if (_isLoading)
+            const Center(child: CircularProgressIndicator(color: _accentGreen))
+          else ..._buildBillsTables(isDesktop, isMobile),
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isMobile) {
+    final totalRecords = _revenueBills.length + _expenseBills.length;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isMobile ? 16 : 20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)]),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(children: [
-        Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.receipt_long_rounded, color: Colors.white, size: 28)),
-        const SizedBox(width: 16),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Bill Management', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-          Text('View and manage bills', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.9))),
-        ])),
-        Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-          child: Text('${_bills.length} records', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+        Container(
+          padding: EdgeInsets.all(isMobile ? 8 : 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(Icons.receipt_long_rounded, color: Colors.white, size: isMobile ? 24 : 28),
+        ),
+        SizedBox(width: isMobile ? 12 : 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Bill Management',
+                style: TextStyle(
+                  fontSize: isMobile ? 18 : 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: isMobile ? 2 : 4),
+              Text(
+                'View and manage revenue & expense bills',
+                style: TextStyle(
+                  fontSize: isMobile ? 11 : 13,
+                  color: Colors.white.withOpacity(0.9),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 10 : 12,
+            vertical: isMobile ? 4 : 6,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            '$totalRecords records',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: isMobile ? 11 : 13,
+            ),
+          ),
         ),
       ]),
     );
@@ -187,30 +284,30 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     _fetchBills();
   }
 
-  Widget _buildFilterBar(bool isDesktop) {
+  Widget _buildFilterBar(bool isDesktop, bool isMobile) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(isMobile ? 12 : 16),
       decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
       child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
+        spacing: isMobile ? 8 : 12,
+        runSpacing: isMobile ? 8 : 12,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          const Icon(Icons.filter_list_rounded, color: _accentGreen, size: 20),
-          const Text('Filter', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
-          _buildQuickChip('Today', 'today'),
-          _buildQuickChip('This Week', 'week'),
-          _buildQuickChip('This Month', 'month'),
-          _buildQuickChip('This Year', 'year'),
-          _buildQuickChip('Custom', 'custom'),
+          Icon(Icons.filter_list_rounded, color: _accentGreen, size: isMobile ? 18 : 20),
+          Text('Filter', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: isMobile ? 12 : 14)),
+          _buildQuickChip('Today', 'today', isMobile),
+          _buildQuickChip('This Week', 'week', isMobile),
+          _buildQuickChip('This Month', 'month', isMobile),
+          _buildQuickChip('This Year', 'year', isMobile),
+          _buildQuickChip('Custom', 'custom', isMobile),
           _buildDateButton('From', _startDate, (d) => setState(() => _startDate = d),
-              enabled: _quickRange == 'custom'),
+              enabled: _quickRange == 'custom', isMobile: isMobile),
           _buildDateButton('To', _endDate, (d) => setState(() => _endDate = d),
-              enabled: _quickRange == 'custom'),
-          _buildTypeDropdown(),
+              enabled: _quickRange == 'custom', isMobile: isMobile),
+          _buildTypeDropdown(isMobile),
           ElevatedButton.icon(
-            icon: const Icon(Icons.search_rounded, size: 18),
-            label: const Text('Apply Filter'),
+            icon: Icon(Icons.search_rounded, size: isMobile ? 16 : 18),
+            label: Text('Apply Filter', style: TextStyle(fontSize: isMobile ? 12 : 14)),
             style: ElevatedButton.styleFrom(backgroundColor: _accentGreen, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
             onPressed: _fetchBills,
           ),
@@ -219,13 +316,13 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     );
   }
 
-  Widget _buildQuickChip(String label, String key) {
+  Widget _buildQuickChip(String label, String key, bool isMobile) {
     final selected = _quickRange == key;
     return InkWell(
       onTap: () => _applyQuickRange(key),
       borderRadius: BorderRadius.circular(20),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 12, vertical: isMobile ? 6 : 8),
         decoration: BoxDecoration(
           color: selected ? _accentGreen.withValues(alpha: 0.15) : _bgDark,
           borderRadius: BorderRadius.circular(20),
@@ -235,7 +332,7 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           label,
           style: TextStyle(
             color: selected ? _accentGreen : _textSecondary,
-            fontSize: 12,
+            fontSize: isMobile ? 10 : 12,
             fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
@@ -244,7 +341,7 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
   }
 
   Widget _buildDateButton(String label, DateTime date, Function(DateTime) onPicked,
-      {bool enabled = true}) {
+      {bool enabled = true, bool isMobile = false}) {
     return Opacity(
       opacity: enabled ? 1.0 : 0.5,
       child: InkWell(
@@ -292,9 +389,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     );
   }
 
-  Widget _buildTypeDropdown() {
+  Widget _buildTypeDropdown(bool isMobile) {
     return SizedBox(
-      width: 140,
+      width: isMobile ? 120 : 140,
       child: SearchableDropdown<String>(
         value: _filterType,
         items: const ['Both', 'Revenue', 'Expense'],
@@ -305,33 +402,292 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     );
   }
 
-  Widget _buildActionBar() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
+  Widget _buildActionBar(String billType, bool isMobile, int billCount, Set<String> selectedBills) {
+    final hasSelection = selectedBills.isNotEmpty;
+    
+    return Wrap(
+      spacing: isMobile ? 6 : 8,
+      runSpacing: isMobile ? 6 : 8,
+      alignment: WrapAlignment.end,
       children: [
+        if (hasSelection) ...[
+          ElevatedButton.icon(
+            icon: Icon(Icons.print_rounded, size: isMobile ? 14 : 16),
+            label: Text('Print Selected (${selectedBills.length})', style: TextStyle(fontSize: isMobile ? 11 : 13)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B5CF6),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: EdgeInsets.symmetric(vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
+            ),
+            onPressed: () => _printSelectedBills(billType, selectedBills),
+          ),
+          ElevatedButton.icon(
+            icon: Icon(Icons.delete_rounded, size: isMobile ? 14 : 16),
+            label: Text('Delete Selected (${selectedBills.length})', style: TextStyle(fontSize: isMobile ? 11 : 13)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: EdgeInsets.symmetric(vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
+            ),
+            onPressed: () => _deleteSelectedBills(billType, selectedBills),
+          ),
+        ],
         ElevatedButton.icon(
-          icon: const Icon(Icons.print_rounded, size: 16),
-          label: const Text('Print All'),
-          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-          onPressed: _bills.isEmpty ? null : _printAllBills,
+          icon: Icon(Icons.print_rounded, size: isMobile ? 14 : 16),
+          label: Text('Print All', style: TextStyle(fontSize: isMobile ? 11 : 13)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF3B82F6),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: EdgeInsets.symmetric(vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
+          ),
+          onPressed: billCount == 0 ? null : () => _printAllBills(billType),
         ),
-        const SizedBox(width: 8),
         ElevatedButton.icon(
-          icon: const Icon(Icons.download_rounded, size: 16),
-          label: const Text('Export CSV'),
-          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-          onPressed: _bills.isEmpty ? null : _exportCsv,
+          icon: Icon(Icons.download_rounded, size: isMobile ? 14 : 16),
+          label: Text('Export CSV', style: TextStyle(fontSize: isMobile ? 11 : 13)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF10B981),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: EdgeInsets.symmetric(vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
+          ),
+          onPressed: billCount == 0 ? null : () => _exportCsv(billType),
         ),
       ],
     );
   }
 
-  Widget _buildBillsTable(bool isDesktop) {
-    if (_bills.isEmpty) {
+  List<Widget> _buildBillsTables(bool isDesktop, bool isMobile) {
+    final tables = <Widget>[];
+    
+    // Revenue Bills Table
+    if (_filterType == 'Both' || _filterType == 'Revenue') {
+      tables.add(_buildSectionHeader('Revenue Bills', _revenueBills.length, isMobile));
+      tables.add(const SizedBox(height: 12));
+      tables.add(_buildActionBar('Revenue', isMobile, _revenueBills.length, _selectedRevenueBills));
+      tables.add(const SizedBox(height: 12));
+      tables.add(_buildSingleTable('Revenue', _revenueBills, _selectedRevenueBills, isDesktop, isMobile));
+      tables.add(const SizedBox(height: 24));
+    }
+    
+    // Expense Bills Table
+    if (_filterType == 'Both' || _filterType == 'Expense') {
+      tables.add(_buildSectionHeader('Expense Bills', _expenseBills.length, isMobile));
+      tables.add(const SizedBox(height: 12));
+      tables.add(_buildActionBar('Expense', isMobile, _expenseBills.length, _selectedExpenseBills));
+      tables.add(const SizedBox(height: 12));
+      tables.add(_buildSingleTable('Expense', _expenseBills, _selectedExpenseBills, isDesktop, isMobile));
+    }
+    
+    return tables;
+  }
+
+  Widget _buildSectionHeader(String title, int count, bool isMobile) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16, vertical: isMobile ? 10 : 12),
+      decoration: BoxDecoration(
+        color: _cardDark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            title.contains('Revenue') ? Icons.trending_up : Icons.trending_down,
+            color: title.contains('Revenue') ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+            size: isMobile ? 18 : 20,
+          ),
+          SizedBox(width: isMobile ? 8 : 12),
+          Text(
+            title,
+            style: TextStyle(
+              color: _textPrimary,
+              fontSize: isMobile ? 14 : 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 10, vertical: isMobile ? 3 : 4),
+            decoration: BoxDecoration(
+              color: _accentGreen.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '$count bills',
+              style: TextStyle(
+                color: _accentGreen,
+                fontSize: isMobile ? 11 : 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSingleTable(String billType, List<Map<String, dynamic>> bills, Set<String> selectedBills, bool isDesktop, bool isMobile) {
+    if (bills.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(40),
+        padding: EdgeInsets.all(isMobile ? 24 : 40),
         decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
-        child: const Center(child: Text('No bills found for the selected filters.', style: TextStyle(color: _textSecondary, fontSize: 15))),
+        child: Center(child: Text('No $billType bills found.', style: TextStyle(color: _textSecondary, fontSize: isMobile ? 13 : 15))),
+      );
+    }
+
+    final isRevenue = billType == 'Revenue';
+
+    if (isMobile) {
+      return ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: bills.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (ctx, index) {
+          final b = bills[index];
+          final docId = b['docId']?.toString() ?? '';
+          final isSelected = selectedBills.contains(docId);
+          final isDeleted = b['isDeleted'] == true;
+          
+          DateTime? dateField;
+          double amount = 0;
+          String identifier = '';
+          String description = '';
+          String name = '';
+          
+          if (isRevenue) {
+            amount = (b['amount'] as num?)?.toDouble() ?? 0;
+            dateField = (b['paidAt'] is Timestamp) ? (b['paidAt'] as Timestamp).toDate() : (b['paidAt'] as DateTime?);
+            identifier = (b['receiptNumber'] ?? b['id'] ?? '').toString();
+            name = (b['studentName'] ?? '').toString();
+            
+            final isAdHoc = b['isAdHoc'] == true;
+            if (isAdHoc) {
+              description = (b['termName'] ?? 'Ad-hoc Fee').toString();
+            } else {
+              final components = b['components'] as List?;
+              if (components != null && components.isNotEmpty) {
+                description = components.map((c) {
+                  final comp = c as Map<String, dynamic>;
+                  final cName = (comp['termName'] as String?) ?? (comp['itemName'] as String?) ?? 'Fee';
+                  final amt = (comp['amount'] as num?)?.toDouble() ?? 0;
+                  return '$cName (₹${amt.toStringAsFixed(0)})';
+                }).join(', ');
+              } else {
+                description = (b['termName'] ?? 'Fee Payment').toString();
+              }
+            }
+          } else {
+            amount = (b['expenseAmount'] as num?)?.toDouble() ?? (b['amount'] as num?)?.toDouble() ?? 0;
+            dateField = (b['billDate'] is Timestamp) ? (b['billDate'] as Timestamp).toDate() : (b['billDate'] as DateTime?);
+            identifier = 'EXP-${b['billId'] ?? ''}';
+            name = (b['expensePOC'] ?? b['pointOfContact'] ?? '').toString();
+            description = (b['expenseType'] ?? b['categoryName'] ?? b['description'] ?? '').toString();
+          }
+
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isSelected ? _accentGreen.withOpacity(0.1) : (isDeleted ? const Color(0xFFEF4444).withOpacity(0.06) : _cardDark),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: isSelected ? _accentGreen : _borderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Checkbox(
+                      value: isSelected,
+                      onChanged: (val) {
+                        setState(() {
+                          if (val == true) {
+                            selectedBills.add(docId);
+                          } else {
+                            selectedBills.remove(docId);
+                          }
+                        });
+                      },
+                      activeColor: _accentGreen,
+                    ),
+                    Expanded(
+                      child: Text(
+                        identifier,
+                        style: TextStyle(
+                          color: isDeleted ? _textSecondary.withOpacity(0.5) : _textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          decoration: isDeleted ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '₹${amount.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: isDeleted ? _textSecondary.withOpacity(0.5) : (isRevenue ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        decoration: isDeleted ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  name.isEmpty ? 'N/A' : name,
+                  style: TextStyle(
+                    color: isDeleted ? _textSecondary.withOpacity(0.5) : _textPrimary,
+                    fontSize: 13,
+                    decoration: isDeleted ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    color: isDeleted ? _textSecondary.withOpacity(0.4) : _textSecondary,
+                    fontSize: 11,
+                    decoration: isDeleted ? TextDecoration.lineThrough : null,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  dateField != null ? DateFormat('dd/MM/yyyy').format(dateField) : '',
+                  style: TextStyle(
+                    color: _textSecondary.withOpacity(0.7),
+                    fontSize: 10,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.print_rounded, color: Color(0xFF3B82F6), size: 16),
+                      tooltip: 'Print',
+                      onPressed: () => _printSingleBill(b, billType),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 12),
+                    IconButton(
+                      icon: const Icon(Icons.delete_rounded, color: Color(0xFFEF4444), size: 16),
+                      tooltip: 'Delete',
+                      onPressed: () => _confirmDeleteBill(b, billType),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
       );
     }
 
@@ -343,28 +699,70 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           headingRowColor: WidgetStateProperty.all(_bgDark),
           dataRowColor: WidgetStateProperty.all(_cardDark),
           dividerThickness: 0.5,
-          columns: const [
-            DataColumn(label: Text('Bill ID', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            DataColumn(label: Text('Date', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            DataColumn(label: Text('Type', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            DataColumn(label: Text('Sub Type', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            DataColumn(label: Text('Student ID', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            DataColumn(label: Text('Name', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            DataColumn(label: Text('Amount', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            DataColumn(label: Text('Actions', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
+          columns: [
+            DataColumn(
+              label: Checkbox(
+                value: bills.isNotEmpty && selectedBills.length == bills.length,
+                tristate: true,
+                onChanged: (val) {
+                  setState(() {
+                    if (val == true) {
+                      selectedBills.addAll(bills.map((b) => b['docId']?.toString() ?? ''));
+                    } else {
+                      selectedBills.clear();
+                    }
+                  });
+                },
+                activeColor: _accentGreen,
+              ),
+            ),
+            DataColumn(label: Text(isRevenue ? 'Receipt#' : 'Bill#', style: const TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
+            const DataColumn(label: Text('Date', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
+            DataColumn(label: Text(isRevenue ? 'Student Name' : 'POC', style: const TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
+            const DataColumn(label: Text('Description', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
+            const DataColumn(label: Text('Amount', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
+            const DataColumn(label: Text('Actions', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
           ],
-          rows: _bills.map((b) {
-            final billType = (b['billType'] ?? '').toString();
-            final isRevenue = billType == 'Revenue';
+          rows: bills.map((b) {
+            final docId = b['docId']?.toString() ?? '';
+            final isSelected = selectedBills.contains(docId);
             final isDeleted = b['isDeleted'] == true;
-            final amount = isRevenue
-                ? (b['revenueAmount'] as num?)?.toDouble() ?? 0
-                : (b['expenseAmount'] as num?)?.toDouble() ?? 0;
-            final subType = isRevenue
-                ? (b['revenueType'] ?? '').toString()
-                : (b['expenseType'] ?? '').toString();
-            final date = (b['billDate'] as Timestamp?)?.toDate();
-            final deletionReason = (b['deletionReason'] ?? '').toString();
+            
+            DateTime? dateField;
+            double amount = 0;
+            String identifier = '';
+            String description = '';
+            String name = '';
+            
+            if (isRevenue) {
+              amount = (b['amount'] as num?)?.toDouble() ?? 0;
+              dateField = (b['paidAt'] is Timestamp) ? (b['paidAt'] as Timestamp).toDate() : (b['paidAt'] as DateTime?);
+              identifier = (b['receiptNumber'] ?? b['id'] ?? '').toString();
+              name = (b['studentName'] ?? '').toString();
+              
+              final isAdHoc = b['isAdHoc'] == true;
+              if (isAdHoc) {
+                description = (b['termName'] ?? 'Ad-hoc Fee').toString();
+              } else {
+                final components = b['components'] as List?;
+                if (components != null && components.isNotEmpty) {
+                  description = components.map((c) {
+                    final comp = c as Map<String, dynamic>;
+                    final cName = (comp['termName'] as String?) ?? (comp['itemName'] as String?) ?? 'Fee';
+                    final amt = (comp['amount'] as num?)?.toDouble() ?? 0;
+                    return '$cName (₹${amt.toStringAsFixed(0)})';
+                  }).join(', ');
+                } else {
+                  description = (b['termName'] ?? 'Fee Payment').toString();
+                }
+              }
+            } else {
+              amount = (b['expenseAmount'] as num?)?.toDouble() ?? (b['amount'] as num?)?.toDouble() ?? 0;
+              dateField = (b['billDate'] is Timestamp) ? (b['billDate'] as Timestamp).toDate() : (b['billDate'] as DateTime?);
+              identifier = 'EXP-${b['billId'] ?? ''}';
+              name = (b['expensePOC'] ?? b['pointOfContact'] ?? '').toString();
+              description = (b['expenseType'] ?? b['categoryName'] ?? b['description'] ?? '').toString();
+            }
 
             final rowTextStyle = TextStyle(
               color: isDeleted ? _textSecondary.withOpacity(0.5) : _textPrimary,
@@ -373,51 +771,34 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
             );
 
             return DataRow(
-              color: isDeleted ? WidgetStateProperty.all(const Color(0xFFEF4444).withOpacity(0.06)) : null,
+              color: isSelected ? WidgetStateProperty.all(_accentGreen.withOpacity(0.1)) : (isDeleted ? WidgetStateProperty.all(const Color(0xFFEF4444).withOpacity(0.06)) : null),
               cells: [
-                DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text('${b['billId'] ?? ''}', style: rowTextStyle),
-                  if (isDeleted) ...[
-                    const SizedBox(width: 6),
-                    Tooltip(
-                      message: deletionReason.isNotEmpty ? 'Deleted: $deletionReason' : 'Deleted',
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                        child: const Text('DELETED', style: TextStyle(color: Color(0xFFEF4444), fontSize: 8, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
-                ])),
-                DataCell(Text(date != null ? DateFormat('dd/MM/yyyy').format(date) : '', style: rowTextStyle)),
-                DataCell(Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isDeleted
-                        ? Colors.grey.withOpacity(0.1)
-                        : isRevenue ? const Color(0xFF10B981).withOpacity(0.15) : const Color(0xFFEF4444).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(billType, style: TextStyle(
-                    color: isDeleted ? _textSecondary.withOpacity(0.5) : isRevenue ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                    fontSize: 11, fontWeight: FontWeight.bold,
-                    decoration: isDeleted ? TextDecoration.lineThrough : null,
-                  )),
+                DataCell(Checkbox(
+                  value: isSelected,
+                  onChanged: (val) {
+                    setState(() {
+                      if (val == true) {
+                        selectedBills.add(docId);
+                      } else {
+                        selectedBills.remove(docId);
+                      }
+                    });
+                  },
+                  activeColor: _accentGreen,
                 )),
-                DataCell(Text(subType, style: TextStyle(color: isDeleted ? _textSecondary.withOpacity(0.4) : _textSecondary, fontSize: 12, decoration: isDeleted ? TextDecoration.lineThrough : null))),
-                DataCell(Text((b['stuId'] ?? 'NA').toString(), style: rowTextStyle)),
-                DataCell(Text((b['stuName'] ?? (b['expensePOC'] ?? '')).toString(), style: rowTextStyle)),
+                DataCell(Text(identifier, style: rowTextStyle)),
+                DataCell(Text(dateField != null ? DateFormat('dd/MM/yyyy').format(dateField) : '', style: rowTextStyle)),
+                DataCell(Text(name.isEmpty ? 'N/A' : name, style: rowTextStyle)),
+                DataCell(Text(description, style: TextStyle(color: isDeleted ? _textSecondary.withOpacity(0.4) : _textSecondary, fontSize: 12, decoration: isDeleted ? TextDecoration.lineThrough : null))),
                 DataCell(Text('₹${amount.toStringAsFixed(2)}', style: TextStyle(
-                  color: isDeleted ? _textSecondary.withOpacity(0.5) : isRevenue ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  color: isDeleted ? _textSecondary.withOpacity(0.5) : (isRevenue ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
                   fontWeight: FontWeight.bold, fontSize: 12,
                   decoration: isDeleted ? TextDecoration.lineThrough : null,
                 ))),
-                DataCell(isDeleted
-                    ? Tooltip(message: deletionReason.isNotEmpty ? deletionReason : 'Deleted', child: const Icon(Icons.info_outline, color: _textSecondary, size: 16))
-                    : Row(mainAxisSize: MainAxisSize.min, children: [
-                        IconButton(icon: const Icon(Icons.print_rounded, color: Color(0xFF3B82F6), size: 18), tooltip: 'Print', onPressed: () => _printSingleBill(b)),
-                        IconButton(icon: const Icon(Icons.delete_rounded, color: Color(0xFFEF4444), size: 18), tooltip: 'Delete', onPressed: () => _confirmDeleteBill(b)),
-                      ])),
+                DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(icon: const Icon(Icons.print_rounded, color: Color(0xFF3B82F6), size: 18), tooltip: 'Print', onPressed: () => _printSingleBill(b, billType)),
+                  IconButton(icon: const Icon(Icons.delete_rounded, color: Color(0xFFEF4444), size: 18), tooltip: 'Delete', onPressed: () => _confirmDeleteBill(b, billType)),
+                ])),
               ],
             );
           }).toList(),
@@ -427,7 +808,7 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
   }
 
   // ============ PRINT SINGLE BILL ============
-  Future<void> _printSingleBill(Map<String, dynamic> bill) async {
+  Future<void> _printSingleBill(Map<String, dynamic> bill, String billType) async {
     if (_schoolId == null) return;
     final branding = await PdfBranding.forSchool(_schoolId!);
     final pdf = pw.Document();
@@ -549,15 +930,169 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     _downloadFile(pdfBytes, 'Bill_${bill['billId']}_Receipt.pdf', 'application/pdf');
   }
 
+  // ============ PRINT SELECTED BILLS ============
+  Future<void> _printSelectedBills(String billType, Set<String> selectedIds) async {
+    if (_schoolId == null || selectedIds.isEmpty) return;
+    
+    final billsList = billType == 'Revenue' ? _revenueBills : _expenseBills;
+    final selectedBills = billsList.where((b) => selectedIds.contains(b['docId']?.toString() ?? '')).toList();
+    
+    if (selectedBills.isEmpty) return;
+    
+    final branding = await PdfBranding.forSchool(_schoolId!);
+    final pdf = pw.Document();
+
+    for (final bill in selectedBills) {
+      await _addBillToPdf(pdf, bill, billType, branding);
+    }
+
+    final pdfBytes = await pdf.save();
+    _downloadFile(pdfBytes, '${billType}_Bills_Selected_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf', 'application/pdf');
+  }
+
+  Future<void> _addBillToPdf(pw.Document pdf, Map<String, dynamic> bill, String billType, PdfBrandingContext branding) async {
+    final isRevenue = billType == 'Revenue';
+    final schoolName = branding.schoolName.isNotEmpty ? branding.schoolName : 'School';
+    final schoolAddr = branding.schoolAddress;
+    final schoolPhone = branding.schoolPhone;
+    
+    double amount = 0;
+    DateTime? date;
+    String identifier = '';
+    String name = '';
+    String description = '';
+    
+    if (isRevenue) {
+      amount = (bill['amount'] as num?)?.toDouble() ?? 0;
+      date = (bill['paidAt'] is Timestamp) ? (bill['paidAt'] as Timestamp).toDate() : DateTime.now();
+      identifier = (bill['receiptNumber'] ?? bill['id'] ?? '').toString();
+      name = (bill['studentName'] ?? '').toString();
+      final isAdHoc = bill['isAdHoc'] == true;
+      if (isAdHoc) {
+        description = (bill['termName'] ?? 'Ad-hoc Fee').toString();
+      } else {
+        final components = bill['components'] as List?;
+        if (components != null && components.isNotEmpty) {
+          description = components.map((c) {
+            final comp = c as Map<String, dynamic>;
+            final cName = (comp['termName'] as String?) ?? (comp['itemName'] as String?) ?? 'Fee';
+            return cName;
+          }).join(', ');
+        } else {
+          description = (bill['termName'] ?? 'Fee Payment').toString();
+        }
+      }
+    } else {
+      amount = (bill['expenseAmount'] as num?)?.toDouble() ?? (bill['amount'] as num?)?.toDouble() ?? 0;
+      date = (bill['billDate'] is Timestamp) ? (bill['billDate'] as Timestamp).toDate() : DateTime.now();
+      identifier = 'EXP-${bill['billId'] ?? ''}';
+      name = (bill['expensePOC'] ?? bill['pointOfContact'] ?? '').toString();
+      description = (bill['expenseType'] ?? bill['categoryName'] ?? '').toString();
+    }
+
+    pw.Widget buildReceiptCopy(String copyLabel) {
+      final bold = pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10);
+      const normal = pw.TextStyle(fontSize: 9);
+      const small = pw.TextStyle(fontSize: 8);
+      return pw.Container(
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+              pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                pw.Text(schoolName, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                if (schoolAddr.isNotEmpty) pw.Text(schoolAddr, style: small),
+                if (schoolPhone.isNotEmpty) pw.Text('Ph: $schoolPhone', style: small),
+              ])),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
+                child: pw.Text(copyLabel, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+              ),
+            ]),
+            pw.Divider(thickness: 0.5, height: 8),
+            pw.Center(child: pw.Text(
+              isRevenue ? 'FEE RECEIPT' : 'EXPENSE VOUCHER',
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+            )),
+            pw.SizedBox(height: 4),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+              pw.Text('$billType #: $identifier', style: bold),
+              pw.Text('Date: ${DateFormat('dd/MM/yyyy').format(date!)}', style: bold),
+            ]),
+            pw.SizedBox(height: 4),
+            pw.Row(children: [
+              pw.Text(isRevenue ? 'Student: ' : 'POC: ', style: bold),
+              pw.Text(name, style: normal),
+            ]),
+            pw.Row(children: [
+              pw.Text('Description: ', style: bold),
+              pw.Expanded(child: pw.Text(description, style: normal)),
+            ]),
+            pw.SizedBox(height: 6),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
+              child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+                pw.Text('AMOUNT:', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Rs. ${amount.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+              ]),
+            ),
+            if ((bill['remarks'] ?? '').toString().isNotEmpty) ...[
+              pw.SizedBox(height: 3),
+              pw.Text('Remarks: ${bill['remarks']}', style: small),
+            ],
+            pw.SizedBox(height: 6),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+              pw.Text('Cashier: ${bill['billCashierName'] ?? bill['cashierName'] ?? ''}', style: small),
+              pw.Text('Signature: _______________', style: small),
+            ]),
+          ],
+        ),
+      );
+    }
+
+    pdf.addPage(pw.Page(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(24),
+      build: (ctx) => pw.Column(
+        children: [
+          buildReceiptCopy('SCHOOL COPY'),
+          pw.SizedBox(height: 6),
+          pw.Center(child: pw.Text(
+            '- - - - - - - - - - - - - - - - - -  Cut Here  - - - - - - - - - - - - - - - - - -',
+            style: const pw.TextStyle(fontSize: 7),
+          )),
+          pw.SizedBox(height: 6),
+          buildReceiptCopy('PARENT/OFFICE COPY'),
+        ],
+      ),
+    ));
+  }
+
   // ============ PRINT ALL BILLS ============
-  Future<void> _printAllBills() async {
+  Future<void> _printAllBills(String billType) async {
     if (_schoolId == null) return;
     final branding = await PdfBranding.forSchool(_schoolId!);
     final schoolName = branding.schoolName.isNotEmpty ? branding.schoolName : 'School';
     final pdf = pw.Document();
 
     // Filter out deleted bills for the print report
-    final activeBills = _bills.where((b) => b['isDeleted'] != true).toList();
+    final billsList = billType == 'Revenue' ? _revenueBills : _expenseBills;
+    final activeBills = billsList.where((b) => b['isDeleted'] != true).toList();
+    
+    if (activeBills.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No active bills to print'), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    }
+    
+    final isRevenue = billType == 'Revenue';
 
     pdf.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4.landscape,
@@ -568,7 +1103,7 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(width: 0.5))),
         child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
           pw.Text(schoolName, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-          pw.Text('Bills Report: ${DateFormat('dd/MM/yyyy').format(_startDate)} - ${DateFormat('dd/MM/yyyy').format(_endDate)}',
+          pw.Text('$billType Bills Report: ${DateFormat('dd/MM/yyyy').format(_startDate)} - ${DateFormat('dd/MM/yyyy').format(_endDate)}',
               style: const pw.TextStyle(fontSize: 9)),
         ]),
       ),
@@ -581,58 +1116,179 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
           cellStyle: const pw.TextStyle(fontSize: 8),
           headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-          headers: ['Bill ID', 'Date', 'Type', 'Sub Type', 'Student ID', 'Name', 'Amount'],
+          headers: isRevenue 
+              ? ['Receipt#', 'Date', 'Student Name', 'Description', 'Amount']
+              : ['Bill#', 'Date', 'POC', 'Expense Type', 'Amount'],
           data: activeBills.map((b) {
-            final isRev = (b['billType'] ?? '') == 'Revenue';
-            final amt = isRev ? (b['revenueAmount'] as num?)?.toDouble() ?? 0 : (b['expenseAmount'] as num?)?.toDouble() ?? 0;
-            final date = (b['billDate'] as Timestamp?)?.toDate();
-            return [
-              (b['billId'] ?? '').toString(),
-              date != null ? DateFormat('dd/MM/yyyy').format(date) : '',
-              (b['billType'] ?? '').toString(),
-              isRev ? (b['revenueType'] ?? '').toString() : (b['expenseType'] ?? '').toString(),
-              (b['stuId'] ?? 'NA').toString(),
-              (b['stuName'] ?? (b['expensePOC'] ?? '')).toString(),
-              'Rs.${amt.toStringAsFixed(2)}',
-            ];
+            if (isRevenue) {
+              final amt = (b['amount'] as num?)?.toDouble() ?? 0;
+              final date = (b['paidAt'] is Timestamp) ? (b['paidAt'] as Timestamp).toDate() : null;
+              final identifier = (b['receiptNumber'] ?? b['id'] ?? '').toString();
+              final name = (b['studentName'] ?? '').toString();
+              String desc = '';
+              final isAdHoc = b['isAdHoc'] == true;
+              if (isAdHoc) {
+                desc = (b['termName'] ?? 'Ad-hoc Fee').toString();
+              } else {
+                final components = b['components'] as List?;
+                if (components != null && components.isNotEmpty) {
+                  desc = components.map((c) {
+                    final comp = c as Map<String, dynamic>;
+                    return (comp['termName'] as String?) ?? (comp['itemName'] as String?) ?? 'Fee';
+                  }).join(', ');
+                } else {
+                  desc = (b['termName'] ?? 'Fee').toString();
+                }
+              }
+              return [
+                identifier,
+                date != null ? DateFormat('dd/MM/yyyy').format(date) : '',
+                name,
+                desc,
+                'Rs.${amt.toStringAsFixed(2)}',
+              ];
+            } else {
+              final amt = (b['expenseAmount'] as num?)?.toDouble() ?? (b['amount'] as num?)?.toDouble() ?? 0;
+              final date = (b['billDate'] is Timestamp) ? (b['billDate'] as Timestamp).toDate() : null;
+              final identifier = 'EXP-${b['billId'] ?? ''}';
+              final poc = (b['expensePOC'] ?? b['pointOfContact'] ?? '').toString();
+              final expType = (b['expenseType'] ?? b['categoryName'] ?? '').toString();
+              return [
+                identifier,
+                date != null ? DateFormat('dd/MM/yyyy').format(date) : '',
+                poc,
+                expType,
+                'Rs.${amt.toStringAsFixed(2)}',
+              ];
+            }
           }).toList(),
         ),
       ],
     ));
 
     final pdfBytes = await pdf.save();
-    _downloadFile(pdfBytes, 'All_Bills_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf', 'application/pdf');
+    _downloadFile(pdfBytes, '${billType}_Bills_All_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf', 'application/pdf');
+  }
+
+  // ============ DELETE SELECTED BILLS ============
+  Future<void> _deleteSelectedBills(String billType, Set<String> selectedIds) async {
+    if (selectedIds.isEmpty) return;
+    
+    final reasonController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Selected Bills', style: TextStyle(color: _textPrimary)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Are you sure you want to delete ${selectedIds.length} selected bills?', style: const TextStyle(color: _textSecondary)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: reasonController,
+            style: const TextStyle(color: _textPrimary),
+            decoration: InputDecoration(
+              hintText: 'Reason for deletion',
+              hintStyle: const TextStyle(color: _textSecondary),
+              filled: true,
+              fillColor: _bgDark,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borderColor)),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: _textSecondary))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed != true) return;
+    
+    final billsList = billType == 'Revenue' ? _revenueBills : _expenseBills;
+    final selectedBills = billsList.where((b) => selectedIds.contains(b['docId']?.toString() ?? '')).toList();
+    
+    for (final bill in selectedBills) {
+      await _deleteBill(bill, reasonController.text, billType);
+    }
+    
+    if (billType == 'Revenue') {
+      _selectedRevenueBills.clear();
+    } else {
+      _selectedExpenseBills.clear();
+    }
   }
 
   // ============ EXPORT CSV ============
-  void _exportCsv() {
+  void _exportCsv(String billType) {
+    final billsList = billType == 'Revenue' ? _revenueBills : _expenseBills;
+    final isRevenue = billType == 'Revenue';
+    
     final rows = <List<String>>[
-      ['Bill ID', 'Date', 'Type', 'Sub Type', 'Student ID', 'Name', 'Amount', 'Remarks'],
+      isRevenue
+          ? ['Receipt#', 'Date', 'Student Name', 'Description', 'Amount', 'Remarks']
+          : ['Bill#', 'Date', 'POC', 'Expense Type', 'Description', 'Amount', 'Remarks'],
     ];
 
-    for (final b in _bills) {
-      final isRev = (b['billType'] ?? '') == 'Revenue';
-      final amt = isRev ? (b['revenueAmount'] as num?)?.toDouble() ?? 0 : (b['expenseAmount'] as num?)?.toDouble() ?? 0;
-      final date = (b['billDate'] as Timestamp?)?.toDate();
-      rows.add([
-        (b['billId'] ?? '').toString(),
-        date != null ? DateFormat('dd/MM/yyyy').format(date) : '',
-        (b['billType'] ?? '').toString(),
-        isRev ? (b['revenueType'] ?? '').toString() : (b['expenseType'] ?? '').toString(),
-        (b['stuId'] ?? 'NA').toString(),
-        (b['stuName'] ?? (b['expensePOC'] ?? '')).toString(),
-        amt.toStringAsFixed(2),
-        (b['remarks'] ?? '').toString(),
-      ]);
+    for (final b in billsList) {
+      if (isRevenue) {
+        final amt = (b['amount'] as num?)?.toDouble() ?? 0;
+        final date = (b['paidAt'] is Timestamp) ? (b['paidAt'] as Timestamp).toDate() : null;
+        final identifier = (b['receiptNumber'] ?? b['id'] ?? '').toString();
+        final name = (b['studentName'] ?? '').toString();
+        String desc = '';
+        final isAdHoc = b['isAdHoc'] == true;
+        if (isAdHoc) {
+          desc = (b['termName'] ?? 'Ad-hoc Fee').toString();
+        } else {
+          final components = b['components'] as List?;
+          if (components != null && components.isNotEmpty) {
+            desc = components.map((c) {
+              final comp = c as Map<String, dynamic>;
+              return (comp['termName'] as String?) ?? (comp['itemName'] as String?) ?? 'Fee';
+            }).join(', ');
+          } else {
+            desc = (b['termName'] ?? 'Fee').toString();
+          }
+        }
+        rows.add([
+          identifier,
+          date != null ? DateFormat('dd/MM/yyyy').format(date) : '',
+          name,
+          desc,
+          amt.toStringAsFixed(2),
+          (b['remarks'] ?? '').toString(),
+        ]);
+      } else {
+        final amt = (b['expenseAmount'] as num?)?.toDouble() ?? (b['amount'] as num?)?.toDouble() ?? 0;
+        final date = (b['billDate'] is Timestamp) ? (b['billDate'] as Timestamp).toDate() : null;
+        final identifier = 'EXP-${b['billId'] ?? ''}';
+        final poc = (b['expensePOC'] ?? b['pointOfContact'] ?? '').toString();
+        final expType = (b['expenseType'] ?? b['categoryName'] ?? '').toString();
+        final desc = (b['description'] ?? b['expenseDesc'] ?? '').toString();
+        rows.add([
+          identifier,
+          date != null ? DateFormat('dd/MM/yyyy').format(date) : '',
+          poc,
+          expType,
+          desc,
+          amt.toStringAsFixed(2),
+          (b['remarks'] ?? '').toString(),
+        ]);
+      }
     }
 
     final csvData = const ListToCsvConverter().convert(rows);
     final bytes = Uint8List.fromList(csvData.codeUnits);
-    _downloadFile(bytes, 'Bills_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv', 'text/csv');
+    _downloadFile(bytes, '${billType}_Bills_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv', 'text/csv');
   }
 
   // ============ DELETE BILL ============
-  void _confirmDeleteBill(Map<String, dynamic> bill) {
+  void _confirmDeleteBill(Map<String, dynamic> bill, String billType) {
     final reasonController = TextEditingController();
     showDialog(
       context: context,
@@ -641,7 +1297,7 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Delete Bill', style: TextStyle(color: _textPrimary)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Are you sure you want to delete Bill #${bill['billId']}?', style: const TextStyle(color: _textSecondary)),
+          Text('Are you sure you want to delete this $billType bill?', style: const TextStyle(color: _textSecondary)),
           const SizedBox(height: 16),
           TextField(
             controller: reasonController,
@@ -661,7 +1317,7 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white),
             onPressed: () async {
               Navigator.pop(ctx);
-              await _deleteBill(bill, reasonController.text);
+              await _deleteBill(bill, reasonController.text, billType);
             },
             child: const Text('Delete'),
           ),
@@ -670,91 +1326,92 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     );
   }
 
-  Future<void> _deleteBill(Map<String, dynamic> bill, String reason) async {
+  Future<void> _deleteBill(Map<String, dynamic> bill, String reason, String billType) async {
     if (_schoolId == null) return;
     try {
-      final billType = (bill['billType'] ?? '').toString();
       final isRevenue = billType == 'Revenue';
+      final docId = bill['docId']?.toString() ?? '';
+      
+      if (docId.isEmpty) return;
 
       // Soft-delete the bill
-      await FirebaseFirestore.instance.collection('schools').doc(_schoolId).collection('bills').doc(bill['docId'].toString()).update({
-        'isDeleted': true,
-        'isBillDeleted': true,
-        'deletionReason': reason,
-        'deletedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Revert fee amount against the student's record if this is a Revenue bill
       if (isRevenue) {
-        final stuId = (bill['stuId'] ?? '').toString();
-        final revenueType = (bill['revenueType'] ?? '').toString();
-        final amount = (bill['revenueAmount'] as num?)?.toDouble() ?? 0.0;
+        // For revenue bills, delete from termFeePayments or studentFeeItems
+        final isAdHoc = bill['isAdHoc'] == true;
+        if (isAdHoc) {
+          await FirebaseFirestore.instance
+              .collection('schools').doc(_schoolId).collection('studentFeeItems')
+              .doc(docId)
+              .update({
+            'isActive': false,
+            'deletionReason': reason,
+            'deletedAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          await FirebaseFirestore.instance
+              .collection('schools').doc(_schoolId).collection('termFeePayments')
+              .doc(docId)
+              .update({
+            'isDeleted': true,
+            'deletionReason': reason,
+            'deletedAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      } else {
+        // For expense bills
+        await FirebaseFirestore.instance
+            .collection('schools').doc(_schoolId).collection('bills')
+            .doc(docId)
+            .update({
+          'isDeleted': true,
+          'isBillDeleted': true,
+          'deletionReason': reason,
+          'deletedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
 
-        if (stuId.isNotEmpty && amount > 0) {
-          // Find the student_fee_details doc for this student
-          final feeSnap = await FirebaseFirestore.instance
-              .collection('schools').doc(_schoolId).collection('student_fee_details')
-              .where('stuId', isEqualTo: int.tryParse(stuId) ?? stuId)
-              .limit(1)
-              .get();
+      // Revert fee amount for revenue bills
+      if (isRevenue && bill['isAdHoc'] != true) {
+        final studentId = (bill['studentId'] ?? '').toString();
+        final amount = (bill['amount'] as num?)?.toDouble() ?? 0.0;
 
-          if (feeSnap.docs.isNotEmpty) {
-            final feeDoc = feeSnap.docs.first;
-            final fd = feeDoc.data();
-            double n(String k) => (fd[k] as num?)?.toDouble() ?? 0;
-
-            final Map<String, dynamic> revert = {'updatedAt': FieldValue.serverTimestamp()};
-
-            // Reverse the exact fields that fee_payment_screen increments
-            switch (revenueType) {
-              case 'Admission Fee':
-                revert['stuPaidAdmissionFees'] = n('stuPaidAdmissionFees') - amount;
-                revert['stuBalAdmissionFees']  = n('stuBalAdmissionFees')  + amount;
-                break;
-              case 'Exam Fee':
-                revert['stuPaidExamFees'] = n('stuPaidExamFees') - amount;
-                revert['stuBalExamFees']  = n('stuBalExamFees')  + amount;
-                break;
-              case 'Tution Fee':
-                revert['stuPaidTutionFees'] = n('stuPaidTutionFees') - amount;
-                revert['stuBalTutionFees']  = n('stuBalTutionFees')  + amount;
-                break;
-              case 'Van Fee':
-                revert['studPaidVanFees'] = n('studPaidVanFees') - amount;
-                revert['stuBalVanFees']   = n('stuBalVanFees')   + amount;
-                break;
-              case 'Arrear Admission Fee':
-                revert['stuPaidArrearAdmissionFees'] = n('stuPaidArrearAdmissionFees') - amount;
-                revert['balanceArrearAdmissionFees'] = n('balanceArrearAdmissionFees') + amount;
-                break;
-              case 'Arrear Exam Fee':
-                revert['stuPaidArrearExamFees'] = n('stuPaidArrearExamFees') - amount;
-                revert['balanceArrearExamFees'] = n('balanceArrearExamFees') + amount;
-                break;
-              case 'Arrear Tution Fee':
-                revert['stuPaidArrearTutionFees']  = n('stuPaidArrearTutionFees') - amount;
-                revert['balanceArrearTuitionFees'] = n('balanceArrearTuitionFees') + amount;
-                break;
-              case 'Arrear Van Fee':
-                revert['stuPaidArrearVanFees'] = n('stuPaidArrearVanFees') - amount;
-                revert['balanceArrearVanFees'] = n('balanceArrearVanFees') + amount;
-                break;
+        if (studentId.isNotEmpty && amount > 0) {
+          try {
+            final ledgerId = (bill['ledgerId'] ?? '').toString();
+            if (ledgerId.isNotEmpty) {
+              final ledgerDoc = await FirebaseFirestore.instance
+                  .collection('schools').doc(_schoolId).collection('studentFeeLedgers')
+                  .doc(ledgerId)
+                  .get();
+              
+              if (ledgerDoc.exists) {
+                final ledgerData = ledgerDoc.data()!;
+                final currentPaid = (ledgerData['totalPaid'] as num?)?.toDouble() ?? 0;
+                final currentBalance = (ledgerData['totalBalance'] as num?)?.toDouble() ?? 0;
+                
+                await ledgerDoc.reference.update({
+                  'totalPaid': currentPaid - amount,
+                  'totalBalance': currentBalance + amount,
+                  'updatedAt': FieldValue.serverTimestamp(),
+                });
+              }
             }
-            revert['stuPaidTotalFees'] = n('stuPaidTotalFees') - amount;
-            revert['stuBalTotalFees']  = n('stuBalTotalFees')  + amount;
-
-            await feeDoc.reference.update(revert);
+          } catch (e) {
+            print('Error reverting ledger: $e');
           }
         }
       }
 
       _fetchBills();
       if (mounted) {
+        final amount = isRevenue ? (bill['amount'] as num?)?.toDouble() ?? 0 : (bill['expenseAmount'] as num?)?.toDouble() ?? (bill['amount'] as num?)?.toDouble() ?? 0;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(isRevenue
-              ? 'Bill deleted & ₹${((bill['revenueAmount'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)} reverted to student balance'
-              : 'Bill deleted'),
+              ? 'Bill deleted & ₹${amount.toStringAsFixed(0)} reverted to student balance'
+              : 'Expense bill deleted'),
           backgroundColor: _accentGreen,
         ));
       }
