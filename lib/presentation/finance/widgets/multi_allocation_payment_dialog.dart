@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/providers/auth_provider.dart';
 import '../../../data/repositories/term_fee_payment_repository.dart';
+import '../../../domain/entities/student_fee_item.dart';
 import '../../../domain/entities/student_fee_ledger.dart';
 import '../../../domain/entities/term_fee_payment.dart';
 
@@ -26,12 +27,14 @@ const Color _borderColor = Color(0xFF30363D);
 ///   * Lists every ledger term entry with `balanceAmount > 0`.
 ///   * Arrears rows (carried from prior years) appear first by default
 ///     (FIFO), tagged with their source academic year.
+///   * Also lists ad-hoc fee items with outstanding balances.
 ///   * The cashier can enter a total tendered amount and click
 ///     "Auto-allocate" to fill rows oldest-first; or fill row-by-row
 ///     manually.
 ///   * Submit records one [TermFeePayment] per allocated row, each as a
 ///     separate transaction (preserves the existing single-term contract
 ///     of [TermFeePaymentRepository.recordPayment] + receipt counter).
+///   * For ad-hoc fees, records payments via StudentFeeItemRepository.
 ///   * On any per-row failure, the dialog reports which rows succeeded
 ///     and surfaces the failure for the rest, so the cashier can retry.
 ///
@@ -42,10 +45,12 @@ class MultiAllocationPaymentDialog extends ConsumerStatefulWidget {
     super.key,
     required this.schoolId,
     required this.ledger,
+    this.adHocFeeItems = const [],
   });
 
   final String schoolId;
   final StudentFeeLedger ledger;
+  final List<StudentFeeItem> adHocFeeItems;
 
   @override
   ConsumerState<MultiAllocationPaymentDialog> createState() =>
@@ -55,7 +60,9 @@ class MultiAllocationPaymentDialog extends ConsumerStatefulWidget {
 class _MultiAllocationPaymentDialogState
     extends ConsumerState<MultiAllocationPaymentDialog> {
   late List<TermLedgerEntry> _openEntries;
+  late List<StudentFeeItem> _openAdHocItems;
   late Map<String, TextEditingController> _amountCtrls;
+  late Map<String, TextEditingController> _adhocAmountCtrls;
   final TextEditingController _totalTenderedCtrl = TextEditingController();
   final TextEditingController _refCtrl = TextEditingController();
   final TextEditingController _notesCtrl = TextEditingController();
@@ -84,11 +91,24 @@ class _MultiAllocationPaymentDialogState
     _amountCtrls = {
       for (final e in entries) e.termId: TextEditingController(text: '0'),
     };
+    
+    // Ad-hoc fee items with outstanding balance
+    final adhocItems = widget.adHocFeeItems
+        .where((e) => e.balanceAmount > 0.001)
+        .toList()
+      ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    _openAdHocItems = adhocItems;
+    _adhocAmountCtrls = {
+      for (final e in adhocItems) e.id: TextEditingController(text: '0'),
+    };
   }
 
   @override
   void dispose() {
     for (final c in _amountCtrls.values) {
+      c.dispose();
+    }
+    for (final c in _adhocAmountCtrls.values) {
       c.dispose();
     }
     _totalTenderedCtrl.dispose();
@@ -102,6 +122,9 @@ class _MultiAllocationPaymentDialogState
     for (final c in _amountCtrls.values) {
       t += double.tryParse(c.text.trim()) ?? 0;
     }
+    for (final c in _adhocAmountCtrls.values) {
+      t += double.tryParse(c.text.trim()) ?? 0;
+    }
     return t;
   }
 
@@ -112,6 +135,8 @@ class _MultiAllocationPaymentDialogState
       return;
     }
     double remaining = tendered;
+    
+    // Allocate to ledger entries first (arrears first, then regular)
     for (final e in _openEntries) {
       if (remaining <= 0) {
         _amountCtrls[e.termId]!.text = '0';
@@ -121,6 +146,18 @@ class _MultiAllocationPaymentDialogState
       _amountCtrls[e.termId]!.text = take.toStringAsFixed(0);
       remaining -= take;
     }
+    
+    // Then allocate to ad-hoc fee items
+    for (final e in _openAdHocItems) {
+      if (remaining <= 0) {
+        _adhocAmountCtrls[e.id]!.text = '0';
+        continue;
+      }
+      final take = remaining < e.balanceAmount ? remaining : e.balanceAmount;
+      _adhocAmountCtrls[e.id]!.text = take.toStringAsFixed(0);
+      remaining -= take;
+    }
+    
     setState(() {
       _error = remaining > 0.01
           ? 'Tendered amount exceeds total outstanding by ₹${remaining.toStringAsFixed(0)}'
@@ -140,7 +177,20 @@ class _MultiAllocationPaymentDialogState
       }
       allocations.add((e, amt));
     }
-    if (allocations.isEmpty) {
+    
+    final adhocAllocations = <(StudentFeeItem item, double amount)>[];
+    for (final e in _openAdHocItems) {
+      final amt = double.tryParse(_adhocAmountCtrls[e.id]!.text.trim()) ?? 0;
+      if (amt <= 0) continue;
+      if (amt > e.balanceAmount + 0.01) {
+        setState(() =>
+            _error = 'Ad-hoc fee "${e.itemName}": ₹$amt exceeds balance ₹${e.balanceAmount.toStringAsFixed(0)}');
+        return;
+      }
+      adhocAllocations.add((e, amt));
+    }
+    
+    if (allocations.isEmpty && adhocAllocations.isEmpty) {
       setState(() => _error = 'Enter an amount on at least one row');
       return;
     }
@@ -153,47 +203,49 @@ class _MultiAllocationPaymentDialogState
     final repo = ref.read(termFeePaymentRepositoryProvider);
     final session = ref.read(currentSessionProvider);
 
-    final successes = <String>[];
-    final failures = <(String termName, String error)>[];
+    try {
+      // Prepare term allocations
+      final termAllocations = allocations.map((a) => TermAllocation(
+        termId: a.$1.termId,
+        termName: a.$1.termName,
+        amount: a.$2,
+      )).toList();
 
-    // Each allocation is its own transactional `recordPayment` call —
-    // preserves single-term invariant + receipt counter atomicity. If a
-    // mid-batch failure happens, the prior rows have already committed,
-    // and we report exactly which ones succeeded vs failed.
-    for (final (entry, amount) in allocations) {
-      try {
-        await repo.recordPayment(RecordTermPaymentRequest(
-          schoolId: widget.schoolId,
-          ledgerId: widget.ledger.id,
-          termId: entry.termId,
-          amount: amount,
-          paymentMode: _mode,
-          transactionRef:
-              _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim(),
-          paidAt: _paidAt,
-          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-          collectedBy: session?.uid,
-          collectedByName: session?.displayName,
-        ));
-        successes.add(entry.termName);
-      } catch (e) {
-        failures.add((entry.termName, e.toString()));
-      }
-    }
+      // Prepare ad-hoc allocations
+      final adHocAllocations = adhocAllocations.map((a) => AdHocAllocation(
+        feeItemId: a.$1.id,
+        itemName: a.$1.itemName,
+        categoryCode: a.$1.categoryCode,
+        amount: a.$2,
+      )).toList();
 
-    if (!mounted) return;
-    if (failures.isEmpty) {
+      // Record single payment with both term and adhoc allocations
+      await repo.recordMultiTermPayment(RecordMultiTermPaymentRequest(
+        schoolId: widget.schoolId,
+        ledgerId: widget.ledger.id,
+        termAllocations: termAllocations,
+        adHocAllocations: adHocAllocations,
+        paymentMode: _mode,
+        transactionRef:
+            _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim(),
+        paidAt: _paidAt,
+        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        collectedBy: session?.uid,
+        collectedByName: session?.displayName,
+      ));
+
+      if (!mounted) return;
       Navigator.of(context).pop(true);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         backgroundColor: _accentGreen,
         content: Text(
-            'Recorded ${successes.length} payment${successes.length == 1 ? '' : 's'} successfully'),
+            'Payment saved successfully with single bill ID'),
       ));
-    } else {
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
         _saving = false;
-        _error =
-            'Saved ${successes.length} of ${allocations.length}. Failed: ${failures.map((f) => f.$1).join(", ")}';
+        _error = e.toString();
       });
     }
   }
@@ -204,7 +256,8 @@ class _MultiAllocationPaymentDialogState
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final allocated = _allocatedTotal();
     final outstanding = _openEntries.fold<double>(
-        0, (s, e) => s + e.balanceAmount);
+        0, (s, e) => s + e.balanceAmount) +
+        _openAdHocItems.fold<double>(0, (s, e) => s + e.balanceAmount);
 
     return Dialog(
       backgroundColor: _cardDark,
@@ -327,9 +380,37 @@ class _MultiAllocationPaymentDialogState
               Flexible(
                 child: SingleChildScrollView(
                   child: Column(
-                    children: _openEntries
-                        .map((e) => _allocationRow(e, money))
-                        .toList(),
+                    children: [
+                      ..._openEntries
+                          .map((e) => _allocationRow(e, money))
+                          .toList(),
+                      if (_openAdHocItems.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _accentAmber.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.event_note_rounded,
+                                  color: _accentAmber, size: 14),
+                              const SizedBox(width: 4),
+                              Text('Ad-Hoc Fees',
+                                  style: TextStyle(
+                                      color: _accentAmber,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        ..._openAdHocItems
+                            .map((e) => _adhocAllocationRow(e, money))
+                            .toList(),
+                      ],
+                    ],
                   ),
                 ),
               ),
@@ -573,6 +654,91 @@ class _MultiAllocationPaymentDialogState
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
                   borderSide: const BorderSide(color: _accentGreen),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _adhocAllocationRow(StudentFeeItem item, NumberFormat money) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: _bgDark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _accentAmber.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: _accentAmber.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: _accentAmber.withOpacity(0.4)),
+            ),
+            child: Text(item.categoryCode,
+                style: TextStyle(
+                    color: _accentAmber,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.3)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.itemName,
+                    style: const TextStyle(
+                        color: _textPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+                Text(
+                    'Due ${DateFormat('dd MMM yyyy').format(item.dueDate)} • Bal ${money.format(item.balanceAmount)}',
+                    style: const TextStyle(
+                        color: _textSecondary, fontSize: 10)),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 110,
+            child: TextField(
+              controller: _adhocAmountCtrls[item.id],
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))
+              ],
+              style: const TextStyle(color: _textPrimary, fontSize: 13),
+              textAlign: TextAlign.right,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                prefixText: '₹ ',
+                prefixStyle: const TextStyle(color: _textSecondary),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 8),
+                hintText: '0',
+                hintStyle: const TextStyle(color: _textSecondary),
+                filled: true,
+                fillColor: _cardDark,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: _borderColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: _borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: _accentAmber),
                 ),
               ),
             ),

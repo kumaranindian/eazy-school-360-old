@@ -89,7 +89,7 @@ class AdHocFeeAssignmentService {
       final feeItem = StudentFeeItem(
         id: '',
         schoolId: schoolId,
-        studentId: student.id,
+        studentId: student.studentNumber, // Use numeric student ID (e.g., "102")
         studentName: student.name,
         className: student.className,
         section: student.section,
@@ -183,6 +183,7 @@ class AdHocFeeAssignmentService {
     // Convert Student entities to StudentInfo
     return students.map((s) => StudentInfo(
       id: s.id,
+      studentNumber: s.studentId.toString(),
       name: s.name,
       className: s.className,
       section: s.section,
@@ -277,13 +278,15 @@ class AssignmentPreview {
 
 /// Simplified student info for assignment
 class StudentInfo {
-  final String id;
+  final String id; // Firestore document ID
+  final String studentNumber; // Numeric student ID for display (e.g., "102")
   final String name;
   final String className;
   final String section;
 
   const StudentInfo({
     required this.id,
+    required this.studentNumber,
     required this.name,
     required this.className,
     required this.section,

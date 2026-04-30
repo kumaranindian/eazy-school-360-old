@@ -76,7 +76,13 @@ service cloud.firestore {
     }
     
     function belongsToSchool(schoolId) {
-      return isSignedIn() && hasUserDoc() && getUserData().schoolId == schoolId;
+      // Support both legacy (users/{uid}.schoolId) and multi-tenant (userMemberships/{uid}/schools/{schoolId})
+      return isSignedIn() && (
+        // Legacy: check users doc schoolId field
+        (hasUserDoc() && getUserData().schoolId == schoolId) ||
+        // Multi-tenant: check if membership doc exists
+        exists(/databases/$(database)/documents/userMemberships/$(request.auth.uid)/schools/$(schoolId))
+      );
     }
     
     function isOwner(userId) {
@@ -437,11 +443,11 @@ service cloud.firestore {
       // AD-HOC FEE ASSIGNMENTS — bulk fee assignments for events
       match /adHocFeeAssignments/{assignmentId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
-        allow create: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() || isAdmin() || isFinance())) 
+        allow create: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
                       && request.resource.data.schoolId == schoolId;
-        allow update: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() || isAdmin() || isFinance())) 
+        allow update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
                       && resource.data.schoolId == schoolId;
-        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() || isAdmin())) 
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId))) 
                       && resource.data.schoolId == schoolId;
       }
 
@@ -655,6 +661,13 @@ service cloud.firestore {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isAdminOrFinance());
         allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
         allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // EXPENSE CATEGORIES SUBCOLLECTION
+      match /expenseCategories/{categoryId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
       }
     }
     

@@ -86,8 +86,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(currentSessionProvider);
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenSize = MediaQuery.of(context).size;
+    final screenWidth = screenSize.width;
     final isDesktop = screenWidth > 900;
+    final isMobile = screenWidth < 600;
 
     if (session == null || session.schoolId == null) {
       return const Scaffold(backgroundColor: _bgDark, body: Center(child: Text('Access Denied', style: TextStyle(color: _textPrimary))));
@@ -102,7 +104,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           // Left side - Form
           Expanded(
             flex: isDesktop ? 1 : 1,
-            child: _buildCollectionForm(context, session.schoolId!, isDesktop),
+            child: _buildCollectionForm(context, session.schoolId!, isDesktop, isMobile),
           ),
           // Right side - Recent Payments (desktop only)
           if (isDesktop)
@@ -114,8 +116,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(20),
-                      child: const Text('Recent Payments', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _textPrimary)),
+                      padding: EdgeInsets.all(isMobile ? 16 : 20),
+                      child: Text('Recent Payments', style: TextStyle(fontSize: isMobile ? 16 : 18, fontWeight: FontWeight.bold, color: _textPrimary)),
                     ),
                     Expanded(
                       child: paymentsAsync.when(
@@ -133,9 +135,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     );
   }
 
-  Widget _buildCollectionForm(BuildContext context, String schoolId, bool isDesktop) {
+  Widget _buildCollectionForm(BuildContext context, String schoolId, bool isDesktop, bool isMobile) {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(isDesktop ? 24 : 16),
+      padding: EdgeInsets.all(isMobile ? 12 : isDesktop ? 24 : 16),
       child: Form(
         key: _formKey,
         child: Column(
@@ -143,7 +145,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           children: [
             // Header
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(isMobile ? 14 : 20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(colors: [_accentBlue.withOpacity(0.15), _accentBlue.withOpacity(0.05)]),
                 borderRadius: BorderRadius.circular(12),
@@ -152,29 +154,29 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(isMobile ? 10 : 12),
                     decoration: BoxDecoration(color: _accentBlue.withOpacity(0.2), shape: BoxShape.circle),
-                    child: const Icon(Icons.account_balance_wallet_rounded, color: _accentBlue, size: 28),
+                    child: Icon(Icons.account_balance_wallet_rounded, color: _accentBlue, size: isMobile ? 24 : 28),
                   ),
-                  const SizedBox(width: 16),
-                  const Expanded(
+                  SizedBox(width: isMobile ? 12 : 16),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Fee Collection', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary)),
-                        SizedBox(height: 4),
-                        Text('Collect fees from students', style: TextStyle(color: _textSecondary)),
+                        Text('Fee Collection', style: TextStyle(fontSize: isMobile ? 18 : 20, fontWeight: FontWeight.bold, color: _textPrimary)),
+                        SizedBox(height: isMobile ? 2 : 4),
+                        Text('Collect fees from students', style: TextStyle(fontSize: isMobile ? 12 : 13, color: _textSecondary)),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: isMobile ? 16 : 24),
 
             // Student Search
-            const Text('Search Student *', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 8),
+            Text('Search Student *', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w500, fontSize: isMobile ? 13 : 14)),
+            SizedBox(height: isMobile ? 6 : 8),
             Stack(
               children: [
                 Column(

@@ -99,6 +99,14 @@ class FeeRepository {
     return _firestore.collection('schools').doc(schoolId).collection('feeStructuresV2');
   }
 
+  CollectionReference<Map<String, dynamic>> _termFeePaymentsCollection(String schoolId) {
+    return _firestore.collection('schools').doc(schoolId).collection('termFeePayments');
+  }
+
+  CollectionReference<Map<String, dynamic>> _studentFeeItemsCollection(String schoolId) {
+    return _firestore.collection('schools').doc(schoolId).collection('studentFeeItems');
+  }
+
   // ============ FEE STRUCTURES ============
 
   Stream<List<FeeStructure>> getFeeStructuresStream(String schoolId) {
@@ -357,23 +365,42 @@ class FeeRepository {
 
   /// Get monthly revenue totals for a date range (aggregated by month)
   Future<Map<String, double>> getMonthlyRevenue(String schoolId, DateTime startDate, DateTime endDate) async {
-    final snapshot = await _billsCollection(schoolId)
-        .where('billType', isEqualTo: 'Revenue')
-        .where('isDeleted', isEqualTo: false)
-        .where('billDate', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
-        .where('billDate', isLessThan: Timestamp.fromDate(endDate))
+    final monthly = <String, double>{};
+
+    // Query term fee payments
+    final termPaymentsSnap = await _termFeePaymentsCollection(schoolId)
+        .where('paidAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+        .where('paidAt', isLessThan: Timestamp.fromDate(endDate))
         .get();
 
-    final monthly = <String, double>{};
-    for (final doc in snapshot.docs) {
+    for (final doc in termPaymentsSnap.docs) {
       final data = doc.data();
-      final billDate = (data['billDate'] as Timestamp?)?.toDate();
-      if (billDate != null) {
-        final key = '${billDate.year}-${billDate.month.toString().padLeft(2, '0')}';
-        final amount = (data['revenueAmount'] as num?)?.toDouble() ?? 0.0;
+      final paidAt = (data['paidAt'] as Timestamp?)?.toDate();
+      if (paidAt != null) {
+        final key = '${paidAt.year}-${paidAt.month.toString().padLeft(2, '0')}';
+        final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
         monthly[key] = (monthly[key] ?? 0.0) + amount;
       }
     }
+
+    // Query student fee items (ad-hoc fees with payments)
+    final feeItemsSnap = await _studentFeeItemsCollection(schoolId)
+        .where('isActive', isEqualTo: true)
+        .where('paidAmount', isGreaterThan: 0)
+        .where('updatedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+        .where('updatedAt', isLessThan: Timestamp.fromDate(endDate))
+        .get();
+
+    for (final doc in feeItemsSnap.docs) {
+      final data = doc.data();
+      final updatedAt = (data['updatedAt'] as Timestamp?)?.toDate();
+      if (updatedAt != null) {
+        final key = '${updatedAt.year}-${updatedAt.month.toString().padLeft(2, '0')}';
+        final amount = (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
+        monthly[key] = (monthly[key] ?? 0.0) + amount;
+      }
+    }
+
     return monthly;
   }
 
@@ -382,17 +409,30 @@ class FeeRepository {
     final startOfDay = DateTime(now.year, now.month, now.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    final snapshot = await _billsCollection(schoolId)
-        .where('billType', isEqualTo: 'Revenue')
-        .where('isDeleted', isEqualTo: false)
-        .where('billDate', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-        .where('billDate', isLessThan: Timestamp.fromDate(endOfDay))
+    double total = 0.0;
+
+    // Query term fee payments
+    final termPaymentsSnap = await _termFeePaymentsCollection(schoolId)
+        .where('paidAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .where('paidAt', isLessThan: Timestamp.fromDate(endOfDay))
         .get();
 
-    double total = 0.0;
-    for (final doc in snapshot.docs) {
-      total += (doc.data()['revenueAmount'] as num?)?.toDouble() ?? 0.0;
+    for (final doc in termPaymentsSnap.docs) {
+      total += (doc.data()['amount'] as num?)?.toDouble() ?? 0.0;
     }
+
+    // Query student fee items (ad-hoc fees with payments today)
+    final feeItemsSnap = await _studentFeeItemsCollection(schoolId)
+        .where('isActive', isEqualTo: true)
+        .where('paidAmount', isGreaterThan: 0)
+        .where('updatedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .where('updatedAt', isLessThan: Timestamp.fromDate(endOfDay))
+        .get();
+
+    for (final doc in feeItemsSnap.docs) {
+      total += (doc.data()['paidAmount'] as num?)?.toDouble() ?? 0.0;
+    }
+
     return total;
   }
 }

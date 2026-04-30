@@ -25,10 +25,12 @@ class AdHocFeeAssignmentScreen extends ConsumerStatefulWidget {
     super.key,
     required this.schoolId,
     required this.academicYear,
+    this.onSuccess,
   });
 
   final String schoolId;
   final String academicYear;
+  final VoidCallback? onSuccess;
 
   @override
   ConsumerState<AdHocFeeAssignmentScreen> createState() =>
@@ -86,6 +88,9 @@ class _AdHocFeeAssignmentScreenState
   }
 
   Future<void> _submit() async {
+    // Prevent race condition - don't allow multiple submissions
+    if (_isLoading) return;
+    
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCategory.isEmpty) {
       _showError('Please select a fee category');
@@ -122,18 +127,52 @@ class _AdHocFeeAssignmentScreenState
       );
 
       if (mounted) {
-        Navigator.of(context).pop();
+        // Clear form data after successful submission
+        _clearForm();
+        
+        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           backgroundColor: _accentGreen,
           content: Text(
               'Successfully assigned fee to ${result.studentsAssigned} students (₹${result.totalAmount.toStringAsFixed(0)})'),
+          duration: const Duration(seconds: 3),
         ));
+        
+        // If callback provided (inline rendering), use it
+        if (widget.onSuccess != null) {
+          widget.onSuccess!();
+        } else {
+          // Otherwise try to pop (pushed as route)
+          try {
+            if (mounted && Navigator.of(context).canPop()) {
+              Navigator.of(context).pop(true);
+            }
+          } catch (e) {
+            print('[AdHocFeeAssignmentScreen] Navigation error: $e');
+          }
+        }
       }
     } catch (e) {
       _showError('Failed to create assignment: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _clearForm() {
+    _nameCtrl.clear();
+    _descCtrl.clear();
+    _amountCtrl.clear();
+    _notesCtrl.clear();
+    setState(() {
+      _selectedCategory = '';
+      _scope = 'school';
+      _dueDate = DateTime.now().add(const Duration(days: 30));
+      _selectedClasses.clear();
+      _selectedSections.clear();
+      _preview = null;
+    });
+    _formKey.currentState?.reset();
   }
 
   void _showError(String message) {

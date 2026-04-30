@@ -588,6 +588,24 @@ service cloud.firestore {
         allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
       }
       
+      // STUDENT FEE LEDGERS — fee ledger for students
+      match /studentFeeLedgers/{ledgerId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+                      && request.resource.data.schoolId == schoolId;
+        allow update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+                      && resource.data.schoolId == schoolId;
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId))) 
+                      && resource.data.schoolId == schoolId;
+      }
+      
+      // FINANCE SETTINGS — school-wide finance configuration
+      match /financeSettings/{settingId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
       // PERMISSION TYPES SUBCOLLECTION
       match /permissionTypes/{permissionTypeId} {
         allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
@@ -736,6 +754,39 @@ service cloud.firestore {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isAdminOrFinance());
         allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
         allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // AD-HOC FEE ASSIGNMENTS — bulk fee assignments for events
+      match /adHocFeeAssignments/{assignmentId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+                      && request.resource.data.schoolId == schoolId;
+        allow update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+                      && resource.data.schoolId == schoolId;
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId))) 
+                      && resource.data.schoolId == schoolId;
+      }
+      
+      // STUDENT FEE ITEMS — category-based fee tracking
+      match /studentFeeItems/{itemId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+                      && request.resource.data.schoolId == schoolId;
+        allow update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+                      && resource.data.schoolId == schoolId;
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId))) 
+                      && resource.data.schoolId == schoolId;
+      }
+      
+      // TERM FEE PAYMENTS — payment transactions for term-based fees
+      match /termFeePayments/{paymentId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+                      && request.resource.data.schoolId == schoolId;
+        allow update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId))) 
+                      && resource.data.schoolId == schoolId;
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId))) 
+                      && resource.data.schoolId == schoolId;
       }
     }
     

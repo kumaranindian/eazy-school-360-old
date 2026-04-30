@@ -259,16 +259,17 @@ class FinanceDashboardService {
     final classWise = <String, double>{};
 
     try {
-      final snap = await _firestore
-          .collection('schools').doc(schoolId).collection('student_fee_details')
+      // Query student fee ledgers (new system)
+      final ledgersSnap = await _firestore
+          .collection('schools').doc(schoolId).collection('studentFeeLedgers')
           .get();
 
-      for (final doc in snap.docs) {
+      for (final doc in ledgersSnap.docs) {
         final data = doc.data();
-        final total = (data['totalFees'] as num?)?.toDouble() ?? 0.0;
-        final paid = (data['paidTotalFees'] as num?)?.toDouble() ?? 0.0;
-        final balance = (data['balanceTotalFees'] as num?)?.toDouble() ?? (total - paid);
-        final className = data['className'] as String? ?? 'Unknown';
+        final total = (data['totalAmount'] as num?)?.toDouble() ?? 0.0;
+        final paid = (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
+        final balance = (data['balanceAmount'] as num?)?.toDouble() ?? (total - paid);
+        final className = (data['className'] ?? data['class'])?.toString() ?? 'Unknown';
 
         totalFees += total;
         collectedFees += paid;
@@ -311,43 +312,69 @@ class FinanceDashboardService {
     final currentAY = AcademicYear.getCurrentYearCode();
 
     try {
-      final snap = await _firestore
+      // Query expenses from bills collection
+      final expensesSnap = await _firestore
           .collection('schools').doc(schoolId).collection('bills')
+          .where('billType', isEqualTo: 'Expense')
           .where('isDeleted', isEqualTo: false)
           .get();
 
-      for (final doc in snap.docs) {
+      for (final doc in expensesSnap.docs) {
         final data = doc.data();
-        final billType = data['billType'] as String? ?? '';
-        final billDate = _parseDate(data['billDate']) ?? _parseDate(data['paymentDate']);
+        final billDate = _parseDate(data['billDate']) ?? _parseDate(data['expenseDate']);
         final billAY = (data['academicYear'] as String?) ?? '';
         // Skip bills from other academic years (keep legacy untagged bills).
         if (billAY.isNotEmpty && billAY != currentAY) continue;
 
-        if (billType == 'Expense') {
-          // Existing expense records use `expenseAmount`; newer ones also write `amount`
-          final amount = (data['expenseAmount'] as num?)?.toDouble() ??
-              (data['amount'] as num?)?.toDouble() ??
-              (data['totalAmount'] as num?)?.toDouble() ?? 0.0;
-          totalExpenses += amount;
-          if (billDate != null) {
-            if (!billDate.isBefore(todayStart)) todayExpenses += amount;
-            if (!billDate.isBefore(monthStart)) monthExpenses += amount;
+        final amount = (data['expenseAmount'] as num?)?.toDouble() ??
+            (data['amount'] as num?)?.toDouble() ??
+            (data['totalAmount'] as num?)?.toDouble() ?? 0.0;
+        totalExpenses += amount;
+        if (billDate != null) {
+          if (!billDate.isBefore(todayStart)) todayExpenses += amount;
+          if (!billDate.isBefore(monthStart)) monthExpenses += amount;
+        }
+      }
+
+      // Query term fee payments (includes both term fees and ad-hoc fees in components)
+      final termPaymentsSnap = await _firestore
+          .collection('schools').doc(schoolId).collection('termFeePayments')
+          .get();
+
+      for (final doc in termPaymentsSnap.docs) {
+        final data = doc.data();
+        final billDate = _parseDate(data['paidAt']);
+        final billAY = (data['academicYear'] as String?) ?? '';
+        // Skip payments from other academic years (keep legacy untagged payments).
+        if (billAY.isNotEmpty && billAY != currentAY) continue;
+
+        final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+        totalCollection += amount;
+        
+        // Try to get class info from the ledger reference
+        final ledgerId = data['ledgerId'] as String?;
+        if (ledgerId != null) {
+          try {
+            final ledgerSnap = await _firestore
+                .collection('schools').doc(schoolId)
+                .collection('studentFeeLedgers')
+                .doc(ledgerId)
+                .get();
+            final ledgerData = ledgerSnap.data();
+            if (ledgerData != null) {
+              final className = (ledgerData['className'] ?? ledgerData['class'])?.toString() ?? '';
+              if (className.isNotEmpty) {
+                classWiseCollection[className] = (classWiseCollection[className] ?? 0.0) + amount;
+              }
+            }
+          } catch (e) {
+            // Ignore ledger fetch errors
           }
-        } else if (billType == 'Revenue') {
-          // Existing fee payment records use `revenueAmount`; newer ones also write `totalAmount`
-          final amount = (data['revenueAmount'] as num?)?.toDouble() ??
-              (data['totalAmount'] as num?)?.toDouble() ??
-              (data['amount'] as num?)?.toDouble() ?? 0.0;
-          totalCollection += amount;
-          final className = (data['className'] ?? data['stuClass'])?.toString() ?? '';
-          if (className.isNotEmpty) {
-            classWiseCollection[className] = (classWiseCollection[className] ?? 0.0) + amount;
-          }
-          if (billDate != null) {
-            if (!billDate.isBefore(todayStart)) todayCollection += amount;
-            if (!billDate.isBefore(monthStart)) monthCollection += amount;
-          }
+        }
+
+        if (billDate != null) {
+          if (!billDate.isBefore(todayStart)) todayCollection += amount;
+          if (!billDate.isBefore(monthStart)) monthCollection += amount;
         }
       }
     } catch (e) {
@@ -396,11 +423,10 @@ class FinanceDashboardService {
     final sixMonthsAgo = DateTime(now.year, now.month - 5, 1);
 
     try {
-      final snap = await _firestore
-          .collection('schools').doc(schoolId).collection('bills')
-          .where('billType', isEqualTo: 'Revenue')
-          .where('isDeleted', isEqualTo: false)
-          .where('billDate', isGreaterThanOrEqualTo: Timestamp.fromDate(sixMonthsAgo))
+      // Query term fee payments (includes both term fees and ad-hoc fees in components)
+      final termPaymentsSnap = await _firestore
+          .collection('schools').doc(schoolId).collection('termFeePayments')
+          .where('paidAt', isGreaterThanOrEqualTo: Timestamp.fromDate(sixMonthsAgo))
           .get();
 
       // Initialize last 6 months with 0
@@ -410,12 +436,11 @@ class FinanceDashboardService {
         result[key] = 0.0;
       }
 
-      for (final doc in snap.docs) {
+      // Process term fee payments
+      for (final doc in termPaymentsSnap.docs) {
         final data = doc.data();
-        final amount = (data['revenueAmount'] as num?)?.toDouble() ??
-            (data['totalAmount'] as num?)?.toDouble() ??
-            (data['amount'] as num?)?.toDouble() ?? 0.0;
-        final date = _parseDate(data['billDate']);
+        final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+        final date = _parseDate(data['paidAt']);
         if (date == null) continue;
         final key = '${date.year}-${date.month.toString().padLeft(2, '0')}';
         if (result.containsKey(key)) {
@@ -433,49 +458,85 @@ class FinanceDashboardService {
     final activities = <RecentActivity>[];
 
     try {
-      final snap = await _firestore
+      // Query expenses from bills collection
+      final expensesSnap = await _firestore
           .collection('schools').doc(schoolId).collection('bills')
+          .where('billType', isEqualTo: 'Expense')
           .where('isDeleted', isEqualTo: false)
           .orderBy('billDate', descending: true)
           .limit(limit)
           .get();
 
-      for (final doc in snap.docs) {
+      for (final doc in expensesSnap.docs) {
         final data = doc.data();
-        final billType = data['billType'] as String? ?? '';
         final date = _parseDate(data['billDate']) ?? _parseDate(data['createdAt']) ?? DateTime.now();
+        final amount = (data['expenseAmount'] as num?)?.toDouble() ??
+            (data['amount'] as num?)?.toDouble() ??
+            (data['totalAmount'] as num?)?.toDouble() ?? 0.0;
+        final description = (data['description'] ?? data['expenseDesc'])?.toString();
+        final expenseType = (data['expenseType'] ?? data['categoryName'])?.toString() ?? 'General';
+        activities.add(RecentActivity(
+          id: doc.id,
+          type: 'expense',
+          title: (description != null && description.isNotEmpty) ? description : expenseType,
+          subtitle: expenseType,
+          amount: amount,
+          date: date,
+        ));
+      }
 
-        if (billType == 'Revenue') {
-          final amount = (data['revenueAmount'] as num?)?.toDouble() ??
-              (data['totalAmount'] as num?)?.toDouble() ??
-              (data['amount'] as num?)?.toDouble() ?? 0.0;
-          final studentName = (data['studentName'] ?? data['stuName'])?.toString() ?? 'Fee Payment';
-          final className = (data['className'] ?? data['stuClass'])?.toString() ?? '-';
-          final revenueType = (data['revenueType'] as String?) ?? 'Fee Payment';
-          final paymentMode = (data['paymentMode'] as String?) ?? 'Cash';
-          activities.add(RecentActivity(
-            id: doc.id,
-            type: 'payment',
-            title: studentName,
-            subtitle: 'Class $className • $revenueType • $paymentMode',
-            amount: amount,
-            date: date,
-          ));
-        } else if (billType == 'Expense') {
-          final amount = (data['expenseAmount'] as num?)?.toDouble() ??
-              (data['amount'] as num?)?.toDouble() ??
-              (data['totalAmount'] as num?)?.toDouble() ?? 0.0;
-          final description = (data['description'] ?? data['expenseDesc'])?.toString();
-          final expenseType = (data['expenseType'] ?? data['categoryName'])?.toString() ?? 'General';
-          activities.add(RecentActivity(
-            id: doc.id,
-            type: 'expense',
-            title: (description != null && description.isNotEmpty) ? description : expenseType,
-            subtitle: expenseType,
-            amount: amount,
-            date: date,
-          ));
+      // Query term fee payments (includes both term fees and ad-hoc fees in components)
+      final termPaymentsSnap = await _firestore
+          .collection('schools').doc(schoolId).collection('termFeePayments')
+          .orderBy('paidAt', descending: true)
+          .limit(limit)
+          .get();
+
+      for (final doc in termPaymentsSnap.docs) {
+        final data = doc.data();
+        final date = _parseDate(data['paidAt']) ?? DateTime.now();
+        final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+        final receiptNumber = (data['receiptNumber'] as String?) ?? '';
+        
+        // Try to get student info from the ledger
+        final ledgerId = data['ledgerId'] as String?;
+        String studentName = 'Fee Payment';
+        String className = '-';
+        String paymentMode = 'Cash';
+        
+        if (ledgerId != null) {
+          try {
+            final ledgerSnap = await _firestore
+                .collection('schools').doc(schoolId)
+                .collection('studentFeeLedgers')
+                .doc(ledgerId)
+                .get();
+            final ledgerData = ledgerSnap.data();
+            if (ledgerData != null) {
+              studentName = (ledgerData['studentName'] ?? ledgerData['stuName'])?.toString() ?? 'Fee Payment';
+              className = (ledgerData['className'] ?? ledgerData['class'])?.toString() ?? '-';
+            }
+          } catch (e) {
+            // Ignore ledger fetch errors
+          }
         }
+        
+        paymentMode = (data['paymentMode'] as String?) ?? 'Cash';
+        
+        activities.add(RecentActivity(
+          id: doc.id,
+          type: 'payment',
+          title: studentName,
+          subtitle: 'Class $className • Fee Payment • $paymentMode • $receiptNumber',
+          amount: amount,
+          date: date,
+        ));
+      }
+
+      // Sort all activities by date descending and limit
+      activities.sort((a, b) => b.date.compareTo(a.date));
+      if (activities.length > limit) {
+        activities.removeRange(limit, activities.length);
       }
     } catch (e) {
       debugPrint('[FinanceDashboard] recent activity error: $e');

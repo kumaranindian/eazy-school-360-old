@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../data/repositories/fee_structure_v2_repository.dart';
+import '../../../data/repositories/student_fee_item_repository.dart';
 import '../../../data/repositories/student_fee_ledger_repository.dart';
 import '../../../domain/entities/fee_category.dart';
 import '../../../domain/entities/fee_structure_v2.dart';
+import '../../../domain/entities/student_fee_item.dart';
 import '../../../domain/entities/student_fee_ledger.dart';
 import 'multi_allocation_payment_dialog.dart';
 
@@ -80,6 +82,9 @@ class _LedgerFeeManagementCardState
   bool _assignBusy = false;
   String? _assignError;
 
+  // Ad-hoc fee items (event-based fees not in the ledger)
+  List<StudentFeeItem> _adhocFeeItems = const [];
+
   @override
   void initState() {
     super.initState();
@@ -123,6 +128,23 @@ class _LedgerFeeManagementCardState
         };
       } catch (_) {}
 
+      // Load ad-hoc fee items for the student
+      List<StudentFeeItem> adhocItems = const [];
+      try {
+        final feeItemRepo = ref.read(studentFeeItemRepositoryProvider);
+        adhocItems = await feeItemRepo.getByStudent(
+          widget.schoolId,
+          widget.studentId,
+          widget.academicYear,
+        );
+        print('[LedgerFeeManagementCard] Loaded ${adhocItems.length} ad-hoc fee items for student ${widget.studentId}');
+        for (final item in adhocItems) {
+          print('  - ${item.itemName}: amount=${item.amount}, paid=${item.paidAmount}, balance=${item.balanceAmount}');
+        }
+      } catch (e) {
+        print('[LedgerFeeManagementCard] Failed to load ad-hoc fee items: $e');
+      }
+
       // When the ledger is absent, eagerly look up active FeeStructureV2s
       // so the empty state can offer one-click assign instead of bouncing
       // the admin to another screen.
@@ -157,6 +179,7 @@ class _LedgerFeeManagementCardState
         _categoriesByCode = cats;
         _matchingStructures = matching;
         _allStructuresForAy = allInAy;
+        _adhocFeeItems = adhocItems;
         _loading = false;
       });
     } catch (e) {
@@ -229,7 +252,7 @@ class _LedgerFeeManagementCardState
         ]),
         const SizedBox(height: 12),
         _yearGroup('Current Year', regular, isDesktop, isMobile,
-            highlight: false, padWithCatalog: true),
+            highlight: false, padWithCatalog: true, adHocItems: _adhocFeeItems),
         for (final ay in arrearsAys) ...[
           const SizedBox(height: 16),
           _yearGroup('Arrears • $ay', arrearsByAy[ay]!, isDesktop, isMobile,
@@ -461,7 +484,7 @@ class _LedgerFeeManagementCardState
 
   Widget _yearGroup(
       String title, List<TermLedgerEntry> entries, bool isDesktop, bool isMobile,
-      {required bool highlight, required bool padWithCatalog}) {
+      {required bool highlight, required bool padWithCatalog, List<StudentFeeItem> adHocItems = const []}) {
     if (entries.isEmpty && !padWithCatalog) return const SizedBox.shrink();
 
     // Group entries by category and sum totals/paid/balance.
@@ -472,6 +495,16 @@ class _LedgerFeeManagementCardState
       agg.total += e.amount + e.lateFeeApplied;
       agg.paid += e.paidAmount;
       agg.balance += e.balanceAmount;
+    }
+
+    // Add ad-hoc fees to the category aggregation
+    for (final item in adHocItems) {
+      final agg = byCategory.putIfAbsent(
+          item.categoryCode, () => _CategoryAggregate(category: item.categoryCode));
+      agg.total += item.amount;
+      agg.paid += item.paidAmount;
+      agg.balance += item.balanceAmount;
+      agg.hasAdHoc = true;
     }
 
     // When rendering the current-year group, pad with every category
@@ -530,14 +563,16 @@ class _LedgerFeeManagementCardState
         ]),
         const SizedBox(height: 8),
         if (isDesktop)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (int i = 0; i < cards.length; i++) ...[
-                if (i > 0) const SizedBox(width: 12),
-                Expanded(child: cards[i]),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (int i = 0; i < cards.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  Expanded(child: cards[i]),
+                ],
               ],
-            ],
+            ),
           )
         else
           Column(
@@ -554,12 +589,22 @@ class _LedgerFeeManagementCardState
 
   Widget _breakdownCard(String title, Color accent,
       List<_CategoryAggregate> cats, _BreakdownKind kind, bool isMobile) {
-    double sum = 0;
     final money = NumberFormat.currency(
         locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
+    // Calculate total outside of Builder to ensure proper accumulation
+    double sum = 0;
+    for (final c in cats) {
+      final v = switch (kind) {
+        _BreakdownKind.total => c.total,
+        _BreakdownKind.paid => c.paid,
+        _BreakdownKind.balance => c.balance,
+      };
+      sum += v;
+    }
+
     return Container(
-      padding: EdgeInsets.all(isMobile ? 12 : 14),
+      padding: EdgeInsets.all(isMobile ? 10 : 12),
       decoration: BoxDecoration(
         color: _bgDark,
         borderRadius: BorderRadius.circular(10),
@@ -582,7 +627,7 @@ class _LedgerFeeManagementCardState
                         fontSize: isMobile ? 12 : 13,
                         letterSpacing: 0.5))),
           ),
-          SizedBox(height: isMobile ? 8 : 10),
+          SizedBox(height: isMobile ? 6 : 6),
           if (cats.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 14),
@@ -590,44 +635,49 @@ class _LedgerFeeManagementCardState
                   style: TextStyle(color: _textSecondary, fontSize: 12)),
             )
           else
-            for (final c in cats) ...[
-              Builder(builder: (_) {
-                final v = switch (kind) {
-                  _BreakdownKind.total => c.total,
-                  _BreakdownKind.paid => c.paid,
-                  _BreakdownKind.balance => c.balance,
-                };
-                sum += v;
-                return Padding(
-                  padding: EdgeInsets.symmetric(vertical: isMobile ? 3 : 4),
-                  child: Row(
-                    children: [
+            for (final c in cats)
+              Padding(
+                padding: EdgeInsets.symmetric(vertical: isMobile ? 2 : 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(_categoryLabel(c.category),
+                        style: TextStyle(
+                            color: _textPrimary,
+                            fontSize: isMobile ? 11 : 12)),
+                    if (c.hasAdHoc) ...[
+                      const SizedBox(width: 6),
                       Container(
-                        width: 4,
-                        height: 4,
-                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 2),
                         decoration: BoxDecoration(
-                            color: accent.withOpacity(0.7),
-                            shape: BoxShape.circle),
-                      ),
-                      Expanded(
-                        child: Text(_categoryLabel(c.category),
-                            overflow: TextOverflow.ellipsis,
+                          color: _accentAmber.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(3),
+                          border: Border.all(
+                              color: _accentAmber.withOpacity(0.4)),
+                        ),
+                        child: Text('AD-HOC',
                             style: TextStyle(
-                                color: _textPrimary,
-                                fontSize: isMobile ? 11 : 12)),
+                                color: _accentAmber,
+                                fontSize: isMobile ? 8 : 9,
+                                fontWeight: FontWeight.bold,
+                                height: 1)),
                       ),
-                      Text(money.format(v),
-                          style: TextStyle(
-                              color: v == 0 ? _textSecondary : _textPrimary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: isMobile ? 11 : 12)),
                     ],
-                  ),
-                );
-              }),
-            ],
-          Divider(color: _borderColor, height: isMobile ? 12 : 14),
+                    const Spacer(),
+                    Text(money.format(switch (kind) {
+                      _BreakdownKind.total => c.total,
+                      _BreakdownKind.paid => c.paid,
+                      _BreakdownKind.balance => c.balance,
+                    }),
+                        style: TextStyle(
+                            color: _textPrimary,
+                            fontSize: isMobile ? 11 : 12,
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+          Divider(color: _borderColor, height: isMobile ? 8 : 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -690,6 +740,7 @@ class _LedgerFeeManagementCardState
       builder: (_) => MultiAllocationPaymentDialog(
         schoolId: widget.schoolId,
         ledger: ledger,
+        adHocFeeItems: _adhocFeeItems,
       ),
     );
     if (result == true) await _refresh();
@@ -739,6 +790,7 @@ class _CategoryAggregate {
   double total = 0;
   double paid = 0;
   double balance = 0;
+  bool hasAdHoc = false;
 }
 
 enum _BreakdownKind { total, paid, balance }

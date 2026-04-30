@@ -464,6 +464,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return AdHocFeeAssignmentScreen(
           schoolId: (session?.schoolId as String?) ?? '',
           academicYear: academicYear,
+          onSuccess: () {
+            // Navigate back to dashboard after successful assignment
+            setState(() => _selectedMenuId = 'dashboard');
+          },
         );
       }
       case 'delete_student': return const DeleteStudentScreen();

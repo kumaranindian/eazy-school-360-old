@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/expense_category_provider.dart';
 import '../../../data/repositories/expense_repository.dart';
 import '../../../domain/entities/expense.dart';
+import '../../../domain/entities/expense_category.dart';
 import '../../../domain/entities/academic_year.dart';
 import '../../../presentation/shared/widgets/searchable_dropdown.dart';
 
@@ -24,9 +26,11 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
   final _remarksController = TextEditingController();
   
   ExpenseCategory _selectedCategory = ExpenseCategory.OTHER;
+  ExpenseCategoryItem? _selectedCategoryItem;
   DateTime _expenseDate = DateTime.now();
   bool _isMissedExpense = false;
   bool _isLoading = false;
+  List<ExpenseCategoryItem> _customCategories = [];
 
   // Dark theme colors
   static const Color _bgDark = Color(0xFF0D1117);
@@ -35,6 +39,27 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
   static const Color _textPrimary = Color(0xFFE6EDF3);
   static const Color _textSecondary = Color(0xFF8B949E);
   static const Color _borderColor = Color(0xFF30363D);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCustomCategories();
+    });
+  }
+
+  Future<void> _loadCustomCategories() async {
+    final session = ref.read(currentSessionProvider);
+    if (session?.schoolId == null) return;
+    
+    final repo = ref.read(expenseCategoryRepositoryProvider);
+    try {
+      final categories = await repo.getCategories(session!.schoolId!);
+      setState(() => _customCategories = categories);
+    } catch (e) {
+      print('Error loading custom categories: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -48,8 +73,10 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(currentSessionProvider);
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenSize = MediaQuery.of(context).size;
+    final screenWidth = screenSize.width;
     final isDesktop = screenWidth > 900;
+    final isMobile = screenWidth < 600;
 
     if (session == null || session.schoolId == null) {
       return const Scaffold(backgroundColor: _bgDark, body: Center(child: Text('Access Denied', style: TextStyle(color: _textPrimary))));
@@ -64,7 +91,7 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
           // Left side - Form
           Expanded(
             flex: isDesktop ? 1 : 1,
-            child: _buildExpenseForm(context, session.schoolId!, isDesktop),
+            child: _buildExpenseForm(context, session.schoolId!, isDesktop, isMobile),
           ),
           // Right side - Recent Expenses (desktop only)
           if (isDesktop)
@@ -76,8 +103,8 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(20),
-                      child: const Text('Recent Expenses', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _textPrimary)),
+                      padding: EdgeInsets.all(isMobile ? 16 : 20),
+                      child: Text('Recent Expenses', style: TextStyle(fontSize: isMobile ? 16 : 18, fontWeight: FontWeight.bold, color: _textPrimary)),
                     ),
                     Expanded(
                       child: expensesAsync.when(
@@ -95,9 +122,9 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
     );
   }
 
-  Widget _buildExpenseForm(BuildContext context, String schoolId, bool isDesktop) {
+  Widget _buildExpenseForm(BuildContext context, String schoolId, bool isDesktop, bool isMobile) {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(isDesktop ? 24 : 16),
+      padding: EdgeInsets.all(isMobile ? 12 : isDesktop ? 24 : 16),
       child: Form(
         key: _formKey,
         child: Column(
@@ -105,7 +132,7 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
           children: [
             // Header
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(isMobile ? 14 : 20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(colors: [Colors.red.withOpacity(0.15), Colors.red.withOpacity(0.05)]),
                 borderRadius: BorderRadius.circular(12),
@@ -114,46 +141,57 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(isMobile ? 10 : 12),
                     decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), shape: BoxShape.circle),
-                    child: const Icon(Icons.money_off_rounded, color: Colors.red, size: 28),
+                    child: Icon(Icons.money_off_rounded, color: Colors.red, size: isMobile ? 24 : 28),
                   ),
-                  const SizedBox(width: 16),
-                  const Expanded(
+                  SizedBox(width: isMobile ? 12 : 16),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Record Expense', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary)),
-                        SizedBox(height: 4),
-                        Text('Track school expenditures', style: TextStyle(color: _textSecondary)),
+                        Text('Record Expense', style: TextStyle(fontSize: isMobile ? 18 : 20, fontWeight: FontWeight.bold, color: _textPrimary)),
+                        SizedBox(height: isMobile ? 2 : 4),
+                        Text('Track school expenditures', style: TextStyle(fontSize: isMobile ? 12 : 13, color: _textSecondary)),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: isMobile ? 16 : 24),
 
             // Expense Category
-            const Text('Expense Category *', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 8),
-            SearchableDropdown<ExpenseCategory>(
-              value: _selectedCategory,
-              items: ExpenseCategory.values,
-              itemLabel: (c) => Expense.getCategoryDisplayName(c),
-              hint: 'Select expense category',
-              onChanged: (v) => setState(() => _selectedCategory = v ?? ExpenseCategory.OTHER),
+            Text('Expense Category *', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w500, fontSize: isMobile ? 13 : 14)),
+            SizedBox(height: isMobile ? 6 : 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildCategoryDropdown(schoolId),
+                ),
+                SizedBox(width: isMobile ? 6 : 8),
+                IconButton(
+                  icon: Icon(Icons.refresh, color: _accentBlue, size: isMobile ? 18 : 20),
+                  tooltip: 'Feed Default Categories',
+                  onPressed: () => _feedDefaultCategories(schoolId),
+                ),
+                IconButton(
+                  icon: Icon(Icons.add_circle_outline, color: _accentBlue, size: isMobile ? 18 : 20),
+                  tooltip: 'Add New Category',
+                  onPressed: () => _showAddCategoryDialog(schoolId),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: isMobile ? 12 : 16),
 
             // Amount
-            const Text('Amount (₹) *', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 8),
+            Text('Amount (₹) *', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w500, fontSize: isMobile ? 13 : 14)),
+            SizedBox(height: isMobile ? 6 : 8),
             TextFormField(
               controller: _amountController,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
-              style: const TextStyle(color: _textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(color: _textPrimary, fontSize: isMobile ? 16 : 18, fontWeight: FontWeight.bold),
               decoration: _inputDecoration('Enter amount', Icons.currency_rupee),
               validator: (value) {
                 if (value == null || value.isEmpty) return 'Amount is required';
@@ -346,6 +384,166 @@ class _ExpenseEntryScreenState extends ConsumerState<ExpenseEntryScreen> {
       _expenseDate = DateTime.now();
       _isMissedExpense = false;
     });
+  }
+
+  Widget _buildCategoryDropdown(String schoolId) {
+    // Only use Firestore categories (no hardcoded enum values)
+    final allCategories = <ExpenseCategoryItem>[];
+    
+    // Add categories from Firestore
+    for (final customCat in _customCategories) {
+      if (!allCategories.any((c) => c.name == customCat.name)) {
+        allCategories.add(customCat);
+      }
+    }
+    
+    // If no categories, show placeholder
+    if (allCategories.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: _cardDark,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _borderColor),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.category, color: _textSecondary, size: 20),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'No categories yet. Click + to add',
+                style: TextStyle(color: _textSecondary, fontSize: 14),
+              ),
+            ),
+            const Icon(Icons.keyboard_arrow_down, color: _textSecondary),
+          ],
+        ),
+      );
+    }
+
+    return SearchableDropdown<ExpenseCategoryItem>(
+      value: _selectedCategoryItem,
+      items: allCategories,
+      itemLabel: (c) => c.name,
+      hint: 'Select expense category',
+      onChanged: (v) {
+        setState(() {
+          _selectedCategoryItem = v;
+          // Try to match to enum, otherwise keep as OTHER
+          if (v != null) {
+            try {
+              _selectedCategory = ExpenseCategory.values.firstWhere(
+                (c) => Expense.getCategoryDisplayName(c) == v.name,
+                orElse: () => ExpenseCategory.OTHER,
+              );
+            } catch (_) {
+              _selectedCategory = ExpenseCategory.OTHER;
+            }
+          }
+        });
+      },
+    );
+  }
+
+  Future<void> _feedDefaultCategories(String schoolId) async {
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(expenseCategoryRepositoryProvider);
+      await repo.feedDefaultCategories(schoolId);
+      await _loadCustomCategories();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Default categories loaded successfully'), backgroundColor: _accentBlue),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _showAddCategoryDialog(String schoolId) async {
+    final nameController = TextEditingController();
+    final codeController = TextEditingController();
+    
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _cardDark,
+        title: const Text('Add New Category', style: TextStyle(color: _textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              style: const TextStyle(color: _textPrimary),
+              decoration: const InputDecoration(
+                labelText: 'Category Name',
+                labelStyle: TextStyle(color: _textSecondary),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: _borderColor)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _accentBlue)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: codeController,
+              style: const TextStyle(color: _textPrimary),
+              decoration: const InputDecoration(
+                labelText: 'Category Code (optional)',
+                labelStyle: TextStyle(color: _textSecondary),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: _borderColor)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _accentBlue)),
+              ),
+              textCapitalization: TextCapitalization.characters,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: _textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: _accentBlue),
+            child: const Text('Add', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && nameController.text.isNotEmpty) {
+      final name = nameController.text.trim();
+      final code = codeController.text.trim().isEmpty 
+          ? name.toUpperCase().replaceAll(' ', '_') 
+          : codeController.text.trim().toUpperCase().replaceAll(' ', '_');
+      
+      try {
+        final repo = ref.read(expenseCategoryRepositoryProvider);
+        await repo.addCategory(schoolId, name, code);
+        await _loadCustomCategories();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Category added successfully'), backgroundColor: _accentBlue),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+
+    nameController.dispose();
+    codeController.dispose();
   }
 
   Widget _buildRecentExpensesList(List<Expense> expenses) {
