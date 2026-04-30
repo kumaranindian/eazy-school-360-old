@@ -6,11 +6,6 @@
   "storage": {
     "rules": "storage.rules"
   },
-  "functions": {
-    "source": "functions",
-    "predeploy": [],
-    "runtime": "nodejs20"
-  },
   "hosting": {
     "public": "build/web",
     "ignore": [
