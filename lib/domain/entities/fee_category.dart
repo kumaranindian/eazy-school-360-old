@@ -131,9 +131,10 @@ class FeeCategory {
       description: data['description']?.toString() ?? '',
       isStandard: data['isStandard'] as bool? ?? false,
       isActive: data['isActive'] as bool? ?? true,
-      applicableClassIds:
-          (data['applicableClassIds'] as List?)?.map((e) => e.toString()).toList() ??
-              const [],
+      applicableClassIds: (data['applicableClassIds'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
       sortOrder: (data['sortOrder'] as num?)?.toInt() ?? 100,
       defaultAmount: (data['defaultAmount'] as num?)?.toDouble() ?? 0,
       createdAt: _parseDate(data['createdAt']),
@@ -157,8 +158,6 @@ class FeeCategory {
         'applicableClassIds': applicableClassIds,
         'sortOrder': sortOrder,
         'defaultAmount': defaultAmount,
-        if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt!),
-        'updatedAt': FieldValue.serverTimestamp(),
       };
 
   FeeCategory copyWith({

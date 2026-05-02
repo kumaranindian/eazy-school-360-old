@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../theme/responsive_theme.dart';
 import 'responsive_layout.dart';
+import '../../presentation/widgets/theme_toggle_button.dart';
 
 /// Responsive AppBar that adapts to screen size and user context
 class ResponsiveAppBar extends ConsumerWidget implements PreferredSizeWidget {
@@ -33,7 +34,7 @@ class ResponsiveAppBar extends ConsumerWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(currentSessionProvider);
-    
+
     return AppBar(
       title: _buildTitle(context),
       backgroundColor: backgroundColor,
@@ -63,8 +64,8 @@ class ResponsiveAppBar extends ConsumerWidget implements PreferredSizeWidget {
       desktop: Text(
         title,
         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-          fontWeight: FontWeight.w500,
-        ),
+              fontWeight: FontWeight.w500,
+            ),
         overflow: TextOverflow.ellipsis,
       ),
     );
@@ -72,30 +73,33 @@ class ResponsiveAppBar extends ConsumerWidget implements PreferredSizeWidget {
 
   Widget? _buildLeading(BuildContext context) {
     if (leading != null) return leading;
-    
+
     if (showBackButton) {
       return IconButton(
         icon: const Icon(Icons.arrow_back),
         onPressed: onBackPressed ?? () => Navigator.of(context).pop(),
       );
     }
-    
+
     return null;
   }
 
   List<Widget> _buildActions(BuildContext context, session) {
     final List<Widget> actionWidgets = [];
-    
+
+    // Add theme toggle button
+    actionWidgets.add(const ThemeToggleButton());
+
     // Add custom actions
     if (actions != null) {
       actionWidgets.addAll(actions!);
     }
-    
+
     // Add user menu if session exists
     if (session != null) {
       actionWidgets.add(_buildUserMenu(context, session));
     }
-    
+
     return actionWidgets;
   }
 
@@ -136,14 +140,14 @@ class ResponsiveAppBar extends ConsumerWidget implements PreferredSizeWidget {
                   Text(
                     session.displayName,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
+                          fontWeight: FontWeight.w500,
+                        ),
                   ),
                   Text(
                     session.role.name,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                   ),
                 ],
               ),
@@ -187,14 +191,14 @@ class ResponsiveAppBar extends ConsumerWidget implements PreferredSizeWidget {
             Text(
               session.displayName,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
+                    fontWeight: FontWeight.w500,
+                  ),
             ),
             Text(
               session.role.name,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
           ],
         ),
@@ -262,7 +266,8 @@ class ResponsiveAppBar extends ConsumerWidget implements PreferredSizeWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+              color:
+                  Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
               borderRadius: BorderRadius.circular(24),
             ),
             child: Row(
@@ -288,14 +293,15 @@ class ResponsiveAppBar extends ConsumerWidget implements PreferredSizeWidget {
                     Text(
                       session.displayName,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
+                            fontWeight: FontWeight.w500,
+                          ),
                     ),
                     Text(
                       session.role.name,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
                     ),
                   ],
                 ),

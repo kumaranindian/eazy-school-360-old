@@ -454,13 +454,13 @@ service cloud.firestore {
       // FEE STRUCTURES V2 (term-wise) — admin/finance manage; all signed-in school members can read.
       match /feeStructuresV2/{structureId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
-        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
-        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
+        allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
 
         // Per-structure terms.
         match /terms/{termId} {
           allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
-          allow create, update, delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
+          allow create, update, delete: if isSignedIn() && isActive() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
         }
       }
 

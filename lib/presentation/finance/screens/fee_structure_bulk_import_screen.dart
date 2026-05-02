@@ -24,10 +24,12 @@ class FeeStructureBulkImportScreen extends ConsumerStatefulWidget {
     super.key,
     required this.schoolId,
     required this.parsed,
+    this.academicYear,
   });
 
   final String schoolId;
   final ParsedFeeStructureImport parsed;
+  final String? academicYear;
 
   @override
   ConsumerState<FeeStructureBulkImportScreen> createState() =>
@@ -112,12 +114,9 @@ class _FeeStructureBulkImportScreenState
     );
   }
 
-  Widget _summaryBanner(
-      List<ParsedFeeStructure> all, NumberFormat money) {
-    final totalTerms =
-        all.fold<int>(0, (s, p) => s + p.terms.length);
-    final grand =
-        all.fold<double>(0, (s, p) => s + p.totalAmount);
+  Widget _summaryBanner(List<ParsedFeeStructure> all, NumberFormat money) {
+    final totalTerms = all.fold<int>(0, (s, p) => s + p.terms.length);
+    final grand = all.fold<double>(0, (s, p) => s + p.totalAmount);
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       padding: const EdgeInsets.all(14),
@@ -183,15 +182,16 @@ class _FeeStructureBulkImportScreenState
       // (same name + academicYear).
       final existing = await repo.listAll(widget.schoolId);
       final existingKeys = existing
-          .map((s) =>
-              '${s.name.toLowerCase()}__${s.academicYear.toLowerCase()}')
+          .map(
+              (s) => '${s.name.toLowerCase()}__${s.academicYear.toLowerCase()}')
           .toSet();
 
       for (final i in picked) {
         final p = widget.parsed.structures[i];
         final key = '${p.name.toLowerCase()}__${p.academicYear.toLowerCase()}';
         if (existingKeys.contains(key)) {
-          errors.add('Skipped "${p.name}" / ${p.academicYear} (already exists)');
+          errors
+              .add('Skipped "${p.name}" / ${p.academicYear} (already exists)');
           if (mounted) setState(() => _imported++);
           continue;
         }
@@ -240,8 +240,7 @@ class _FeeStructureBulkImportScreenState
           content: SingleChildScrollView(
             child: SelectableText(
               errors.join('\n'),
-              style: const TextStyle(
-                  color: _textSecondary, fontSize: 12),
+              style: const TextStyle(color: _textSecondary, fontSize: 12),
             ),
           ),
           actions: [
@@ -250,8 +249,7 @@ class _FeeStructureBulkImportScreenState
                 Navigator.of(ctx).pop();
                 if (ok > 0) Navigator.of(context).pop();
               },
-              child: const Text('OK',
-                  style: TextStyle(color: _accentBlue)),
+              child: const Text('OK', style: TextStyle(color: _accentBlue)),
             ),
           ],
         ),
@@ -283,17 +281,14 @@ class _StructurePreviewCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: _cardDark,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: selected ? _accentGreen : _borderColor),
+          border: Border.all(color: selected ? _accentGreen : _borderColor),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
               Icon(
-                selected
-                    ? Icons.check_box
-                    : Icons.check_box_outline_blank,
+                selected ? Icons.check_box : Icons.check_box_outline_blank,
                 color: selected ? _accentGreen : _textSecondary,
               ),
               const SizedBox(width: 10),
@@ -308,8 +303,7 @@ class _StructurePreviewCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: _accentBlue.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(6),
@@ -332,8 +326,7 @@ class _StructurePreviewCard extends StatelessWidget {
                     'AY ${structure.academicYear}'),
                 _meta(Icons.school_outlined,
                     'Classes: ${structure.classes.join(", ")}'),
-                _meta(
-                    Icons.format_list_numbered,
+                _meta(Icons.format_list_numbered,
                     '${structure.terms.length} term(s)'),
                 _meta(Icons.attach_money,
                     'Total ${money.format(structure.totalAmount)}',
@@ -342,8 +335,7 @@ class _StructurePreviewCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: _bgDark,
                 borderRadius: BorderRadius.circular(8),
@@ -352,8 +344,7 @@ class _StructurePreviewCard extends StatelessWidget {
               child: Column(
                 children: structure.terms
                     .map((t) => Padding(
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 2),
+                          padding: const EdgeInsets.symmetric(vertical: 2),
                           child: Row(
                             children: [
                               Container(
@@ -375,8 +366,7 @@ class _StructurePreviewCard extends StatelessWidget {
                                   '${t.termName} • ${DateFormat('dd MMM yyyy').format(t.dueDate)}'
                                   '${t.lateFee.enabled ? ' • late ${money.format(t.lateFee.amount)} after ${t.lateFee.graceDays}d' : ''}',
                                   style: const TextStyle(
-                                      color: _textPrimary,
-                                      fontSize: 12),
+                                      color: _textPrimary, fontSize: 12),
                                 ),
                               ),
                               Text(money.format(t.amount),

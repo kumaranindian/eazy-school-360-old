@@ -152,7 +152,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && (
         isSuperAdmin() ||
         isOwner(uid) ||
-        request.resource.data.roles.hasAny(['ADMIN'])
+        request.resource.data.roles.hasAny(['ADMIN', 'FINANCE'])
       );
       allow update: if isSignedIn() && (
         isSuperAdmin() ||
@@ -552,14 +552,14 @@ service cloud.firestore {
       match /fee_structures/{structureId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
         allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
-        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
       }
       
       // FINANCE: STUDENT FEE DETAILS
       match /student_fee_details/{detailId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
         allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
-        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
       }
       
       // FINANCE: BILLS (Revenue & Expense)
@@ -571,21 +571,21 @@ service cloud.firestore {
         );
         allow create: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
         allow update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
-        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
       }
       
       // STUDENTS SUBCOLLECTION
       match /students/{studentId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
         allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
-        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
       }
       
       // CLASSES SUBCOLLECTION
       match /classes/{classId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
-        allow create, update: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
-        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
       }
       
       // STUDENT FEE LEDGERS — fee ledger for students
@@ -595,7 +595,7 @@ service cloud.firestore {
                       && request.resource.data.schoolId == schoolId;
         allow update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId))) 
                       && resource.data.schoolId == schoolId;
-        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId))) 
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId))) 
                       && resource.data.schoolId == schoolId;
       }
       
@@ -603,7 +603,7 @@ service cloud.firestore {
       match /financeSettings/{settingId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
         allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
-        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
       }
       
       // PERMISSION TYPES SUBCOLLECTION
@@ -720,6 +720,13 @@ service cloud.firestore {
       // ARREARS SUBCOLLECTION
       match /arrears/{arrearsId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isAdminOrFinance());
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // CONCESSION CATEGORIES SUBCOLLECTION
+      match /concessionCategories/{categoryId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
         allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
         allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
       }
@@ -954,6 +961,13 @@ service cloud.firestore {
     // USERS COLLECTION
     // ============================================================
     match /users/{userId} {
+      // LIST: Super admin can list all users, tenant admin can list users from their school
+      // This is needed for checking if a user already exists by email before creation
+      allow list: if isSignedIn() && (
+        isSuperAdmin() ||
+        (isTenantAdmin() && hasUserDoc())
+      );
+
       // CREATE: User can create their own document OR admin can create for their school
       // When admin creates a staff/finance user via createUserWithEmailAndPassword,
       // Firebase auto-signs in as the new user. So the new user creates their own doc.
@@ -963,24 +977,24 @@ service cloud.firestore {
         isSuperAdmin() ||
         (isTenantAdmin() && request.resource.data.schoolId == getUserData().schoolId)
       );
-      
+
       // READ: User can read their own data, super admin can read all, tenant admin can read users from their school
       allow read: if isSignedIn() && (
         request.auth.uid == userId || 
         isSuperAdmin() ||
         (isTenantAdmin() && resource.data.schoolId == getUserData().schoolId)
       );
-      
+
       // UPDATE: User can update their own data, super admin can update all, tenant admin can update users from their school
       allow update: if isSignedIn() && (
         request.auth.uid == userId || 
         isSuperAdmin() ||
         (isTenantAdmin() && resource.data.schoolId == getUserData().schoolId)
       );
-      
+
       // DELETE: Only super admin
       allow delete: if isSignedIn() && isSuperAdmin();
-      
+
       // NOTIFICATIONS SUBCOLLECTION
       match /notifications/{notificationId} {
         allow read: if isSignedIn() && request.auth.uid == userId;

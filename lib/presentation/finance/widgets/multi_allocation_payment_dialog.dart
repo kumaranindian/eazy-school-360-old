@@ -75,23 +75,22 @@ class _MultiAllocationPaymentDialogState
   void initState() {
     super.initState();
     // Arrears first (FIFO by sourceAcademicYear), then regular by sequence.
-    final entries = widget.ledger.termStatus
-        .where((e) => e.balanceAmount > 0.001)
-        .toList()
-      ..sort((a, b) {
-        if (a.isArrear != b.isArrear) return a.isArrear ? -1 : 1;
-        if (a.isArrear) {
-          // Older source AY first.
-          final c = a.sourceAcademicYear.compareTo(b.sourceAcademicYear);
-          if (c != 0) return c;
-        }
-        return a.sequence.compareTo(b.sequence);
-      });
+    final entries =
+        widget.ledger.termStatus.where((e) => e.balanceAmount > 0.001).toList()
+          ..sort((a, b) {
+            if (a.isArrear != b.isArrear) return a.isArrear ? -1 : 1;
+            if (a.isArrear) {
+              // Older source AY first.
+              final c = a.sourceAcademicYear.compareTo(b.sourceAcademicYear);
+              if (c != 0) return c;
+            }
+            return a.sequence.compareTo(b.sequence);
+          });
     _openEntries = entries;
     _amountCtrls = {
       for (final e in entries) e.termId: TextEditingController(text: '0'),
     };
-    
+
     // Ad-hoc fee items with outstanding balance
     final adhocItems = widget.adHocFeeItems
         .where((e) => e.balanceAmount > 0.001)
@@ -135,7 +134,7 @@ class _MultiAllocationPaymentDialogState
       return;
     }
     double remaining = tendered;
-    
+
     // Allocate to ledger entries first (arrears first, then regular)
     for (final e in _openEntries) {
       if (remaining <= 0) {
@@ -146,7 +145,7 @@ class _MultiAllocationPaymentDialogState
       _amountCtrls[e.termId]!.text = take.toStringAsFixed(0);
       remaining -= take;
     }
-    
+
     // Then allocate to ad-hoc fee items
     for (final e in _openAdHocItems) {
       if (remaining <= 0) {
@@ -157,7 +156,7 @@ class _MultiAllocationPaymentDialogState
       _adhocAmountCtrls[e.id]!.text = take.toStringAsFixed(0);
       remaining -= take;
     }
-    
+
     setState(() {
       _error = remaining > 0.01
           ? 'Tendered amount exceeds total outstanding by ₹${remaining.toStringAsFixed(0)}'
@@ -171,25 +170,25 @@ class _MultiAllocationPaymentDialogState
       final amt = double.tryParse(_amountCtrls[e.termId]!.text.trim()) ?? 0;
       if (amt <= 0) continue;
       if (amt > e.balanceAmount + 0.01) {
-        setState(() =>
-            _error = 'Row "${e.termName}": ₹$amt exceeds balance ₹${e.balanceAmount.toStringAsFixed(0)}');
+        setState(() => _error =
+            'Row "${e.termName}": ₹$amt exceeds balance ₹${e.balanceAmount.toStringAsFixed(0)}');
         return;
       }
       allocations.add((e, amt));
     }
-    
+
     final adhocAllocations = <(StudentFeeItem item, double amount)>[];
     for (final e in _openAdHocItems) {
       final amt = double.tryParse(_adhocAmountCtrls[e.id]!.text.trim()) ?? 0;
       if (amt <= 0) continue;
       if (amt > e.balanceAmount + 0.01) {
-        setState(() =>
-            _error = 'Ad-hoc fee "${e.itemName}": ₹$amt exceeds balance ₹${e.balanceAmount.toStringAsFixed(0)}');
+        setState(() => _error =
+            'Ad-hoc fee "${e.itemName}": ₹$amt exceeds balance ₹${e.balanceAmount.toStringAsFixed(0)}');
         return;
       }
       adhocAllocations.add((e, amt));
     }
-    
+
     if (allocations.isEmpty && adhocAllocations.isEmpty) {
       setState(() => _error = 'Enter an amount on at least one row');
       return;
@@ -200,26 +199,51 @@ class _MultiAllocationPaymentDialogState
       _error = null;
     });
 
-    final repo = ref.read(termFeePaymentRepositoryProvider);
-    final session = ref.read(currentSessionProvider);
-
     try {
+      print('[Payment Dialog] Starting payment submission...');
+
+      final repo = ref.read(termFeePaymentRepositoryProvider);
+      print('[Payment Dialog] Repository loaded');
+
+      final session = ref.read(currentSessionProvider);
+      print('[Payment Dialog] Session loaded: ${session?.uid}');
+
+      // Check if session is available
+      if (session == null) {
+        setState(() {
+          _saving = false;
+          _error = 'Session expired or invalid. Please log in again.';
+        });
+        return;
+      }
+
       // Prepare term allocations
-      final termAllocations = allocations.map((a) => TermAllocation(
-        termId: a.$1.termId,
-        termName: a.$1.termName,
-        amount: a.$2,
-      )).toList();
+      print('[Payment Dialog] Preparing term allocations...');
+      final termAllocations = allocations
+          .map((a) => TermAllocation(
+                termId: a.$1.termId,
+                termName: a.$1.termName,
+                amount: a.$2,
+              ))
+          .toList();
+      print(
+          '[Payment Dialog] Term allocations prepared: ${termAllocations.length}');
 
       // Prepare ad-hoc allocations
-      final adHocAllocations = adhocAllocations.map((a) => AdHocAllocation(
-        feeItemId: a.$1.id,
-        itemName: a.$1.itemName,
-        categoryCode: a.$1.categoryCode,
-        amount: a.$2,
-      )).toList();
+      print('[Payment Dialog] Preparing ad-hoc allocations...');
+      final adHocAllocations = adhocAllocations
+          .map((a) => AdHocAllocation(
+                feeItemId: a.$1.id,
+                itemName: a.$1.itemName,
+                categoryCode: a.$1.categoryCode,
+                amount: a.$2,
+              ))
+          .toList();
+      print(
+          '[Payment Dialog] Ad-hoc allocations prepared: ${adHocAllocations.length}');
 
       // Record single payment with both term and adhoc allocations
+      print('[Payment Dialog] Calling recordMultiTermPayment...');
       await repo.recordMultiTermPayment(RecordMultiTermPaymentRequest(
         schoolId: widget.schoolId,
         ledgerId: widget.ledger.id,
@@ -230,22 +254,39 @@ class _MultiAllocationPaymentDialogState
             _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim(),
         paidAt: _paidAt,
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        collectedBy: session?.uid,
-        collectedByName: session?.displayName,
+        collectedBy: session.uid,
+        collectedByName: session.displayName,
       ));
+      print('[Payment Dialog] Payment recorded successfully');
 
       if (!mounted) return;
       Navigator.of(context).pop(true);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         backgroundColor: _accentGreen,
-        content: Text(
-            'Payment saved successfully with single bill ID'),
+        content: Text('Payment saved successfully with single bill ID'),
       ));
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _error = e.toString();
+        // Provide more detailed error message
+        String errorMsg = 'Payment failed: ';
+        if (e.toString().contains('Student ledger not found')) {
+          errorMsg += 'Student ledger not found. Please refresh and try again.';
+        } else if (e.toString().contains('not on ledger')) {
+          errorMsg +=
+              'Term not found on ledger. Data may be stale. Please refresh.';
+        } else if (e.toString().contains('exceeds balance')) {
+          errorMsg +=
+              'Amount exceeds available balance. Please check the amounts.';
+        } else if (e.toString().contains('permission') ||
+            e.toString().contains('PERMISSION_DENIED')) {
+          errorMsg +=
+              'Permission denied. You may not have the required permissions.';
+        } else {
+          errorMsg += e.toString();
+        }
+        _error = errorMsg;
       });
     }
   }
@@ -255,15 +296,14 @@ class _MultiAllocationPaymentDialogState
     final money =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final allocated = _allocatedTotal();
-    final outstanding = _openEntries.fold<double>(
-        0, (s, e) => s + e.balanceAmount) +
-        _openAdHocItems.fold<double>(0, (s, e) => s + e.balanceAmount);
+    final outstanding =
+        _openEntries.fold<double>(0, (s, e) => s + e.balanceAmount) +
+            _openAdHocItems.fold<double>(0, (s, e) => s + e.balanceAmount);
 
     return Dialog(
       backgroundColor: _cardDark,
       surfaceTintColor: _cardDark,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Theme(
         // Force a dark InputDecoration theme so every TextField /
         // DropdownButtonFormField / InputDecorator below inherits the
@@ -283,8 +323,8 @@ class _MultiAllocationPaymentDialogState
             hintStyle: const TextStyle(color: _textSecondary),
             prefixStyle: const TextStyle(color: _textSecondary),
             suffixStyle: const TextStyle(color: _textSecondary),
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: _borderColor),
@@ -304,270 +344,267 @@ class _MultiAllocationPaymentDialogState
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(children: [
-                const Icon(Icons.payments_rounded, color: _accentGreen),
-                const SizedBox(width: 8),
-                const Text('Make Payment',
-                    style: TextStyle(
-                        color: _textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18)),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded,
-                      color: _textSecondary),
-                  onPressed: _saving ? null : () => Navigator.pop(context),
-                ),
-              ]),
-              const SizedBox(height: 4),
-              Text(
-                  '${widget.ledger.studentName} • ${widget.ledger.className} • AY ${widget.ledger.academicYear}',
-                  style: const TextStyle(
-                      color: _textSecondary, fontSize: 12)),
-              const SizedBox(height: 12),
-
-              // Tendered amount + auto-allocate
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _bgDark,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _borderColor),
-                ),
-                child: Row(children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _totalTenderedCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                            RegExp(r'^\d+\.?\d{0,2}'))
-                      ],
-                      style: const TextStyle(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(children: [
+                  const Icon(Icons.payments_rounded, color: _accentGreen),
+                  const SizedBox(width: 8),
+                  const Text('Make Payment',
+                      style: TextStyle(
                           color: _textPrimary,
                           fontWeight: FontWeight.bold,
-                          fontSize: 16),
-                      decoration: const InputDecoration(
-                        labelText: 'Total Tendered',
-                        labelStyle: TextStyle(color: _textSecondary),
-                        prefixText: '₹ ',
-                        prefixStyle: TextStyle(color: _textSecondary),
-                        border: InputBorder.none,
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: _saving ? null : _autoAllocate,
-                    icon: const Icon(Icons.auto_awesome, size: 16),
-                    label: const Text('Auto-allocate'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _accentBlue,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ]),
-              ),
-              const SizedBox(height: 12),
-
-              // Open ledger rows
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      ..._openEntries
-                          .map((e) => _allocationRow(e, money))
-                          .toList(),
-                      if (_openAdHocItems.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _accentAmber.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.event_note_rounded,
-                                  color: _accentAmber, size: 14),
-                              const SizedBox(width: 4),
-                              Text('Ad-Hoc Fees',
-                                  style: TextStyle(
-                                      color: _accentAmber,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        ..._openAdHocItems
-                            .map((e) => _adhocAllocationRow(e, money))
-                            .toList(),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // Allocation summary
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _bgDark,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _borderColor),
-                ),
-                child: Row(children: [
-                  Text('Outstanding: ${money.format(outstanding)}',
-                      style: const TextStyle(
-                          color: _textSecondary, fontSize: 12)),
+                          fontSize: 18)),
                   const Spacer(),
-                  Text('Allocated: ${money.format(allocated)}',
-                      style: TextStyle(
-                          color: allocated > 0
-                              ? _accentGreen
-                              : _textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold)),
+                  IconButton(
+                    icon:
+                        const Icon(Icons.close_rounded, color: _textSecondary),
+                    onPressed: _saving ? null : () => Navigator.pop(context),
+                  ),
                 ]),
-              ),
+                const SizedBox(height: 4),
+                Text(
+                    '${widget.ledger.studentName} • ${widget.ledger.className} • AY ${widget.ledger.academicYear}',
+                    style:
+                        const TextStyle(color: _textSecondary, fontSize: 12)),
+                const SizedBox(height: 12),
 
-              const SizedBox(height: 12),
-
-              // Mode + date + ref + notes
-              Row(children: [
-                Expanded(
-                  child: DropdownButtonFormField<TermPaymentMode>(
-                    value: _mode,
-                    dropdownColor: _cardDark,
-                    style: const TextStyle(color: _textPrimary),
-                    decoration: const InputDecoration(
-                      labelText: 'Mode',
-                      labelStyle: TextStyle(color: _textSecondary),
-                      isDense: true,
-                    ),
-                    items: TermPaymentMode.values
-                        .map((m) => DropdownMenuItem(
-                            value: m, child: Text(m.name)))
-                        .toList(),
-                    onChanged: _saving
-                        ? null
-                        : (v) => setState(
-                            () => _mode = v ?? TermPaymentMode.CASH),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: InkWell(
-                    onTap: _saving
-                        ? null
-                        : () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _paidAt,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime.now()
-                                  .add(const Duration(days: 1)),
-                            );
-                            if (picked != null) {
-                              setState(() => _paidAt = picked);
-                            }
-                          },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Date',
-                        labelStyle: TextStyle(color: _textSecondary),
-                        isDense: true,
-                      ),
-                      child: Text(
-                          DateFormat('dd MMM yyyy').format(_paidAt),
-                          style: const TextStyle(color: _textPrimary)),
-                    ),
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _refCtrl,
-                style: const TextStyle(color: _textPrimary),
-                decoration: const InputDecoration(
-                  labelText: 'Transaction Reference',
-                  labelStyle: TextStyle(color: _textSecondary),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _notesCtrl,
-                style: const TextStyle(color: _textPrimary),
-                maxLines: 1,
-                decoration: const InputDecoration(
-                  labelText: 'Notes',
-                  labelStyle: TextStyle(color: _textSecondary),
-                  isDense: true,
-                ),
-              ),
-
-              if (_error != null) ...[
-                const SizedBox(height: 8),
+                // Tendered amount + auto-allocate
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _accentRed.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
-                    border:
-                        Border.all(color: _accentRed.withOpacity(0.4)),
+                    color: _bgDark,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _borderColor),
                   ),
                   child: Row(children: [
-                    const Icon(Icons.warning_amber,
-                        color: _accentRed, size: 14),
-                    const SizedBox(width: 6),
                     Expanded(
-                      child: Text(_error!,
-                          style: const TextStyle(
-                              color: _accentRed, fontSize: 12)),
+                      child: TextField(
+                        controller: _totalTenderedCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d+\.?\d{0,2}'))
+                        ],
+                        style: const TextStyle(
+                            color: _textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16),
+                        decoration: const InputDecoration(
+                          labelText: 'Total Tendered',
+                          labelStyle: TextStyle(color: _textSecondary),
+                          prefixText: '₹ ',
+                          prefixStyle: TextStyle(color: _textSecondary),
+                          border: InputBorder.none,
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: _saving ? null : _autoAllocate,
+                      icon: const Icon(Icons.auto_awesome, size: 16),
+                      label: const Text('Auto-allocate'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _accentBlue,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
                   ]),
                 ),
-              ],
+                const SizedBox(height: 12),
 
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _saving || allocated <= 0 ? null : _submit,
-                  icon: _saving
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.save_rounded),
-                  label: Text(_saving
-                      ? 'Saving…'
-                      : 'Save Payment (${money.format(allocated)})'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _accentGreen,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: _borderColor,
-                    disabledForegroundColor: _textSecondary,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 14),
+                // Open ledger rows
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        ..._openEntries
+                            .map((e) => _allocationRow(e, money))
+                            .toList(),
+                        if (_openAdHocItems.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _accentAmber.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.event_note_rounded,
+                                    color: _accentAmber, size: 14),
+                                const SizedBox(width: 4),
+                                Text('Ad-Hoc Fees',
+                                    style: TextStyle(
+                                        color: _accentAmber,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          ..._openAdHocItems
+                              .map((e) => _adhocAllocationRow(e, money))
+                              .toList(),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+
+                const SizedBox(height: 8),
+
+                // Allocation summary
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _bgDark,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _borderColor),
+                  ),
+                  child: Row(children: [
+                    Text('Outstanding: ${money.format(outstanding)}',
+                        style: const TextStyle(
+                            color: _textSecondary, fontSize: 12)),
+                    const Spacer(),
+                    Text('Allocated: ${money.format(allocated)}',
+                        style: TextStyle(
+                            color:
+                                allocated > 0 ? _accentGreen : _textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold)),
+                  ]),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Mode + date + ref + notes
+                Row(children: [
+                  Expanded(
+                    child: DropdownButtonFormField<TermPaymentMode>(
+                      value: _mode,
+                      dropdownColor: _cardDark,
+                      style: const TextStyle(color: _textPrimary),
+                      decoration: const InputDecoration(
+                        labelText: 'Mode',
+                        labelStyle: TextStyle(color: _textSecondary),
+                        isDense: true,
+                      ),
+                      items: TermPaymentMode.values
+                          .map((m) =>
+                              DropdownMenuItem(value: m, child: Text(m.name)))
+                          .toList(),
+                      onChanged: _saving
+                          ? null
+                          : (v) =>
+                              setState(() => _mode = v ?? TermPaymentMode.CASH),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InkWell(
+                      onTap: _saving
+                          ? null
+                          : () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _paidAt,
+                                firstDate: DateTime(2020),
+                                lastDate:
+                                    DateTime.now().add(const Duration(days: 1)),
+                              );
+                              if (picked != null) {
+                                setState(() => _paidAt = picked);
+                              }
+                            },
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Date',
+                          labelStyle: TextStyle(color: _textSecondary),
+                          isDense: true,
+                        ),
+                        child: Text(DateFormat('dd MMM yyyy').format(_paidAt),
+                            style: const TextStyle(color: _textPrimary)),
+                      ),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _refCtrl,
+                  style: const TextStyle(color: _textPrimary),
+                  decoration: const InputDecoration(
+                    labelText: 'Transaction Reference',
+                    labelStyle: TextStyle(color: _textSecondary),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _notesCtrl,
+                  style: const TextStyle(color: _textPrimary),
+                  maxLines: 1,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes',
+                    labelStyle: TextStyle(color: _textSecondary),
+                    isDense: true,
+                  ),
+                ),
+
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _accentRed.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: _accentRed.withOpacity(0.4)),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.warning_amber,
+                          color: _accentRed, size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(_error!,
+                            style: const TextStyle(
+                                color: _accentRed, fontSize: 12)),
+                      ),
+                    ]),
+                  ),
+                ],
+
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _saving || allocated <= 0 ? null : _submit,
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.save_rounded),
+                    label: Text(_saving
+                        ? 'Saving…'
+                        : 'Save Payment (${money.format(allocated)})'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accentGreen,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: _borderColor,
+                      disabledForegroundColor: _textSecondary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -616,8 +653,8 @@ class _MultiAllocationPaymentDialogState
                         fontWeight: FontWeight.w600)),
                 Text(
                     'Due ${DateFormat('dd MMM yyyy').format(e.dueDate)} • Bal ${money.format(e.balanceAmount)}',
-                    style: const TextStyle(
-                        color: _textSecondary, fontSize: 10)),
+                    style:
+                        const TextStyle(color: _textSecondary, fontSize: 10)),
               ],
             ),
           ),
@@ -637,8 +674,8 @@ class _MultiAllocationPaymentDialogState
                 prefixText: '₹ ',
                 prefixStyle: const TextStyle(color: _textSecondary),
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 hintText: '0',
                 hintStyle: const TextStyle(color: _textSecondary),
                 filled: true,
@@ -701,8 +738,8 @@ class _MultiAllocationPaymentDialogState
                         fontWeight: FontWeight.w600)),
                 Text(
                     'Due ${DateFormat('dd MMM yyyy').format(item.dueDate)} • Bal ${money.format(item.balanceAmount)}',
-                    style: const TextStyle(
-                        color: _textSecondary, fontSize: 10)),
+                    style:
+                        const TextStyle(color: _textSecondary, fontSize: 10)),
               ],
             ),
           ),
@@ -722,8 +759,8 @@ class _MultiAllocationPaymentDialogState
                 prefixText: '₹ ',
                 prefixStyle: const TextStyle(color: _textSecondary),
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 hintText: '0',
                 hintStyle: const TextStyle(color: _textSecondary),
                 filled: true,

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../data/repositories/fee_structure_v2_repository.dart';
 import '../../../data/services/fee_structure_excel_service.dart';
+import '../../../domain/entities/academic_year.dart';
 import '../../../domain/entities/fee_structure_v2.dart';
 import 'fee_structure_editor_screen.dart';
 import 'fee_structure_bulk_import_screen.dart';
@@ -33,6 +35,73 @@ class FeeStructureListScreen extends ConsumerStatefulWidget {
 class _FeeStructureListScreenState
     extends ConsumerState<FeeStructureListScreen> {
   bool _busy = false;
+
+  /// Academic year the sheet data will be attached to. Defaults to the
+  /// current year, but can be overridden manually.
+  String _selectedAcademicYear = AcademicYear.getCurrentYearCode();
+
+  /// Admin-configured active academic year (the doc with `isCurrent == true`
+  /// in `schools/{schoolId}/academicYears`).
+  String _activeAcademicYear = AcademicYear.getCurrentYearCode();
+
+  /// Available academic years for selection
+  List<String> _academicYears = [];
+
+  String? get _schoolId => ref.read(currentSessionProvider)?.schoolId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAcademicYears();
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _loadActiveAcademicYear());
+  }
+
+  /// Loads all academic years from Firestore for selection
+  Future<void> _loadAcademicYears() async {
+    if (_schoolId == null) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(_schoolId)
+          .collection('academicYears')
+          .orderBy('yearCode', descending: true)
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _academicYears =
+            snap.docs.map((d) => d['yearCode'].toString()).toList();
+        if (_academicYears.isEmpty) {
+          _academicYears = [AcademicYear.getCurrentYearCode()];
+        }
+      });
+    } catch (e) {
+      debugPrint('[FeeStructureList] Could not load academic years: $e');
+    }
+  }
+
+  /// Loads the active academic year from Firestore
+  Future<void> _loadActiveAcademicYear() async {
+    if (_schoolId == null) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(_schoolId)
+          .collection('academicYears')
+          .where('isCurrent', isEqualTo: true)
+          .limit(1)
+          .get();
+      if (snap.docs.isEmpty || !mounted) return;
+      final code = (snap.docs.first.data()['yearCode'] ?? '').toString();
+      if (code.isEmpty) return;
+      setState(() {
+        _selectedAcademicYear = code;
+        _activeAcademicYear = code;
+      });
+    } catch (e) {
+      debugPrint('[FeeStructureList] Could not load active academic year: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,31 +154,91 @@ class _FeeStructureListScreenState
           const SizedBox(width: 12),
         ],
       ),
-      body: structuresAsync.when(
-        loading: () =>
-            const Center(child: CircularProgressIndicator(color: _accentGreen)),
-        error: (e, _) => Center(
-            child: Text('Error: $e',
-                style: const TextStyle(color: _textSecondary))),
-        data: (list) {
-          if (list.isEmpty) {
-            return _emptyState(context, schoolId);
-          }
-          return Padding(
+      body: Column(
+        children: [
+          // Academic Year Selection
+          Container(
             padding: const EdgeInsets.all(16),
-            child: GridView.builder(
-              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 380,
-                mainAxisExtent: 200,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: list.length,
-              itemBuilder: (_, i) =>
-                  _StructureCard(structure: list[i], schoolId: schoolId),
+            decoration: BoxDecoration(
+              color: _cardDark,
+              border: Border(bottom: BorderSide(color: _borderColor, width: 1)),
             ),
-          );
-        },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Academic Year',
+                    style: TextStyle(
+                        color: _textPrimary, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _academicYears.map((yr) {
+                    final isSelected = _selectedAcademicYear == yr;
+                    final isCurrent = yr == _activeAcademicYear;
+                    return ChoiceChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isCurrent)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 4),
+                              child: Text('CURRENT',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600)),
+                            ),
+                          Text(yr,
+                              style: TextStyle(fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                      selected: isSelected,
+                      selectedColor: _accentGreen,
+                      backgroundColor: _cardDark,
+                      labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : _textPrimary,
+                          fontWeight: FontWeight.w600),
+                      side: BorderSide(
+                          color: isSelected ? _accentGreen : _borderColor),
+                      onSelected: _busy
+                          ? null
+                          : (_) => setState(() => _selectedAcademicYear = yr),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          // Fee Structures List
+          Expanded(
+            child: structuresAsync.when(
+              loading: () => const Center(
+                  child: CircularProgressIndicator(color: _accentGreen)),
+              error: (e, _) => Center(
+                  child: Text('Error: $e',
+                      style: const TextStyle(color: _textSecondary))),
+              data: (list) {
+                if (list.isEmpty) {
+                  return _emptyState(context, schoolId);
+                }
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: GridView.builder(
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 380,
+                      mainAxisExtent: 200,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
+                    itemCount: list.length,
+                    itemBuilder: (_, i) =>
+                        _StructureCard(structure: list[i], schoolId: schoolId),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -154,14 +283,18 @@ class _FeeStructureListScreenState
   Future<void> _downloadTemplate() async {
     setState(() => _busy = true);
     try {
-      final bytes = FeeStructureExcelService().buildTemplate();
+      // Use the selected academic year
+      final bytes = FeeStructureExcelService().buildTemplate(
+        academicYear: _selectedAcademicYear,
+      );
       final blob = html.Blob(
         [bytes],
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
       final url = html.Url.createObjectUrlFromBlob(blob);
+      final filename = 'fee_structures_template_$_selectedAcademicYear.xlsx';
       html.AnchorElement(href: url)
-        ..setAttribute('download', 'fee_structures_template.xlsx')
+        ..setAttribute('download', filename)
         ..click();
       html.Url.revokeObjectUrl(url);
       _toast('Template downloaded — fill it and re-upload.');
@@ -218,6 +351,7 @@ class _FeeStructureListScreenState
         builder: (_) => FeeStructureBulkImportScreen(
           schoolId: schoolId,
           parsed: parsed,
+          academicYear: _selectedAcademicYear,
         ),
       ));
     } on FeeStructureExcelParseException catch (e) {
@@ -256,8 +390,7 @@ class _FeeStructureListScreenState
                     padding: EdgeInsets.only(bottom: 8),
                     child: Text(
                       'The uploaded file has multiple sheets. Pick the ones you actually want to commit. Other sheets will be ignored.',
-                      style: TextStyle(
-                          color: _textSecondary, fontSize: 12),
+                      style: TextStyle(color: _textSecondary, fontSize: 12),
                     ),
                   ),
                   ...sheets.map((s) {
@@ -276,8 +409,8 @@ class _FeeStructureListScreenState
                       controlAffinity: ListTileControlAffinity.leading,
                       contentPadding: EdgeInsets.zero,
                       dense: true,
-                      title: Text(s,
-                          style: const TextStyle(color: _textPrimary)),
+                      title:
+                          Text(s, style: const TextStyle(color: _textPrimary)),
                     );
                   }),
                 ],
@@ -300,24 +433,19 @@ class _FeeStructureListScreenState
                   }
                 }),
                 child: Text(
-                  selected.length == sheets.length
-                      ? 'Clear all'
-                      : 'Select all',
+                  selected.length == sheets.length ? 'Clear all' : 'Select all',
                   style: const TextStyle(color: _accentBlue),
                 ),
               ),
               TextButton(
-                onPressed: selected.isEmpty
-                    ? null
-                    : () => Navigator.of(ctx).pop(
+                onPressed:
+                    selected.isEmpty ? null : () => Navigator.of(ctx).pop(
                         // preserve original sheet order
                         sheets.where(selected.contains).toList()),
                 child: Text(
                   'Import (${selected.length})',
                   style: TextStyle(
-                    color: selected.isEmpty
-                        ? _textSecondary
-                        : _accentGreen,
+                    color: selected.isEmpty ? _textSecondary : _accentGreen,
                   ),
                 ),
               ),
@@ -345,8 +473,7 @@ class _FeeStructureListScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close',
-                style: TextStyle(color: _accentBlue)),
+            child: const Text('Close', style: TextStyle(color: _accentBlue)),
           ),
         ],
       ),
@@ -358,8 +485,7 @@ class _FeeStructureListScreenState
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor:
-            error ? const Color(0xFFEF4444) : _accentGreen,
+        backgroundColor: error ? const Color(0xFFEF4444) : _accentGreen,
       ),
     );
   }
@@ -421,15 +547,14 @@ class _StructureCard extends ConsumerWidget {
                 ),
                 if (!structure.isActive)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: _textSecondary.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Text('Inactive',
-                        style: TextStyle(
-                            color: _textSecondary, fontSize: 10)),
+                        style: TextStyle(color: _textSecondary, fontSize: 10)),
                   ),
               ],
             ),
@@ -446,11 +571,11 @@ class _StructureCard extends ConsumerWidget {
                 const SizedBox(width: 4),
                 Text(
                   '${structure.applicableToClassIds.length} classes assigned',
-                  style:
-                      const TextStyle(color: _textSecondary, fontSize: 11),
+                  style: const TextStyle(color: _textSecondary, fontSize: 11),
                 ),
                 const Spacer(),
-                const Icon(Icons.chevron_right, color: _textSecondary, size: 18),
+                const Icon(Icons.chevron_right,
+                    color: _textSecondary, size: 18),
               ],
             ),
           ],

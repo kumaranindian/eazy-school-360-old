@@ -127,13 +127,16 @@ class _HolidayCalendarWidgetState extends State<HolidayCalendarWidget> {
   Widget _buildCalendarPanel() {
     return Container(
       color: _bgDark,
-      child: Column(
-        children: [
-          _buildMonthHeader(),
-          _buildWeekdayRow(),
-          _buildDayGrid(),
-          _buildLegend(),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildMonthHeader(),
+            _buildWeekdayRow(),
+            _buildDayGrid(),
+            _buildLegend(),
+          ],
+        ),
       ),
     );
   }
@@ -163,7 +166,8 @@ class _HolidayCalendarWidgetState extends State<HolidayCalendarWidget> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.chevron_right, color: _textPrimary, size: 22),
+            icon:
+                const Icon(Icons.chevron_right, color: _textPrimary, size: 22),
             onPressed: () => setState(() {
               _focusedMonth =
                   DateTime(_focusedMonth.year, _focusedMonth.month + 1);
@@ -232,8 +236,8 @@ class _HolidayCalendarWidgetState extends State<HolidayCalendarWidget> {
               if (dayNum < 1 || dayNum > daysInMonth) {
                 return const Expanded(child: SizedBox(height: 72));
               }
-              final date = DateTime(
-                  _focusedMonth.year, _focusedMonth.month, dayNum);
+              final date =
+                  DateTime(_focusedMonth.year, _focusedMonth.month, dayNum);
               return Expanded(child: _buildDayCell(date));
             }),
           );
@@ -304,9 +308,8 @@ class _HolidayCalendarWidgetState extends State<HolidayCalendarWidget> {
                               : isWknd
                                   ? Colors.orange
                                   : _textPrimary,
-                          fontWeight: isToday
-                              ? FontWeight.bold
-                              : FontWeight.normal,
+                          fontWeight:
+                              isToday ? FontWeight.bold : FontWeight.normal,
                           fontSize: 13,
                         ),
                       ),
@@ -314,8 +317,7 @@ class _HolidayCalendarWidgetState extends State<HolidayCalendarWidget> {
                   ),
                   if (hasHoliday && widget.isAdmin)
                     GestureDetector(
-                      onTap: () =>
-                          _showDayActions(date, holidays),
+                      onTap: () => _showDayActions(date, holidays),
                       child: const Icon(Icons.more_horiz,
                           color: _textSecondary, size: 14),
                     ),
@@ -396,7 +398,8 @@ class _HolidayCalendarWidgetState extends State<HolidayCalendarWidget> {
 
   Widget _buildSidePanel() {
     final monthHols = _monthHolidays;
-    final selectedHols = _selectedDay != null ? _dayHolidays(_selectedDay!) : <SchoolHoliday>[];
+    final selectedHols =
+        _selectedDay != null ? _dayHolidays(_selectedDay!) : <SchoolHoliday>[];
 
     return Container(
       color: _bgDark,
@@ -476,16 +479,12 @@ class _HolidayCalendarWidgetState extends State<HolidayCalendarWidget> {
             child: Row(
               children: [
                 _summaryChip(
-                    monthHols
-                        .where((h) => h.type == HolidayType.PUBLIC)
-                        .length,
+                    monthHols.where((h) => h.type == HolidayType.PUBLIC).length,
                     'Public',
                     const Color(0xFF3B82F6)),
                 const SizedBox(width: 8),
                 _summaryChip(
-                    monthHols
-                        .where((h) => h.type == HolidayType.SCHOOL)
-                        .length,
+                    monthHols.where((h) => h.type == HolidayType.SCHOOL).length,
                     'School',
                     const Color(0xFF8B5CF6)),
                 const SizedBox(width: 8),
@@ -537,9 +536,7 @@ class _HolidayCalendarWidgetState extends State<HolidayCalendarWidget> {
                 Text(
                   '${holiday.date.day}',
                   style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18),
+                      color: color, fontWeight: FontWeight.bold, fontSize: 18),
                 ),
                 Text(
                   DateFormat('MMM').format(holiday.date),
@@ -601,8 +598,8 @@ class _HolidayCalendarWidgetState extends State<HolidayCalendarWidget> {
       ),
       child: Text(
         _typeLabel(type),
-        style: TextStyle(
-            color: color, fontSize: 9, fontWeight: FontWeight.w600),
+        style:
+            TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -627,8 +624,8 @@ class _HolidayCalendarWidgetState extends State<HolidayCalendarWidget> {
       ),
       child: Text(
         '$count $label',
-        style: TextStyle(
-            color: color, fontSize: 10, fontWeight: FontWeight.w600),
+        style:
+            TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -665,8 +662,8 @@ class _HolidayCalendarWidgetState extends State<HolidayCalendarWidget> {
                   title: Text(h.title,
                       style: const TextStyle(color: _textPrimary)),
                   subtitle: Text(_typeLabel(h.type),
-                      style: const TextStyle(
-                          color: _textSecondary, fontSize: 11)),
+                      style:
+                          const TextStyle(color: _textSecondary, fontSize: 11)),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

@@ -38,8 +38,9 @@ class AdHocFeeAssignmentService {
     String? notes,
   }) async {
     try {
-      print('[AdHocFeeAssignment] Starting assignment creation for school: $schoolId');
-      
+      print(
+          '[AdHocFeeAssignment] Starting assignment creation for school: $schoolId');
+
       // Step 1: Get target students based on scope
       final targetStudents = await _getTargetStudents(
         schoolId: schoolId,
@@ -50,7 +51,8 @@ class AdHocFeeAssignmentService {
         studentIds: studentIds,
       );
 
-      print('[AdHocFeeAssignment] Found ${targetStudents.length} target students');
+      print(
+          '[AdHocFeeAssignment] Found ${targetStudents.length} target students');
 
       if (targetStudents.isEmpty) {
         throw Exception('No students found matching the criteria');
@@ -69,7 +71,9 @@ class AdHocFeeAssignmentService {
         scope: scope,
         classIds: classIds,
         sections: sections,
-        studentIds: studentIds.isEmpty ? targetStudents.map((s) => s.id).toList() : studentIds,
+        studentIds: studentIds.isEmpty
+            ? targetStudents.map((s) => s.id).toList()
+            : studentIds,
         studentCount: targetStudents.length,
         assignedCount: 0,
         totalAmount: amount * targetStudents.length,
@@ -83,33 +87,36 @@ class AdHocFeeAssignmentService {
       final assignmentId = await _assignmentRepo.create(schoolId, assignment);
       print('[AdHocFeeAssignment] Assignment created with ID: $assignmentId');
 
-    // Step 3: Create fee items for each student
-    final feeItems = <StudentFeeItem>[];
-    for (final student in targetStudents) {
-      final feeItem = StudentFeeItem(
-        id: '',
-        schoolId: schoolId,
-        studentId: student.studentNumber, // Use numeric student ID (e.g., "102")
-        studentName: student.name,
-        className: student.className,
-        section: student.section,
-        academicYear: academicYear,
-        categoryCode: categoryCode,
-        itemName: assignmentName,
-        amount: amount,
-        paidAmount: 0,
-        balanceAmount: amount,
-        dueDate: dueDate,
-        source: scope == 'custom' ? 'ad_hoc' : 'event',
-        adHocAssignmentId: assignmentId,
-        assignmentLevel: scope,
-        assignedBy: createdBy,
-        assignedAt: DateTime.now(),
-        notes: notes,
-        isActive: true,
-      );
-      feeItems.add(feeItem);
-    }
+      // Step 3: Create fee items for each student
+      final feeItems = <StudentFeeItem>[];
+      for (final student in targetStudents) {
+        print(
+            '[AdHocFeeAssignment] Creating fee item for student: docId=${student.id}, studentNumber=${student.studentNumber}, name=${student.name}');
+        final feeItem = StudentFeeItem(
+          id: '',
+          schoolId: schoolId,
+          studentId:
+              student.studentNumber, // Use numeric student ID (e.g., "102")
+          studentName: student.name,
+          className: student.className,
+          section: student.section,
+          academicYear: academicYear,
+          categoryCode: categoryCode,
+          itemName: assignmentName,
+          amount: amount,
+          paidAmount: 0,
+          balanceAmount: amount,
+          dueDate: dueDate,
+          source: scope == 'custom' ? 'ad_hoc' : 'event',
+          adHocAssignmentId: assignmentId,
+          assignmentLevel: scope,
+          assignedBy: createdBy,
+          assignedAt: DateTime.now(),
+          notes: notes,
+          isActive: true,
+        );
+        feeItems.add(feeItem);
+      }
 
       // Step 4: Batch create fee items
       print('[AdHocFeeAssignment] Creating ${feeItems.length} fee items...');
@@ -117,8 +124,10 @@ class AdHocFeeAssignmentService {
       print('[AdHocFeeAssignment] Fee items created successfully');
 
       // Step 5: Update assignment progress and mark complete in one operation
-      print('[AdHocFeeAssignment] Updating assignment progress and marking complete...');
-      await _assignmentRepo.updateProgressAndComplete(schoolId, assignmentId, targetStudents.length);
+      print(
+          '[AdHocFeeAssignment] Updating assignment progress and marking complete...');
+      await _assignmentRepo.updateProgressAndComplete(
+          schoolId, assignmentId, targetStudents.length);
       print('[AdHocFeeAssignment] Assignment completed successfully');
 
       return AssignmentResult(
@@ -149,30 +158,39 @@ class AdHocFeeAssignmentService {
       case 'school':
         // All students in the school - get from stream and filter by academic year
         final snapshot = await _studentRepo.getStudentsStream(schoolId).first;
-        students = snapshot.where((s) => s.academicYearCode == academicYear).toList();
+        students =
+            snapshot.where((s) => s.academicYearCode == academicYear).toList();
         break;
 
       case 'class':
         // Students in specific classes
         for (final className in classIds) {
-          final classSnapshot = await _studentRepo.getStudentsByClassStream(schoolId, className).first;
-          final filtered = classSnapshot.where((s) => s.academicYearCode == academicYear).toList();
+          final classSnapshot = await _studentRepo
+              .getStudentsByClassStream(schoolId, className)
+              .first;
+          final filtered = classSnapshot
+              .where((s) => s.academicYearCode == academicYear)
+              .toList();
           students.addAll(filtered);
         }
         break;
 
       case 'section':
         // Students in specific sections - get all and filter
-        final allSnapshot = await _studentRepo.getStudentsStream(schoolId).first;
+        final allSnapshot =
+            await _studentRepo.getStudentsStream(schoolId).first;
         students = allSnapshot
-            .where((s) => s.academicYearCode == academicYear && sections.contains(s.section))
+            .where((s) =>
+                s.academicYearCode == academicYear &&
+                sections.contains(s.section))
             .toList();
         break;
 
       case 'custom':
         // Specific students by ID
         for (final studentId in studentIds) {
-          final student = await _studentRepo.getStudentById(schoolId, studentId);
+          final student =
+              await _studentRepo.getStudentById(schoolId, studentId);
           if (student != null && student.academicYearCode == academicYear) {
             students.add(student);
           }
@@ -181,13 +199,15 @@ class AdHocFeeAssignmentService {
     }
 
     // Convert Student entities to StudentInfo
-    return students.map((s) => StudentInfo(
-      id: s.id,
-      studentNumber: s.studentId.toString(),
-      name: s.name,
-      className: s.className,
-      section: s.section,
-    )).toList();
+    return students
+        .map((s) => StudentInfo(
+              id: s.id,
+              studentNumber: s.studentId.toString(),
+              name: s.name,
+              className: s.className,
+              section: s.section,
+            ))
+        .toList();
   }
 
   /// Preview assignment before execution
@@ -231,12 +251,16 @@ class AdHocFeeAssignmentService {
     // Delete all fee items associated with this assignment
     // Note: This is a simplified version. In production, you might want to
     // check if any payments have been made before deleting.
-    final allItems = await _feeItemRepo.getByClass(schoolId, '', assignment.academicYear);
-    final assignmentItems = allItems.where((item) => item.adHocAssignmentId == assignmentId).toList();
+    final allItems =
+        await _feeItemRepo.getByClass(schoolId, '', assignment.academicYear);
+    final assignmentItems = allItems
+        .where((item) => item.adHocAssignmentId == assignmentId)
+        .toList();
 
     for (final item in assignmentItems) {
       if (item.paidAmount > 0) {
-        throw Exception('Cannot cancel assignment - some students have already paid');
+        throw Exception(
+            'Cannot cancel assignment - some students have already paid');
       }
       await _feeItemRepo.delete(schoolId, item.id);
     }
@@ -293,7 +317,8 @@ class StudentInfo {
   });
 }
 
-final adHocFeeAssignmentServiceProvider = Provider<AdHocFeeAssignmentService>((ref) {
+final adHocFeeAssignmentServiceProvider =
+    Provider<AdHocFeeAssignmentService>((ref) {
   return AdHocFeeAssignmentService(
     ref.watch(adHocFeeAssignmentRepositoryProvider),
     ref.watch(studentFeeItemRepositoryProvider),

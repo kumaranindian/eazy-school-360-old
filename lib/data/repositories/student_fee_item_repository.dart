@@ -10,8 +10,10 @@ class StudentFeeItemRepository {
 
   StudentFeeItemRepository(this._firestore);
 
-  CollectionReference<Map<String, dynamic>> _col(String schoolId) =>
-      _firestore.collection('schools').doc(schoolId).collection('studentFeeItems');
+  CollectionReference<Map<String, dynamic>> _col(String schoolId) => _firestore
+      .collection('schools')
+      .doc(schoolId)
+      .collection('studentFeeItems');
 
   /// Get all fee items for a student in a specific academic year
   Future<List<StudentFeeItem>> getByStudent(
@@ -19,14 +21,27 @@ class StudentFeeItemRepository {
     String studentId,
     String academicYear,
   ) async {
+    print(
+        '[StudentFeeItemRepository] getByStudent: schoolId=$schoolId, studentId=$studentId, academicYear=$academicYear');
+    // Query without orderBy to avoid composite index requirement
+    // Sort in memory instead
     final snap = await _col(schoolId)
         .where('studentId', isEqualTo: studentId)
         .where('academicYear', isEqualTo: academicYear)
         .where('isActive', isEqualTo: true)
-        .orderBy('dueDate')
         .get();
 
-    return snap.docs.map((d) => StudentFeeItem.fromFirestore(d)).toList();
+    print('[StudentFeeItemRepository] Found ${snap.docs.length} fee items');
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      print(
+          '  - ${doc.id}: studentId=${data['studentId']}, category=${data['categoryCode']}, amount=${data['amount']}');
+    }
+    final items =
+        snap.docs.map((d) => StudentFeeItem.fromFirestore(d)).toList();
+    // Sort by dueDate in memory
+    items.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    return items;
   }
 
   /// Stream fee items for a student
@@ -35,13 +50,19 @@ class StudentFeeItemRepository {
     String studentId,
     String academicYear,
   ) {
+    // Query without orderBy to avoid composite index requirement
+    // Sort in memory instead
     return _col(schoolId)
         .where('studentId', isEqualTo: studentId)
         .where('academicYear', isEqualTo: academicYear)
         .where('isActive', isEqualTo: true)
-        .orderBy('dueDate')
         .snapshots()
-        .map((snap) => snap.docs.map((d) => StudentFeeItem.fromFirestore(d)).toList());
+        .map((snap) {
+      final items =
+          snap.docs.map((d) => StudentFeeItem.fromFirestore(d)).toList();
+      items.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+      return items;
+    });
   }
 
   /// Get fee items by category for a student
@@ -51,15 +72,18 @@ class StudentFeeItemRepository {
     String academicYear,
     String categoryCode,
   ) async {
+    // Query without orderBy to avoid composite index requirement
     final snap = await _col(schoolId)
         .where('studentId', isEqualTo: studentId)
         .where('academicYear', isEqualTo: academicYear)
         .where('categoryCode', isEqualTo: categoryCode)
         .where('isActive', isEqualTo: true)
-        .orderBy('dueDate')
         .get();
 
-    return snap.docs.map((d) => StudentFeeItem.fromFirestore(d)).toList();
+    final items =
+        snap.docs.map((d) => StudentFeeItem.fromFirestore(d)).toList();
+    items.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    return items;
   }
 
   /// Get all outstanding (unpaid) fee items for a student
@@ -93,7 +117,8 @@ class StudentFeeItemRepository {
   }
 
   /// Update a fee item
-  Future<void> update(String schoolId, String itemId, StudentFeeItem item) async {
+  Future<void> update(
+      String schoolId, String itemId, StudentFeeItem item) async {
     await _col(schoolId).doc(itemId).update(item.toFirestore());
   }
 
@@ -219,15 +244,16 @@ class CategorySummary {
   });
 }
 
-final studentFeeItemRepositoryProvider = Provider<StudentFeeItemRepository>((ref) {
+final studentFeeItemRepositoryProvider =
+    Provider<StudentFeeItemRepository>((ref) {
   return StudentFeeItemRepository(FirebaseFirestore.instance);
 });
 
 /// Stream provider for student fee items
-final studentFeeItemsProvider = StreamProvider.family<List<StudentFeeItem>, ({String schoolId, String studentId, String academicYear})>(
+final studentFeeItemsProvider = StreamProvider.family<List<StudentFeeItem>,
+    ({String schoolId, String studentId, String academicYear})>(
   (ref, params) {
-    return ref
-        .watch(studentFeeItemRepositoryProvider)
-        .streamByStudent(params.schoolId, params.studentId, params.academicYear);
+    return ref.watch(studentFeeItemRepositoryProvider).streamByStudent(
+        params.schoolId, params.studentId, params.academicYear);
   },
 );

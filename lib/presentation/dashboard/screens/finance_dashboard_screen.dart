@@ -10,12 +10,14 @@ import '../../finance/screens/bill_management_screen.dart';
 import '../../finance/screens/student_fee_management_screen.dart';
 import '../../finance/screens/fee_structure_list_screen.dart';
 import 'finance_dashboard_home.dart';
+import '../../widgets/theme_toggle_button.dart';
 
 class FinanceDashboardScreen extends ConsumerStatefulWidget {
   const FinanceDashboardScreen({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<FinanceDashboardScreen> createState() => _FinanceDashboardScreenState();
+  ConsumerState<FinanceDashboardScreen> createState() =>
+      _FinanceDashboardScreenState();
 }
 
 // Menu index mapping:
@@ -27,16 +29,9 @@ class FinanceDashboardScreen extends ConsumerStatefulWidget {
 // 5 = Financial Reports
 // 6 = Fee Structures (term-wise)
 
-class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen> {
+class _FinanceDashboardScreenState
+    extends ConsumerState<FinanceDashboardScreen> {
   int _selectedIndex = 0;
-
-  // Dark theme colors (match other dashboards)
-  static const Color _bgDark = Color(0xFF0D1117);
-  static const Color _cardDark = Color(0xFF161B22);
-  static const Color _accentBlue = Color(0xFF4CAF50);
-  static const Color _textPrimary = Color(0xFFE6EDF3);
-  static const Color _textSecondary = Color(0xFF8B949E);
-  static const Color _borderColor = Color(0xFF30363D);
 
   @override
   Widget build(BuildContext context) {
@@ -48,13 +43,18 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 1024;
     final isTablet = screenWidth > 600 && screenWidth <= 1024;
-    
+
     if (session == null) {
-      return const Scaffold(backgroundColor: _bgDark, body: Center(child: Text('Access Denied', style: TextStyle(color: _textPrimary))));
+      return Scaffold(
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          body: Center(
+              child: Text('Access Denied',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface))));
     }
 
     return Scaffold(
-      backgroundColor: _bgDark,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       drawer: isDesktop ? null : _buildDrawer(context, session),
       body: Row(
         children: [
@@ -63,7 +63,9 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
             child: Column(
               children: [
                 _buildTopBar(context, session, isDesktop),
-                Expanded(child: _buildContent(context, session, isDesktop, isTablet)),
+                Expanded(
+                    child:
+                        _buildContent(context, session, isDesktop, isTablet)),
               ],
             ),
           ),
@@ -74,7 +76,7 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
 
   Widget _buildDrawer(BuildContext context, dynamic session) {
     return Drawer(
-      backgroundColor: _bgDark,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       child: SafeArea(
         child: Column(
           children: [
@@ -84,72 +86,118 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.asset('assets/images/eazyschool.png', width: 40, height: 40, fit: BoxFit.contain),
+                    child: Image.asset('assets/images/eazyschool.png',
+                        width: 40, height: 40, fit: BoxFit.contain),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Eazy School', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textPrimary)),
-                        Text('Finance Portal', style: TextStyle(fontSize: 11, color: _textSecondary)),
+                        Text('Eazy School',
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    Theme.of(context).colorScheme.onSurface)),
+                        Text('Finance Portal',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant)),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            Container(height: 1, color: _borderColor),
+            Container(height: 1, color: Theme.of(context).colorScheme.outline),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
                   _buildDrawerSectionHeader('Home'),
-                  _buildDrawerNavItem(context, Icons.dashboard_rounded, 'Dashboard', 0),
+                  _buildDrawerNavItem(
+                      context, Icons.dashboard_rounded, 'Dashboard', 0),
                   _buildDrawerSectionHeader('Students'),
-                  _buildDrawerNavItem(context, Icons.people_rounded, 'Student Directory', 1),
+                  _buildDrawerNavItem(
+                      context, Icons.people_rounded, 'Student Directory', 1),
                   _buildDrawerSectionHeader('Finance'),
-                  _buildDrawerNavItem(context, Icons.account_balance_wallet_rounded, 'Fee Management', 2),
-                  _buildDrawerNavItem(context, Icons.money_off_rounded, 'Expense Entry', 3),
-                  _buildDrawerNavItem(context, Icons.receipt_long_rounded, 'Bill Management', 4),
+                  _buildDrawerNavItem(
+                      context,
+                      Icons.account_balance_wallet_rounded,
+                      'Fee Management',
+                      2),
+                  _buildDrawerNavItem(
+                      context, Icons.money_off_rounded, 'Expense Entry', 3),
+                  _buildDrawerNavItem(context, Icons.receipt_long_rounded,
+                      'Bill Management', 4),
                   _buildDrawerSectionHeader('Term-wise Fees'),
-                  _buildDrawerNavItem(context, Icons.receipt_long_outlined, 'Fee Structures', 6),
-                  _buildDrawerNavItem(context, Icons.assignment_ind_outlined, 'Student Ledgers', 7),
+                  _buildDrawerNavItem(context, Icons.receipt_long_outlined,
+                      'Fee Structures', 6),
+                  _buildDrawerNavItem(context, Icons.assignment_ind_outlined,
+                      'Student Ledgers', 7),
                   _buildDrawerSectionHeader('Reports'),
-                  _buildDrawerNavItem(context, Icons.insights_rounded, 'Financial Reports', 5),
+                  _buildDrawerNavItem(
+                      context, Icons.insights_rounded, 'Financial Reports', 5),
                 ],
               ),
             ),
-            Container(height: 1, color: _borderColor),
+            Container(height: 1, color: Theme.of(context).colorScheme.outline),
             Container(
               margin: const EdgeInsets.all(12),
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(10), border: Border.all(color: _borderColor)),
+              decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                  border:
+                      Border.all(color: Theme.of(context).colorScheme.outline)),
               child: Row(
                 children: [
                   CircleAvatar(
-                    backgroundColor: _accentBlue,
+                    backgroundColor: const Color(0xFF4CAF50),
                     radius: 18,
-                    child: Text((session.displayName as String? ?? 'F')[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    child: Text(
+                        (session.displayName as String? ?? 'F')[0]
+                            .toUpperCase(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14)),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(session.displayName as String? ?? 'Finance User', style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis),
-                        Text(session.email as String? ?? '', style: const TextStyle(color: _textSecondary, fontSize: 10), overflow: TextOverflow.ellipsis),
+                        Text(session.displayName as String? ?? 'Finance User',
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13),
+                            overflow: TextOverflow.ellipsis),
+                        Text(session.email as String? ?? '',
+                            style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                                fontSize: 10),
+                            overflow: TextOverflow.ellipsis),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.logout_rounded, color: _textSecondary, size: 18),
+                    icon: Icon(Icons.logout_rounded,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        size: 18),
                     onPressed: () async {
                       Navigator.pop(context);
                       await ref.read(authProvider.notifier).signOut();
                       if (mounted) {
                         Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(builder: (_) => const EnhancedLoginScreen()),
+                          MaterialPageRoute(
+                              builder: (_) => const EnhancedLoginScreen()),
                           (route) => false,
                         );
                       }
@@ -164,12 +212,15 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
     );
   }
 
-  Widget _buildDrawerNavItem(BuildContext context, IconData icon, String label, int index) {
+  Widget _buildDrawerNavItem(
+      BuildContext context, IconData icon, String label, int index) {
     final isSelected = _selectedIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       child: Material(
-        color: isSelected ? _accentBlue.withOpacity(0.15) : Colors.transparent,
+        color: isSelected
+            ? const Color(0xFF4CAF50).withOpacity(0.15)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           onTap: () {
@@ -181,9 +232,20 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
-                Icon(icon, color: isSelected ? _accentBlue : _textSecondary, size: 20),
+                Icon(icon,
+                    color: isSelected
+                        ? const Color(0xFF4CAF50)
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    size: 20),
                 const SizedBox(width: 12),
-                Text(label, style: TextStyle(color: isSelected ? _textPrimary : _textSecondary, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, fontSize: 13)),
+                Text(label,
+                    style: TextStyle(
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.onSurface
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                        fontSize: 13)),
               ],
             ),
           ),
@@ -195,7 +257,7 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
   Widget _buildSideNavigation(BuildContext context, dynamic session) {
     return Container(
       width: 260,
-      color: _bgDark,
+      color: Theme.of(context).colorScheme.surface,
       child: Column(
         children: [
           // Logo Header
@@ -205,23 +267,33 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.asset('assets/images/eazyschool.png', width: 40, height: 40, fit: BoxFit.contain),
+                  child: Image.asset('assets/images/eazyschool.png',
+                      width: 40, height: 40, fit: BoxFit.contain),
                 ),
-                const SizedBox(width: 12),
-                const Expanded(
+                SizedBox(width: 12),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Eazy School', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textPrimary)),
-                      Text('Finance Portal', style: TextStyle(fontSize: 11, color: _textSecondary)),
+                      Text('Eazy School',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onSurface)),
+                      Text('Finance Portal',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant)),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          Container(height: 1, color: _borderColor),
-          
+          Container(height: 1, color: Theme.of(context).colorScheme.outline),
+
           // Navigation Items
           Expanded(
             child: ListView(
@@ -232,48 +304,76 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
                 _buildSideNavSectionHeader('Students'),
                 _buildSideNavItem(Icons.people_rounded, 'Student Directory', 1),
                 _buildSideNavSectionHeader('Finance'),
-                _buildSideNavItem(Icons.account_balance_wallet_rounded, 'Fee Management', 2),
+                _buildSideNavItem(
+                    Icons.account_balance_wallet_rounded, 'Fee Management', 2),
                 _buildSideNavItem(Icons.money_off_rounded, 'Expense Entry', 3),
-                _buildSideNavItem(Icons.receipt_long_rounded, 'Bill Management', 4),
+                _buildSideNavItem(
+                    Icons.receipt_long_rounded, 'Bill Management', 4),
                 _buildSideNavSectionHeader('Term-wise Fees'),
-                _buildSideNavItem(Icons.receipt_long_outlined, 'Fee Structures', 6),
-                _buildSideNavItem(Icons.assignment_ind_outlined, 'Student Ledgers', 7),
+                _buildSideNavItem(
+                    Icons.receipt_long_outlined, 'Fee Structures', 6),
+                _buildSideNavItem(
+                    Icons.assignment_ind_outlined, 'Student Ledgers', 7),
                 _buildSideNavSectionHeader('Reports'),
-                _buildSideNavItem(Icons.insights_rounded, 'Financial Reports', 5),
+                _buildSideNavItem(
+                    Icons.insights_rounded, 'Financial Reports', 5),
               ],
             ),
           ),
-          
+
           // User Info Footer
-          Container(height: 1, color: _borderColor),
+          Container(height: 1, color: Theme.of(context).colorScheme.outline),
           Container(
             margin: const EdgeInsets.all(12),
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(10), border: Border.all(color: _borderColor)),
+            decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+                border:
+                    Border.all(color: Theme.of(context).colorScheme.outline)),
             child: Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: _accentBlue,
+                  backgroundColor: const Color(0xFF4CAF50),
                   radius: 18,
-                  child: Text((session.displayName as String? ?? 'F')[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  child: Text(
+                      (session.displayName as String? ?? 'F')[0].toUpperCase(),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(session.displayName as String? ?? 'Finance User', style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis),
-                      Text(session.email as String? ?? '', style: const TextStyle(color: _textSecondary, fontSize: 10), overflow: TextOverflow.ellipsis),
+                      Text(session.displayName as String? ?? 'Finance User',
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13),
+                          overflow: TextOverflow.ellipsis),
+                      Text(session.email as String? ?? '',
+                          style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              fontSize: 10),
+                          overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.logout_rounded, color: _textSecondary, size: 18),
+                  icon: Icon(Icons.logout_rounded,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: 18),
                   onPressed: () async {
                     await ref.read(authProvider.notifier).signOut();
                     if (mounted) {
                       Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (_) => const EnhancedLoginScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const EnhancedLoginScreen()),
                         (route) => false,
                       );
                     }
@@ -290,14 +390,24 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
   Widget _buildDrawerSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Text(title.toUpperCase(), style: const TextStyle(color: _textSecondary, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+      child: Text(title.toUpperCase(),
+          style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2)),
     );
   }
 
   Widget _buildSideNavSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Text(title.toUpperCase(), style: const TextStyle(color: _textSecondary, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+      child: Text(title.toUpperCase(),
+          style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2)),
     );
   }
 
@@ -306,7 +416,9 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       child: Material(
-        color: isSelected ? _accentBlue.withOpacity(0.15) : Colors.transparent,
+        color: isSelected
+            ? const Color(0xFF4CAF50).withOpacity(0.15)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           onTap: () => setState(() => _selectedIndex = index),
@@ -315,9 +427,20 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
-                Icon(icon, color: isSelected ? _accentBlue : _textSecondary, size: 20),
+                Icon(icon,
+                    color: isSelected
+                        ? const Color(0xFF4CAF50)
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    size: 20),
                 const SizedBox(width: 12),
-                Text(label, style: TextStyle(color: isSelected ? _textPrimary : _textSecondary, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, fontSize: 13)),
+                Text(label,
+                    style: TextStyle(
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.onSurface
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                        fontSize: 13)),
               ],
             ),
           ),
@@ -328,27 +451,41 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
 
   String _getPageTitle() {
     switch (_selectedIndex) {
-      case 0: return 'Dashboard';
-      case 1: return 'Student Directory';
-      case 2: return 'Fee Management';
-      case 3: return 'Expense Entry';
-      case 4: return 'Bill Management';
-      case 5: return 'Financial Reports';
-      case 6: return 'Fee Structures';
-      default: return 'Dashboard';
+      case 0:
+        return 'Dashboard';
+      case 1:
+        return 'Student Directory';
+      case 2:
+        return 'Fee Management';
+      case 3:
+        return 'Expense Entry';
+      case 4:
+        return 'Bill Management';
+      case 5:
+        return 'Financial Reports';
+      case 6:
+        return 'Fee Structures';
+      default:
+        return 'Dashboard';
     }
   }
 
   Widget _buildTopBar(BuildContext context, dynamic session, bool isDesktop) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isDesktop ? 28 : 16, vertical: 14),
-      decoration: const BoxDecoration(color: _bgDark, border: Border(bottom: BorderSide(color: _borderColor, width: 1))),
+      padding:
+          EdgeInsets.symmetric(horizontal: isDesktop ? 28 : 16, vertical: 14),
+      decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border(
+              bottom: BorderSide(
+                  color: Theme.of(context).colorScheme.outline, width: 1))),
       child: Row(
         children: [
           if (!isDesktop) ...[
             Builder(
               builder: (ctx) => IconButton(
-                icon: const Icon(Icons.menu_rounded, color: _textPrimary, size: 24),
+                icon: Icon(Icons.menu_rounded,
+                    color: Theme.of(context).colorScheme.onSurface, size: 24),
                 onPressed: () => Scaffold.of(ctx).openDrawer(),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -357,42 +494,81 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
             const SizedBox(width: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.asset('assets/images/eazyschool.png', width: 36, height: 36, fit: BoxFit.contain),
+              child: Image.asset('assets/images/eazyschool.png',
+                  width: 36, height: 36, fit: BoxFit.contain),
             ),
             const SizedBox(width: 12),
           ],
-          Text(_getPageTitle(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _textPrimary)),
-          
+          Text(_getPageTitle(),
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface)),
+
           const Spacer(),
-          
+
+          // Theme toggle button
+          const ThemeToggleButton(),
+          const SizedBox(width: 12),
+
           // Notifications
           Stack(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(8), border: Border.all(color: _borderColor)),
-                child: const Icon(Icons.notifications_outlined, color: _textSecondary, size: 20),
+                decoration: BoxDecoration(
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: Theme.of(context).colorScheme.outline)),
+                child: Icon(Icons.notifications_outlined,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    size: 20),
               ),
-              Positioned(right: 4, top: 4, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle))),
+              Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                          color: Colors.red, shape: BoxShape.circle))),
             ],
           ),
-          
+
           if (isDesktop) ...[
             const SizedBox(width: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(8), border: Border.all(color: _borderColor)),
+              decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                  border:
+                      Border.all(color: Theme.of(context).colorScheme.outline)),
               child: Row(
                 children: [
                   CircleAvatar(
-                    backgroundColor: _accentBlue,
+                    backgroundColor: const Color(0xFF4CAF50),
                     radius: 14,
-                    child: Text((session.displayName as String? ?? 'F')[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    child: Text(
+                        (session.displayName as String? ?? 'F')[0]
+                            .toUpperCase(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12)),
                   ),
                   const SizedBox(width: 8),
-                  Text(session.displayName as String? ?? 'Finance', style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w500, fontSize: 13)),
+                  Text(session.displayName as String? ?? 'Finance',
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13)),
                   const SizedBox(width: 4),
-                  const Icon(Icons.keyboard_arrow_down, color: _textSecondary, size: 18),
+                  Icon(Icons.keyboard_arrow_down,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: 18),
                 ],
               ),
             ),
@@ -402,7 +578,8 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
     );
   }
 
-  Widget _buildContent(BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
+  Widget _buildContent(
+      BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
     switch (_selectedIndex) {
       case 0:
         return FinanceDashboardHome(
@@ -412,12 +589,18 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
           onNavigateToBills: () => setState(() => _selectedIndex = 4),
           onNavigateToReports: () => setState(() => _selectedIndex = 5),
         );
-      case 1: return const StudentManagementScreen();
-      case 2: return const StudentFeeManagementScreen();
-      case 3: return const ExpenseEntryScreen();
-      case 4: return const BillManagementScreen();
-      case 5: return const FinancialReportsScreen();
-      case 6: return const FeeStructureListScreen();
+      case 1:
+        return const StudentManagementScreen();
+      case 2:
+        return const StudentFeeManagementScreen();
+      case 3:
+        return const ExpenseEntryScreen();
+      case 4:
+        return const BillManagementScreen();
+      case 5:
+        return const FinancialReportsScreen();
+      case 6:
+        return const FeeStructureListScreen();
       default:
         return FinanceDashboardHome(
           onNavigateToStudents: () => setState(() => _selectedIndex = 1),
@@ -430,7 +613,8 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
   }
 
   // ignore: unused_element
-  Widget _buildUnusedDashboardContent(BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
+  Widget _buildUnusedDashboardContent(
+      BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
     return SingleChildScrollView(
       padding: EdgeInsets.all(isDesktop ? 24 : 16),
       child: Column(
@@ -441,12 +625,16 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [_accentBlue.withOpacity(0.15), _accentBlue.withOpacity(0.05)],
+                colors: [
+                  const Color(0xFF4CAF50).withOpacity(0.15),
+                  const Color(0xFF4CAF50).withOpacity(0.05)
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _accentBlue.withOpacity(0.3)),
+              border:
+                  Border.all(color: const Color(0xFF4CAF50).withOpacity(0.3)),
             ),
             child: Row(
               children: [
@@ -454,26 +642,42 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Welcome back, ${session.displayName ?? "Finance User"}!', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary)),
+                      Text(
+                          'Welcome back, ${session.displayName ?? "Finance User"}!',
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onSurface)),
                       const SizedBox(height: 4),
-                      const Text('Manage fees, expenses, and financial reports', style: TextStyle(color: _textSecondary)),
+                      Text('Manage fees, expenses, and financial reports',
+                          style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant)),
                     ],
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: _accentBlue.withOpacity(0.2), shape: BoxShape.circle),
-                  child: const Icon(Icons.account_balance_wallet_rounded, color: _accentBlue, size: 28),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFF4CAF50).withOpacity(0.2),
+                      shape: BoxShape.circle),
+                  child: const Icon(Icons.account_balance_wallet_rounded,
+                      color: Color(0xFF4CAF50), size: 28),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // Quick Stats
-          Text('Overview', style: TextStyle(fontSize: isDesktop ? 18 : 16, fontWeight: FontWeight.bold, color: _textPrimary)),
+          Text('Overview',
+              style: TextStyle(
+                  fontSize: isDesktop ? 18 : 16,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: 12),
-          
+
           GridView.count(
             crossAxisCount: isDesktop ? 4 : (isTablet ? 2 : 2),
             shrinkWrap: true,
@@ -482,19 +686,30 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
             mainAxisSpacing: 12,
             childAspectRatio: isDesktop ? 1.8 : 1.5,
             children: [
-              _buildStatCard('Total Students', '0', Icons.people_rounded, const Color(0xFF3B82F6)),
-              _buildStatCard('Fees Collected', '₹0', Icons.account_balance_wallet_rounded, const Color(0xFF10B981)),
-              _buildStatCard('Outstanding Fees', '₹0', Icons.account_balance_rounded, const Color(0xFFF59E0B)),
-              _buildStatCard('Total Expenses', '₹0', Icons.money_off_rounded, const Color(0xFFEF4444)),
+              _buildStatCard('Total Students', '0', Icons.people_rounded,
+                  const Color(0xFF3B82F6)),
+              _buildStatCard(
+                  'Fees Collected',
+                  '₹0',
+                  Icons.account_balance_wallet_rounded,
+                  const Color(0xFF10B981)),
+              _buildStatCard('Outstanding Fees', '₹0',
+                  Icons.account_balance_rounded, const Color(0xFFF59E0B)),
+              _buildStatCard('Total Expenses', '₹0', Icons.money_off_rounded,
+                  const Color(0xFFEF4444)),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Quick Actions
-          Text('Quick Actions', style: TextStyle(fontSize: isDesktop ? 18 : 16, fontWeight: FontWeight.bold, color: _textPrimary)),
+          Text('Quick Actions',
+              style: TextStyle(
+                  fontSize: isDesktop ? 18 : 16,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: 12),
-          
+
           GridView.count(
             crossAxisCount: isDesktop ? 4 : (isTablet ? 2 : 2),
             shrinkWrap: true,
@@ -503,12 +718,22 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
             mainAxisSpacing: 12,
             childAspectRatio: isDesktop ? 2.5 : 2.0,
             children: [
-              _buildQuickActionCard('Add Student', Icons.person_add_rounded, () => setState(() => _selectedIndex = 1)),
-              _buildQuickActionCard('Fee Management', Icons.account_balance_wallet_rounded, () => setState(() => _selectedIndex = 2)),
-              _buildQuickActionCard('Collect Fee', Icons.payment_rounded, () => setState(() => _selectedIndex = 3)),
-              _buildQuickActionCard('Add Expense', Icons.add_card_rounded, () => setState(() => _selectedIndex = 4)),
-              _buildQuickActionCard('Bill Management', Icons.receipt_long_rounded, () => setState(() => _selectedIndex = 5)),
-              _buildQuickActionCard('Financial Reports', Icons.insights_rounded, () => setState(() => _selectedIndex = 6)),
+              _buildQuickActionCard('Add Student', Icons.person_add_rounded,
+                  () => setState(() => _selectedIndex = 1)),
+              _buildQuickActionCard(
+                  'Fee Management',
+                  Icons.account_balance_wallet_rounded,
+                  () => setState(() => _selectedIndex = 2)),
+              _buildQuickActionCard('Collect Fee', Icons.payment_rounded,
+                  () => setState(() => _selectedIndex = 3)),
+              _buildQuickActionCard('Add Expense', Icons.add_card_rounded,
+                  () => setState(() => _selectedIndex = 4)),
+              _buildQuickActionCard(
+                  'Bill Management',
+                  Icons.receipt_long_rounded,
+                  () => setState(() => _selectedIndex = 5)),
+              _buildQuickActionCard('Financial Reports', Icons.insights_rounded,
+                  () => setState(() => _selectedIndex = 6)),
             ],
           ),
         ],
@@ -516,13 +741,14 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+      String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _cardDark,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -533,7 +759,9 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8)),
                 child: Icon(icon, color: color, size: 20),
               ),
             ],
@@ -541,8 +769,15 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary)),
-              Text(title, style: const TextStyle(fontSize: 12, color: _textSecondary)),
+              Text(value,
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface)),
+              Text(title,
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ],
           ),
         ],
@@ -550,9 +785,10 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
     );
   }
 
-  Widget _buildQuickActionCard(String title, IconData icon, VoidCallback onTap) {
+  Widget _buildQuickActionCard(
+      String title, IconData icon, VoidCallback onTap) {
     return Material(
-      color: _cardDark,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -561,25 +797,32 @@ class _FinanceDashboardScreenState extends ConsumerState<FinanceDashboardScreen>
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _borderColor),
+            border: Border.all(color: Theme.of(context).colorScheme.outline),
           ),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: _accentBlue.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                child: Icon(icon, color: _accentBlue, size: 20),
+                decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Icon(icon, color: const Color(0xFF4CAF50), size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, color: _textPrimary, fontSize: 13)),
+                child: Text(title,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontSize: 13)),
               ),
-              const Icon(Icons.arrow_forward_ios, color: _textSecondary, size: 14),
+              Icon(Icons.arrow_forward_ios,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  size: 14),
             ],
           ),
         ),
       ),
     );
   }
-
 }

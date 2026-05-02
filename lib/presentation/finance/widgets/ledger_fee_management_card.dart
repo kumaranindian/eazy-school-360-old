@@ -111,6 +111,73 @@ class _LedgerFeeManagementCardState
       final ledger = await repo.getByStudent(
           widget.schoolId, widget.studentId, widget.academicYear);
 
+      // Load arrears from student_fee_details collection
+      List<TermLedgerEntry> arrearsEntries = [];
+      try {
+        final arrearsSnap = await FirebaseFirestore.instance
+            .collection('schools')
+            .doc(widget.schoolId)
+            .collection('student_fee_details')
+            .where('stuId', isEqualTo: int.tryParse(widget.studentId) ?? 0)
+            .where('isArrearsRecord', isEqualTo: true)
+            .get();
+
+        for (final doc in arrearsSnap.docs) {
+          final data = doc.data();
+          final arrearsAy = (data['academicYear'] ?? '').toString();
+          final balanceArrearTuition =
+              (data['balanceArrearTuitionFees'] as num?)?.toDouble() ?? 0;
+          final balanceArrearExam =
+              (data['balanceArrearExamFees'] as num?)?.toDouble() ?? 0;
+          final balanceArrearVan =
+              (data['balanceArrearVanFees'] as num?)?.toDouble() ?? 0;
+
+          if (balanceArrearTuition > 0) {
+            arrearsEntries.add(TermLedgerEntry(
+              termId: 'ARREARS_TUITION_$arrearsAy',
+              termName: 'Tuition Arrears',
+              sequence: 999,
+              amount: balanceArrearTuition,
+              dueDate: DateTime.now(),
+              paidAmount: 0,
+              category: 'TUITION',
+              isArrear: true,
+              sourceAcademicYear: arrearsAy,
+            ));
+          }
+          if (balanceArrearExam > 0) {
+            arrearsEntries.add(TermLedgerEntry(
+              termId: 'ARREARS_EXAM_$arrearsAy',
+              termName: 'Exam Arrears',
+              sequence: 999,
+              amount: balanceArrearExam,
+              dueDate: DateTime.now(),
+              paidAmount: 0,
+              category: 'EXAM',
+              isArrear: true,
+              sourceAcademicYear: arrearsAy,
+            ));
+          }
+          if (balanceArrearVan > 0) {
+            arrearsEntries.add(TermLedgerEntry(
+              termId: 'ARREARS_VAN_$arrearsAy',
+              termName: 'Van Arrears',
+              sequence: 999,
+              amount: balanceArrearVan,
+              dueDate: DateTime.now(),
+              paidAmount: 0,
+              category: 'VAN',
+              isArrear: true,
+              sourceAcademicYear: arrearsAy,
+            ));
+          }
+        }
+        print(
+            '[LedgerFeeManagementCard] Loaded ${arrearsEntries.length} arrears entries for student ${widget.studentId}');
+      } catch (e) {
+        print('[LedgerFeeManagementCard] Failed to load arrears: $e');
+      }
+
       // Best-effort load of category catalog so we can render friendly
       // names rather than UPPER_SNAKE codes. Failure is non-fatal — we
       // fall back to the code itself.
@@ -137,9 +204,11 @@ class _LedgerFeeManagementCardState
           widget.studentId,
           widget.academicYear,
         );
-        print('[LedgerFeeManagementCard] Loaded ${adhocItems.length} ad-hoc fee items for student ${widget.studentId}');
+        print(
+            '[LedgerFeeManagementCard] Loaded ${adhocItems.length} ad-hoc fee items for student ${widget.studentId}');
         for (final item in adhocItems) {
-          print('  - ${item.itemName}: amount=${item.amount}, paid=${item.paidAmount}, balance=${item.balanceAmount}');
+          print(
+              '  - ${item.itemName}: amount=${item.amount}, paid=${item.paidAmount}, balance=${item.balanceAmount}');
         }
       } catch (e) {
         print('[LedgerFeeManagementCard] Failed to load ad-hoc fee items: $e');
@@ -160,8 +229,8 @@ class _LedgerFeeManagementCardState
           final classKey = widget.className.trim();
           matching = allInAy.where((s) {
             if (s.applicableToClassIds.isEmpty) return s.isDefault;
-            return s.applicableToClassIds.any(
-                (c) => c.trim().toLowerCase() == classKey.toLowerCase());
+            return s.applicableToClassIds
+                .any((c) => c.trim().toLowerCase() == classKey.toLowerCase());
           }).toList();
           // Default structures are valid fallbacks if no class-specific
           // match exists.
@@ -175,7 +244,13 @@ class _LedgerFeeManagementCardState
 
       if (!mounted) return;
       setState(() {
-        _ledger = ledger;
+        // Merge arrears entries with ledger termStatus
+        if (ledger != null && arrearsEntries.isNotEmpty) {
+          final mergedTermStatus = [...ledger.termStatus, ...arrearsEntries];
+          _ledger = ledger.copyWith(termStatus: mergedTermStatus);
+        } else {
+          _ledger = ledger;
+        }
         _categoriesByCode = cats;
         _matchingStructures = matching;
         _allStructuresForAy = allInAy;
@@ -194,13 +269,15 @@ class _LedgerFeeManagementCardState
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return _shell(child: const Padding(
+      return _shell(
+          child: const Padding(
         padding: EdgeInsets.symmetric(vertical: 40),
         child: Center(child: CircularProgressIndicator(color: _accentGreen)),
       ));
     }
     if (_error != null) {
-      return _shell(child: Padding(
+      return _shell(
+          child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: Center(
           child: Text('Failed to load fees: $_error',
@@ -217,10 +294,8 @@ class _LedgerFeeManagementCardState
     final isMobile = width <= 600;
 
     final ledger = _ledger!;
-    final regular =
-        ledger.termStatus.where((e) => !e.isArrear).toList();
-    final arrears =
-        ledger.termStatus.where((e) => e.isArrear).toList();
+    final regular = ledger.termStatus.where((e) => !e.isArrear).toList();
+    final arrears = ledger.termStatus.where((e) => e.isArrear).toList();
 
     // Group arrears by source AY so we can render one card-group per AY.
     final arrearsByAy = <String, List<TermLedgerEntry>>{};
@@ -230,12 +305,12 @@ class _LedgerFeeManagementCardState
     }
     final arrearsAys = arrearsByAy.keys.toList()..sort();
 
-    return _shell(child: Column(
+    return _shell(
+        child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          const Icon(Icons.account_balance_wallet_rounded,
-              color: _accentGreen),
+          const Icon(Icons.account_balance_wallet_rounded, color: _accentGreen),
           const SizedBox(width: 8),
           Text('Fee Management • AY ${ledger.academicYear}',
               style: TextStyle(
@@ -265,8 +340,8 @@ class _LedgerFeeManagementCardState
   }
 
   Widget _emptyState() {
-    final money = NumberFormat.currency(
-        locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final money =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final hasMatching = _matchingStructures.isNotEmpty;
     final hasAnyForAy = _allStructuresForAy.isNotEmpty;
     final showFallback = !hasMatching && hasAnyForAy;
@@ -291,21 +366,17 @@ class _LedgerFeeManagementCardState
           const SizedBox(height: 6),
           Text(
               'Lookup: studentId="${widget.studentId}" • class="${widget.className}" • AY="${widget.academicYear}"',
-              style: const TextStyle(
-                  color: _textSecondary, fontSize: 11)),
+              style: const TextStyle(color: _textSecondary, fontSize: 11)),
           const SizedBox(height: 12),
-
           if (hasMatching) ...[
             const Text('Matching fee structure(s) for this class:',
-                style: TextStyle(
-                    color: _textSecondary, fontSize: 12)),
+                style: TextStyle(color: _textSecondary, fontSize: 12)),
             const SizedBox(height: 8),
             for (final s in _matchingStructures)
               _structureRow(s, money, isFallback: false),
           ] else if (showFallback) ...[
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: _accentAmber.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(6),
@@ -313,21 +384,17 @@ class _LedgerFeeManagementCardState
               ),
               child: Text(
                   'No structure is tagged for class "${widget.className}" in AY ${widget.academicYear}. Pick one below or fix the structure\'s applicable classes.',
-                  style: const TextStyle(
-                      color: _accentAmber, fontSize: 12)),
+                  style: const TextStyle(color: _accentAmber, fontSize: 12)),
             ),
             const SizedBox(height: 10),
-            const Text(
-                'Other structures active in this AY (assign manually):',
-                style: TextStyle(
-                    color: _textSecondary, fontSize: 12)),
+            const Text('Other structures active in this AY (assign manually):',
+                style: TextStyle(color: _textSecondary, fontSize: 12)),
             const SizedBox(height: 8),
             for (final s in _allStructuresForAy)
               _structureRow(s, money, isFallback: true),
           ] else ...[
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: _accentRed.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(6),
@@ -335,24 +402,20 @@ class _LedgerFeeManagementCardState
               ),
               child: Text(
                   'No active fee structure exists for AY ${widget.academicYear}. Create one via Finance → Fee Structures → New Structure, then return here.',
-                  style: const TextStyle(
-                      color: _accentRed, fontSize: 12)),
+                  style: const TextStyle(color: _accentRed, fontSize: 12)),
             ),
           ],
-
           if (_assignError != null) ...[
             const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: _accentRed.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: _accentRed.withOpacity(0.4)),
               ),
               child: Text(_assignError!,
-                  style: const TextStyle(
-                      color: _accentRed, fontSize: 12)),
+                  style: const TextStyle(color: _accentRed, fontSize: 12)),
             ),
           ],
         ],
@@ -403,8 +466,8 @@ class _LedgerFeeManagementCardState
                 const SizedBox(height: 2),
                 Text(
                     '${s.type.name} • ${s.termCount} term(s) • Total ${money.format(s.totalAmount)} • Classes: ${s.applicableToClassIds.isEmpty ? "—" : s.applicableToClassIds.join(", ")}',
-                    style: const TextStyle(
-                        color: _textSecondary, fontSize: 10)),
+                    style:
+                        const TextStyle(color: _textSecondary, fontSize: 10)),
               ],
             ),
           ),
@@ -417,17 +480,16 @@ class _LedgerFeeManagementCardState
                     height: 12,
                     child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 2))
-                : Icon(isFallback
-                    ? Icons.warning_amber_rounded
-                    : Icons.check_circle_outline_rounded,
+                : Icon(
+                    isFallback
+                        ? Icons.warning_amber_rounded
+                        : Icons.check_circle_outline_rounded,
                     size: 14),
             label: Text(isFallback ? 'Assign anyway' : 'Assign & Load'),
             style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  isFallback ? _accentAmber : _accentGreen,
+              backgroundColor: isFallback ? _accentAmber : _accentGreen,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               textStyle: const TextStyle(fontSize: 12),
             ),
           ),
@@ -438,8 +500,8 @@ class _LedgerFeeManagementCardState
 
   Future<void> _assign(FeeStructureV2 s) async {
     if (widget.studentId.isEmpty) {
-      setState(() => _assignError =
-          'Student id is empty — cannot create a ledger.');
+      setState(
+          () => _assignError = 'Student id is empty — cannot create a ledger.');
       return;
     }
     setState(() {
@@ -455,7 +517,8 @@ class _LedgerFeeManagementCardState
         className: widget.className,
         section: widget.section,
         structureId: s.id,
-        parentName: (widget.parentName ?? '').isEmpty ? null : widget.parentName,
+        parentName:
+            (widget.parentName ?? '').isEmpty ? null : widget.parentName,
         parentPhone:
             (widget.parentPhone ?? '').isEmpty ? null : widget.parentPhone,
         onConflict: ConflictAction.SKIP,
@@ -482,9 +545,11 @@ class _LedgerFeeManagementCardState
         child: child,
       );
 
-  Widget _yearGroup(
-      String title, List<TermLedgerEntry> entries, bool isDesktop, bool isMobile,
-      {required bool highlight, required bool padWithCatalog, List<StudentFeeItem> adHocItems = const []}) {
+  Widget _yearGroup(String title, List<TermLedgerEntry> entries, bool isDesktop,
+      bool isMobile,
+      {required bool highlight,
+      required bool padWithCatalog,
+      List<StudentFeeItem> adHocItems = const []}) {
     if (entries.isEmpty && !padWithCatalog) return const SizedBox.shrink();
 
     // Group entries by category and sum totals/paid/balance.
@@ -498,13 +563,17 @@ class _LedgerFeeManagementCardState
     }
 
     // Add ad-hoc fees to the category aggregation
+    // Use uppercase category code to match the catalog keys
     for (final item in adHocItems) {
+      final categoryKey = item.categoryCode.toUpperCase();
       final agg = byCategory.putIfAbsent(
-          item.categoryCode, () => _CategoryAggregate(category: item.categoryCode));
+          categoryKey, () => _CategoryAggregate(category: categoryKey));
       agg.total += item.amount;
       agg.paid += item.paidAmount;
       agg.balance += item.balanceAmount;
       agg.hasAdHoc = true;
+      print(
+          '[_yearGroup] Added ad-hoc item: ${item.itemName}, category=$categoryKey, amount=${item.amount}');
     }
 
     // When rendering the current-year group, pad with every category
@@ -514,14 +583,13 @@ class _LedgerFeeManagementCardState
     // groups skip this — they must stay faithful to what was carried.
     if (padWithCatalog) {
       for (final code in _categoriesByCode.keys) {
-        byCategory.putIfAbsent(
-            code, () => _CategoryAggregate(category: code));
+        byCategory.putIfAbsent(code, () => _CategoryAggregate(category: code));
       }
     }
 
     final cats = byCategory.values.toList()
-      ..sort((a, b) => _categoryRank(a.category)
-          .compareTo(_categoryRank(b.category)));
+      ..sort((a, b) =>
+          _categoryRank(a.category).compareTo(_categoryRank(b.category)));
 
     const totalColor = _accentAmber;
     const paidColor = _accentGreen;
@@ -532,8 +600,8 @@ class _LedgerFeeManagementCardState
           'TOTAL FEES', totalColor, cats, _BreakdownKind.total, isMobile),
       _breakdownCard(
           'PAID FEES', paidColor, cats, _BreakdownKind.paid, isMobile),
-      _breakdownCard('BALANCE FEES', balanceColor, cats,
-          _BreakdownKind.balance, isMobile),
+      _breakdownCard(
+          'BALANCE FEES', balanceColor, cats, _BreakdownKind.balance, isMobile),
     ];
 
     return Column(
@@ -589,8 +657,8 @@ class _LedgerFeeManagementCardState
 
   Widget _breakdownCard(String title, Color accent,
       List<_CategoryAggregate> cats, _BreakdownKind kind, bool isMobile) {
-    final money = NumberFormat.currency(
-        locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final money =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     // Calculate total outside of Builder to ensure proper accumulation
     double sum = 0;
@@ -643,8 +711,7 @@ class _LedgerFeeManagementCardState
                   children: [
                     Text(_categoryLabel(c.category),
                         style: TextStyle(
-                            color: _textPrimary,
-                            fontSize: isMobile ? 11 : 12)),
+                            color: _textPrimary, fontSize: isMobile ? 11 : 12)),
                     if (c.hasAdHoc) ...[
                       const SizedBox(width: 6),
                       Container(
@@ -653,8 +720,8 @@ class _LedgerFeeManagementCardState
                         decoration: BoxDecoration(
                           color: _accentAmber.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(3),
-                          border: Border.all(
-                              color: _accentAmber.withOpacity(0.4)),
+                          border:
+                              Border.all(color: _accentAmber.withOpacity(0.4)),
                         ),
                         child: Text('AD-HOC',
                             style: TextStyle(
@@ -665,11 +732,12 @@ class _LedgerFeeManagementCardState
                       ),
                     ],
                     const Spacer(),
-                    Text(money.format(switch (kind) {
-                      _BreakdownKind.total => c.total,
-                      _BreakdownKind.paid => c.paid,
-                      _BreakdownKind.balance => c.balance,
-                    }),
+                    Text(
+                        money.format(switch (kind) {
+                          _BreakdownKind.total => c.total,
+                          _BreakdownKind.paid => c.paid,
+                          _BreakdownKind.balance => c.balance,
+                        }),
                         style: TextStyle(
                             color: _textPrimary,
                             fontSize: isMobile ? 11 : 12,
@@ -699,22 +767,32 @@ class _LedgerFeeManagementCardState
   }
 
   Widget _actionRow(StudentFeeLedger ledger) {
-    final outstanding = ledger.totalPending;
+    // Calculate actual outstanding balance from ledger entries instead of relying on totalPending field
+    // which may not be updated correctly
+    double actualOutstanding = 0;
+    for (final entry in ledger.termStatus) {
+      actualOutstanding += entry.balanceAmount;
+    }
+    // Also include ad-hoc fee items
+    for (final item in _adhocFeeItems) {
+      actualOutstanding += item.balanceAmount;
+    }
+
+    final outstanding =
+        actualOutstanding > 0 ? actualOutstanding : ledger.totalPending;
     return Wrap(
       spacing: 10,
       runSpacing: 8,
       children: [
         ElevatedButton.icon(
-          onPressed:
-              outstanding > 0 ? () => _openPaymentDialog(ledger) : null,
+          onPressed: outstanding > 0 ? () => _openPaymentDialog(ledger) : null,
           icon: const Icon(Icons.payments_rounded, size: 16),
           label: const Text('Make Payment'),
           style: ElevatedButton.styleFrom(
             backgroundColor: _accentGreen,
             foregroundColor: Colors.white,
             disabledBackgroundColor: _borderColor,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
         ),
         if (widget.onBillHistory != null)
@@ -725,8 +803,7 @@ class _LedgerFeeManagementCardState
             style: OutlinedButton.styleFrom(
               foregroundColor: _textPrimary,
               side: const BorderSide(color: _borderColor),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
       ],

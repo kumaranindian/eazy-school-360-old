@@ -11,16 +11,18 @@ class FeeCategoryRepository {
   final FirebaseFirestore _firestore;
   FeeCategoryRepository(this._firestore);
 
-  CollectionReference<Map<String, dynamic>> _col(String schoolId) =>
-      _firestore.collection('schools').doc(schoolId).collection('feeCategories');
+  CollectionReference<Map<String, dynamic>> _col(String schoolId) => _firestore
+      .collection('schools')
+      .doc(schoolId)
+      .collection('feeCategories');
 
   /// Streams the active categories for a school, sorted by [sortOrder]. Seeds
   /// the standard categories on the first read so the catalog always has the
   /// four built-in entries.
   Stream<List<FeeCategory>> streamCategories(String schoolId) async* {
     await _ensureDefaults(schoolId);
-    yield* _col(schoolId).orderBy('sortOrder').snapshots().map((snap) =>
-        snap.docs.map((d) => FeeCategory.fromFirestore(d)).toList());
+    yield* _col(schoolId).orderBy('sortOrder').snapshots().map(
+        (snap) => snap.docs.map((d) => FeeCategory.fromFirestore(d)).toList());
   }
 
   /// One-shot fetch (used by services that don't need a stream).
@@ -35,7 +37,10 @@ class FeeCategoryRepository {
       final ref = _col(schoolId).doc(category.code);
       final exists = (await ref.get()).exists;
       final data = category.toFirestore();
-      if (!exists) data['createdAt'] = FieldValue.serverTimestamp();
+      if (!exists) {
+        data['createdAt'] = FieldValue.serverTimestamp();
+      }
+      data['updatedAt'] = FieldValue.serverTimestamp();
       await ref.set(data, SetOptions(merge: true));
     } catch (e) {
       throw Exception('Failed to upsert fee category "${category.code}": $e');

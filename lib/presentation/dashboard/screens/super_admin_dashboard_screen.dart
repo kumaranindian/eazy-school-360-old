@@ -6,15 +6,18 @@ import '../../../core/security/route_guard.dart';
 import '../../../core/security/role_policy.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../auth/screens/enhanced_login_screen.dart';
+import '../../widgets/theme_toggle_button.dart';
 
 class SuperAdminDashboardScreen extends ConsumerStatefulWidget {
   const SuperAdminDashboardScreen({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<SuperAdminDashboardScreen> createState() => _SuperAdminDashboardScreenState();
+  ConsumerState<SuperAdminDashboardScreen> createState() =>
+      _SuperAdminDashboardScreenState();
 }
 
-class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardScreen> {
+class _SuperAdminDashboardScreenState
+    extends ConsumerState<SuperAdminDashboardScreen> {
   int _selectedIndex = 0;
 
   @override
@@ -31,7 +34,7 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 1024;
     final isTablet = screenWidth > 600 && screenWidth <= 1024;
-    
+
     if (session == null || !session.isSuperAdmin) {
       return const Scaffold(
         body: Center(
@@ -41,19 +44,19 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Row(
         children: [
           // Side Navigation for Desktop
           if (isDesktop) _buildSideNavigation(context, session),
-          
+
           // Main Content Area
           Expanded(
             child: Column(
               children: [
                 // Top Bar
                 _buildTopBar(context, session, isDesktop),
-                
+
                 // Content
                 Expanded(
                   child: _buildContent(context, session, isDesktop, isTablet),
@@ -71,7 +74,7 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
     return Container(
       width: 280,
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
+        color: Theme.of(context).colorScheme.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.15),
@@ -95,7 +98,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
                     ),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 28),
+                  child: const Icon(Icons.admin_panel_settings_rounded,
+                      color: Colors.white, size: 28),
                 ),
                 const SizedBox(width: 14),
                 const Expanded(
@@ -124,7 +128,7 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
             ),
           ),
           const Divider(color: Colors.white12, height: 1),
-          
+
           // Navigation Items
           Expanded(
             child: ListView(
@@ -138,7 +142,7 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
               ],
             ),
           ),
-          
+
           // User Info at Bottom
           Container(
             padding: const EdgeInsets.all(16),
@@ -154,7 +158,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
                   radius: 20,
                   child: Text(
                     (session.displayName as String? ?? 'S')[0].toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -244,7 +249,7 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
         vertical: 16,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
@@ -266,58 +271,67 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 24),
+                child: const Icon(Icons.admin_panel_settings_rounded,
+                    color: Colors.white, size: 24),
               ),
               const SizedBox(width: 14),
             ],
-            
+
             // Page Title
             Text(
               _getPageTitle(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
-            
+
             const Spacer(),
-            
+
+            // Theme toggle button
+            const ThemeToggleButton(),
+            const SizedBox(width: 16),
+
             // Search Bar (Desktop only)
             if (isDesktop)
               Container(
                 width: 300,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F7FA),
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: TextField(
                   decoration: InputDecoration(
                     hintText: 'Search schools, users...',
-                    hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-                    prefixIcon: Icon(Icons.search, color: Colors.grey.shade500, size: 20),
+                    hintStyle:
+                        TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                    prefixIcon: Icon(Icons.search,
+                        color: Colors.grey.shade500, size: 20),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
-            
+
             const SizedBox(width: 16),
-            
+
             // Notifications
             _buildIconButton(Icons.notifications_outlined, badge: '5'),
-            
+
             const SizedBox(width: 8),
-            
+
             // User Menu
             PopupMenuButton<String>(
               offset: const Offset(0, 50),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F7FA),
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -326,15 +340,20 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
                       backgroundColor: const Color(0xFF7B1FA2),
                       radius: 16,
                       child: Text(
-                        (session.displayName as String? ?? 'S')[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        (session.displayName as String? ?? 'S')[0]
+                            .toUpperCase(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
                       ),
                     ),
                     if (isDesktop) ...[
                       const SizedBox(width: 10),
                       Text(
                         session.displayName as String? ?? 'Super Admin',
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14),
                       ),
                       const SizedBox(width: 4),
                       const Icon(Icons.keyboard_arrow_down, size: 20),
@@ -343,10 +362,26 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
                 ),
               ),
               itemBuilder: (context) => [
-                const PopupMenuItem(value: 'profile', child: ListTile(leading: Icon(Icons.person_outline), title: Text('Profile'), dense: true)),
-                const PopupMenuItem(value: 'settings', child: ListTile(leading: Icon(Icons.settings_outlined), title: Text('Settings'), dense: true)),
+                const PopupMenuItem(
+                    value: 'profile',
+                    child: ListTile(
+                        leading: Icon(Icons.person_outline),
+                        title: Text('Profile'),
+                        dense: true)),
+                const PopupMenuItem(
+                    value: 'settings',
+                    child: ListTile(
+                        leading: Icon(Icons.settings_outlined),
+                        title: Text('Settings'),
+                        dense: true)),
                 const PopupMenuDivider(),
-                const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout, color: Colors.red), title: Text('Logout', style: TextStyle(color: Colors.red)), dense: true)),
+                const PopupMenuItem(
+                    value: 'logout',
+                    child: ListTile(
+                        leading: Icon(Icons.logout, color: Colors.red),
+                        title:
+                            Text('Logout', style: TextStyle(color: Colors.red)),
+                        dense: true)),
               ],
               onSelected: (value) async {
                 if (value == 'logout') {
@@ -354,7 +389,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
                   if (mounted) {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (context) => const EnhancedLoginScreen()),
+                      MaterialPageRoute(
+                          builder: (context) => const EnhancedLoginScreen()),
                     );
                   }
                 }
@@ -372,10 +408,11 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: const Color(0xFFF5F7FA),
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(icon, color: const Color(0xFF1A1A2E), size: 22),
+          child: Icon(icon,
+              color: Theme.of(context).colorScheme.onSurface, size: 22),
         ),
         if (badge != null)
           Positioned(
@@ -389,7 +426,10 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
               ),
               child: Text(
                 badge,
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -399,16 +439,23 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
 
   String _getPageTitle() {
     switch (_selectedIndex) {
-      case 0: return 'Dashboard';
-      case 1: return 'School Management';
-      case 2: return 'Global Staff';
-      case 3: return 'System Reports';
-      case 4: return 'Settings';
-      default: return 'Dashboard';
+      case 0:
+        return 'Dashboard';
+      case 1:
+        return 'School Management';
+      case 2:
+        return 'Global Staff';
+      case 3:
+        return 'System Reports';
+      case 4:
+        return 'Settings';
+      default:
+        return 'Dashboard';
     }
   }
 
-  Widget _buildContent(BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
+  Widget _buildContent(
+      BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
     switch (_selectedIndex) {
       case 0:
         return _buildDashboardHome(context, session, isDesktop, isTablet);
@@ -417,10 +464,11 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
     }
   }
 
-  Widget _buildDashboardHome(BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
+  Widget _buildDashboardHome(
+      BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
     final crossAxisCount = isDesktop ? 4 : (isTablet ? 3 : 2);
     final padding = isDesktop ? 32.0 : 16.0;
-    
+
     return SingleChildScrollView(
       padding: EdgeInsets.all(padding),
       child: Column(
@@ -487,25 +535,26 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
                       color: Colors.white.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 64),
+                    child: const Icon(Icons.admin_panel_settings_rounded,
+                        color: Colors.white, size: 64),
                   ),
               ],
             ),
           ),
-          
+
           SizedBox(height: isDesktop ? 32 : 24),
-          
+
           // Stats Cards
           Text(
             'Platform Overview',
             style: TextStyle(
               fontSize: isDesktop ? 22 : 18,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF1A1A2E),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 16),
-          
+
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -514,26 +563,35 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
             mainAxisSpacing: 16,
             childAspectRatio: isDesktop ? 1.4 : 1.2,
             children: [
-              _buildStatCard('Total Schools', '156', Icons.school_rounded, const Color(0xFF7B1FA2), '+12 this month', true),
-              _buildStatCard('Active Users', '2,847', Icons.people_rounded, const Color(0xFF2196F3), '+156 this week', true),
-              _buildStatCard('Pending', '23', Icons.pending_actions_rounded, const Color(0xFFFF9800), 'Needs attention', false),
-              _buildStatCard('System Health', '99.9%', Icons.health_and_safety_rounded, const Color(0xFF4CAF50), 'All systems go', true),
+              _buildStatCard('Total Schools', '156', Icons.school_rounded,
+                  const Color(0xFF7B1FA2), '+12 this month', true),
+              _buildStatCard('Active Users', '2,847', Icons.people_rounded,
+                  const Color(0xFF2196F3), '+156 this week', true),
+              _buildStatCard('Pending', '23', Icons.pending_actions_rounded,
+                  const Color(0xFFFF9800), 'Needs attention', false),
+              _buildStatCard(
+                  'System Health',
+                  '99.9%',
+                  Icons.health_and_safety_rounded,
+                  const Color(0xFF4CAF50),
+                  'All systems go',
+                  true),
             ],
           ),
-          
+
           SizedBox(height: isDesktop ? 32 : 24),
-          
+
           // Quick Actions
           Text(
             'Quick Actions',
             style: TextStyle(
               fontSize: isDesktop ? 22 : 18,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF1A1A2E),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 16),
-          
+
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -542,15 +600,28 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
             mainAxisSpacing: 16,
             childAspectRatio: isDesktop ? 1.5 : 1.3,
             children: [
-              _buildActionCard('Add School', Icons.add_business_rounded, const Color(0xFF7B1FA2), () {}),
-              _buildActionCard('Manage Users', Icons.people_alt_rounded, const Color(0xFF2196F3), () => setState(() => _selectedIndex = 2)),
-              _buildActionCard('View Reports', Icons.analytics_rounded, const Color(0xFFFF9800), () => setState(() => _selectedIndex = 3)),
-              _buildActionCard('Settings', Icons.settings_rounded, const Color(0xFF4CAF50), () => setState(() => _selectedIndex = 4)),
+              _buildActionCard('Add School', Icons.add_business_rounded,
+                  const Color(0xFF7B1FA2), () {}),
+              _buildActionCard(
+                  'Manage Users',
+                  Icons.people_alt_rounded,
+                  const Color(0xFF2196F3),
+                  () => setState(() => _selectedIndex = 2)),
+              _buildActionCard(
+                  'View Reports',
+                  Icons.analytics_rounded,
+                  const Color(0xFFFF9800),
+                  () => setState(() => _selectedIndex = 3)),
+              _buildActionCard(
+                  'Settings',
+                  Icons.settings_rounded,
+                  const Color(0xFF4CAF50),
+                  () => setState(() => _selectedIndex = 4)),
             ],
           ),
-          
+
           SizedBox(height: isDesktop ? 32 : 24),
-          
+
           // Recent Schools
           _buildRecentSchools(isDesktop),
         ],
@@ -570,17 +641,22 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
         children: [
           Icon(icon, color: Colors.white, size: 16),
           const SizedBox(width: 6),
-          Text(label, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color, String subtitle, bool isPositive) {
+  Widget _buildStatCard(String title, String value, IconData icon, Color color,
+      String subtitle, bool isPositive) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -608,7 +684,9 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isPositive ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                  color: isPositive
+                      ? Colors.green.withOpacity(0.1)
+                      : Colors.orange.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -625,17 +703,17 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
           const Spacer(),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1A1A2E),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             title,
             style: TextStyle(
-              color: Colors.grey.shade600,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 14,
             ),
           ),
@@ -644,9 +722,10 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
     );
   }
 
-  Widget _buildActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildActionCard(
+      String title, IconData icon, Color color, VoidCallback onTap) {
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -677,10 +756,10 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
               const SizedBox(height: 14),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A2E),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -695,7 +774,7 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -711,12 +790,12 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Recent Schools',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A1A2E),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               TextButton(
@@ -726,7 +805,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
             ],
           ),
           const SizedBox(height: 16),
-          _buildSchoolItem('Springfield Elementary', 'Springfield, IL', 35, true),
+          _buildSchoolItem(
+              'Springfield Elementary', 'Springfield, IL', 35, true),
           _buildSchoolItem('Riverside High School', 'Riverside, CA', 85, true),
           _buildSchoolItem('Oak Valley Academy', 'Oak Valley, TX', 42, false),
           _buildSchoolItem('Maple Grove School', 'Maple Grove, MN', 28, true),
@@ -735,7 +815,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
     );
   }
 
-  Widget _buildSchoolItem(String name, String location, int staffCount, bool isActive) {
+  Widget _buildSchoolItem(
+      String name, String location, int staffCount, bool isActive) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -755,11 +836,16 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
               children: [
                 Text(
                   name,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.onSurface),
                 ),
                 Text(
                   '$location • $staffCount staff',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 13),
                 ),
               ],
             ),
@@ -767,7 +853,9 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: isActive ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+              color: isActive
+                  ? Colors.green.withOpacity(0.1)
+                  : Colors.orange.withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -789,20 +877,22 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.construction_rounded, size: 80, color: Colors.grey.shade400),
+          Icon(Icons.construction_rounded,
+              size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(height: 20),
           Text(
             'Coming Soon',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Colors.grey.shade600,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'This feature is under development',
-            style: TextStyle(color: Colors.grey.shade500),
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -812,7 +902,7 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
   Widget _buildBottomNavigation(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.08),
@@ -824,7 +914,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
       child: SafeArea(
         child: NavigationBar(
           selectedIndex: _selectedIndex,
-          onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+          onDestinationSelected: (index) =>
+              setState(() => _selectedIndex = index),
           backgroundColor: Colors.transparent,
           elevation: 0,
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,

@@ -20,24 +20,18 @@ import '../../auth/screens/enhanced_login_screen.dart';
 import '../../shared/screens/holiday_calendar_screen.dart';
 import '../../staff/screens/my_payslips_screen.dart';
 import '../../staff/screens/class_teacher_leave_screen.dart';
+import '../../widgets/theme_toggle_button.dart';
 
 class StaffDashboardScreen extends ConsumerStatefulWidget {
   const StaffDashboardScreen({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<StaffDashboardScreen> createState() => _StaffDashboardScreenState();
+  ConsumerState<StaffDashboardScreen> createState() =>
+      _StaffDashboardScreenState();
 }
 
 class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
   int _selectedIndex = 0;
-
-  // Dark theme colors - same as Admin dashboard
-  static const Color _bgDark = Color(0xFF0D1117);
-  static const Color _cardDark = Color(0xFF161B22);
-  static const Color _accentBlue = Color(0xFF4CAF50);
-  static const Color _textPrimary = Color(0xFFE6EDF3);
-  static const Color _textSecondary = Color(0xFF8B949E);
-  static const Color _borderColor = Color(0xFF30363D);
 
   @override
   Widget build(BuildContext context) {
@@ -53,13 +47,18 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 1024;
     final isTablet = screenWidth > 600 && screenWidth <= 1024;
-    
+
     if (session == null || !session.isStaff) {
-      return const Scaffold(backgroundColor: _bgDark, body: Center(child: Text('Access Denied', style: TextStyle(color: _textPrimary))));
+      return Scaffold(
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          body: Center(
+              child: Text('Access Denied',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface))));
     }
 
     return Scaffold(
-      backgroundColor: _bgDark,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       drawer: isDesktop ? null : _buildDrawer(context, session),
       body: Row(
         children: [
@@ -68,7 +67,9 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
             child: Column(
               children: [
                 _buildTopBar(context, session, isDesktop),
-                Expanded(child: _buildContent(context, session, isDesktop, isTablet)),
+                Expanded(
+                    child:
+                        _buildContent(context, session, isDesktop, isTablet)),
               ],
             ),
           ),
@@ -79,7 +80,7 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
 
   Widget _buildDrawer(BuildContext context, dynamic session) {
     return Drawer(
-      backgroundColor: _bgDark,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       child: SafeArea(
         child: Column(
           children: [
@@ -89,72 +90,116 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.asset('assets/images/eazyschool.png', width: 40, height: 40, fit: BoxFit.contain),
+                    child: Image.asset('assets/images/eazyschool.png',
+                        width: 40, height: 40, fit: BoxFit.contain),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Eazy School', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textPrimary)),
-                        Text('Staff Portal', style: TextStyle(fontSize: 11, color: _textSecondary)),
+                        Text('Eazy School',
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    Theme.of(context).colorScheme.onSurface)),
+                        Text('Staff Portal',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant)),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            Container(height: 1, color: _borderColor),
+            Container(height: 1, color: Theme.of(context).colorScheme.outline),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  _buildDrawerNavItem(context, Icons.dashboard_rounded, 'Dashboard', 0),
-                  _buildDrawerNavItem(context, Icons.event_note_rounded, 'Apply Leave', 1),
-                  _buildDrawerNavItem(context, Icons.access_time_rounded, 'Request Permission', 2),
-                  _buildDrawerNavItem(context, Icons.history_rounded, 'My Leaves', 4),
-                  _buildDrawerNavItem(context, Icons.fact_check_rounded, 'My Permissions', 5),
-                  _buildDrawerNavItem(context, Icons.calendar_month_rounded, 'Holiday Calendar', 6),
-                  _buildDrawerNavItem(context, Icons.payments_rounded, 'My Payslips', 7),
-                  _buildDrawerNavItem(context, Icons.school_rounded, 'Student Leaves', 8),
+                  _buildDrawerNavItem(
+                      context, Icons.dashboard_rounded, 'Dashboard', 0),
+                  _buildDrawerNavItem(
+                      context, Icons.event_note_rounded, 'Apply Leave', 1),
+                  _buildDrawerNavItem(context, Icons.access_time_rounded,
+                      'Request Permission', 2),
+                  _buildDrawerNavItem(
+                      context, Icons.history_rounded, 'My Leaves', 4),
+                  _buildDrawerNavItem(
+                      context, Icons.fact_check_rounded, 'My Permissions', 5),
+                  _buildDrawerNavItem(context, Icons.calendar_month_rounded,
+                      'Holiday Calendar', 6),
+                  _buildDrawerNavItem(
+                      context, Icons.payments_rounded, 'My Payslips', 7),
+                  _buildDrawerNavItem(
+                      context, Icons.school_rounded, 'Student Leaves', 8),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Divider(color: Color(0xFF30363D)),
                   ),
-                  _buildDrawerNavItem(context, Icons.person_rounded, 'My Profile', 3),
+                  _buildDrawerNavItem(
+                      context, Icons.person_rounded, 'My Profile', 3),
                 ],
               ),
             ),
-            Container(height: 1, color: _borderColor),
+            Container(height: 1, color: Theme.of(context).colorScheme.outline),
             Container(
               margin: const EdgeInsets.all(12),
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(10), border: Border.all(color: _borderColor)),
+              decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                  border:
+                      Border.all(color: Theme.of(context).colorScheme.outline)),
               child: Row(
                 children: [
                   CircleAvatar(
-                    backgroundColor: _accentBlue,
+                    backgroundColor: const Color(0xFF4CAF50),
                     radius: 18,
-                    child: Text((session.displayName as String? ?? 'S')[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    child: Text(
+                        (session.displayName as String? ?? 'S')[0]
+                            .toUpperCase(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14)),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(session.displayName as String? ?? 'Staff', style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis),
-                        Text(session.email as String? ?? '', style: const TextStyle(color: _textSecondary, fontSize: 10), overflow: TextOverflow.ellipsis),
+                        Text(session.displayName as String? ?? 'Staff',
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13),
+                            overflow: TextOverflow.ellipsis),
+                        Text(session.email as String? ?? '',
+                            style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                                fontSize: 10),
+                            overflow: TextOverflow.ellipsis),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.logout_rounded, color: _textSecondary, size: 18),
+                    icon: Icon(Icons.logout_rounded,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        size: 18),
                     onPressed: () async {
                       Navigator.pop(context);
                       await ref.read(authProvider.notifier).signOut();
                       if (mounted) {
                         Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(builder: (_) => const EnhancedLoginScreen()),
+                          MaterialPageRoute(
+                              builder: (_) => const EnhancedLoginScreen()),
                           (route) => false,
                         );
                       }
@@ -169,12 +214,15 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
     );
   }
 
-  Widget _buildDrawerNavItem(BuildContext context, IconData icon, String label, int index) {
+  Widget _buildDrawerNavItem(
+      BuildContext context, IconData icon, String label, int index) {
     final isSelected = _selectedIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       child: Material(
-        color: isSelected ? _accentBlue.withOpacity(0.15) : Colors.transparent,
+        color: isSelected
+            ? const Color(0xFF4CAF50).withOpacity(0.15)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           onTap: () {
@@ -186,9 +234,20 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
-                Icon(icon, color: isSelected ? _accentBlue : _textSecondary, size: 20),
+                Icon(icon,
+                    color: isSelected
+                        ? const Color(0xFF4CAF50)
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    size: 20),
                 const SizedBox(width: 12),
-                Text(label, style: TextStyle(color: isSelected ? _textPrimary : _textSecondary, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, fontSize: 13)),
+                Text(label,
+                    style: TextStyle(
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.onSurface
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                        fontSize: 13)),
               ],
             ),
           ),
@@ -200,7 +259,7 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
   Widget _buildSideNavigation(BuildContext context, dynamic session) {
     return Container(
       width: 260,
-      color: _bgDark,
+      color: Theme.of(context).colorScheme.surface,
       child: Column(
         children: [
           // Logo Header
@@ -210,22 +269,32 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.asset('assets/images/eazyschool.png', width: 42, height: 42, fit: BoxFit.contain),
+                  child: Image.asset('assets/images/eazyschool.png',
+                      width: 42, height: 42, fit: BoxFit.contain),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Eazy School', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary)),
-                      Text('Staff Portal', style: TextStyle(fontSize: 11, color: _textSecondary)),
+                      Text('Eazy School',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onSurface)),
+                      Text('Staff Portal',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant)),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          
+
           // Navigation Items
           Expanded(
             child: ListView(
@@ -233,10 +302,12 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
               children: [
                 _buildNavItem(Icons.dashboard_rounded, 'Dashboard', 0),
                 _buildNavItem(Icons.event_note_rounded, 'Apply Leave', 1),
-                _buildNavItem(Icons.access_time_rounded, 'Request Permission', 2),
+                _buildNavItem(
+                    Icons.access_time_rounded, 'Request Permission', 2),
                 _buildNavItem(Icons.history_rounded, 'My Leaves', 4),
                 _buildNavItem(Icons.fact_check_rounded, 'My Permissions', 5),
-                _buildNavItem(Icons.calendar_month_rounded, 'Holiday Calendar', 6),
+                _buildNavItem(
+                    Icons.calendar_month_rounded, 'Holiday Calendar', 6),
                 _buildNavItem(Icons.payments_rounded, 'My Payslips', 7),
                 _buildNavItem(Icons.school_rounded, 'Student Leaves', 8),
                 const SizedBox(height: 8),
@@ -244,35 +315,61 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
               ],
             ),
           ),
-          
+
           // User Info
           Container(
             margin: const EdgeInsets.all(12),
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(10), border: Border.all(color: _borderColor)),
+            decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+                border:
+                    Border.all(color: Theme.of(context).colorScheme.outline)),
             child: Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: _accentBlue,
+                  backgroundColor: const Color(0xFF4CAF50),
                   radius: 18,
-                  child: Text((session.displayName as String? ?? 'S')[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  child: Text(
+                      (session.displayName as String? ?? 'S')[0].toUpperCase(),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(session.displayName as String? ?? 'Staff', style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis),
-                      Text(session.email as String? ?? '', style: const TextStyle(color: _textSecondary, fontSize: 10), overflow: TextOverflow.ellipsis),
+                      Text(session.displayName as String? ?? 'Staff',
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13),
+                          overflow: TextOverflow.ellipsis),
+                      Text(session.email as String? ?? '',
+                          style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              fontSize: 10),
+                          overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.logout_rounded, color: _textSecondary, size: 18),
+                  icon: Icon(Icons.logout_rounded,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: 18),
                   onPressed: () async {
                     await ref.read(authRepositoryProvider).signOut();
                     if (mounted) {
-                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const EnhancedLoginScreen()));
+                      Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  const EnhancedLoginScreen()));
                     }
                   },
                 ),
@@ -287,7 +384,10 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
   Widget _buildMyLeaves(BuildContext context, dynamic session, bool isDesktop) {
     final schoolId = session.schoolId as String?;
     if (schoolId == null) {
-      return const Center(child: Text('No school selected', style: TextStyle(color: _textSecondary)));
+      return Center(
+          child: Text('No school selected',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)));
     }
 
     final leavesAsync = ref.watch(staffLeaveApplicationsProvider((
@@ -298,8 +398,12 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
     return Padding(
       padding: EdgeInsets.all(isDesktop ? 28 : 16),
       child: leavesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
-        error: (e, __) => Center(child: Text('Failed to load leave history: $e', style: const TextStyle(color: _textSecondary))),
+        loading: () => Center(
+            child: CircularProgressIndicator(color: const Color(0xFF4CAF50))),
+        error: (e, __) => Center(
+            child: Text('Failed to load leave history: $e',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant))),
         data: (leaves) {
           if (leaves.isEmpty) {
             return _buildMyLeavesPlaceholder();
@@ -310,21 +414,31 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final leave = leaves[index];
-              final title = (leave.metadata?['leaveTypeName'] as String?) ?? leave.leaveTypeCode;
-              final dateText = '${leave.startDate.day.toString().padLeft(2, '0')}/${leave.startDate.month.toString().padLeft(2, '0')}/${leave.startDate.year}'
+              final title = (leave.metadata?['leaveTypeName'] as String?) ??
+                  leave.leaveTypeCode;
+              final dateText =
+                  '${leave.startDate.day.toString().padLeft(2, '0')}/${leave.startDate.month.toString().padLeft(2, '0')}/${leave.startDate.year}'
                   ' - '
                   '${leave.endDate.day.toString().padLeft(2, '0')}/${leave.endDate.month.toString().padLeft(2, '0')}/${leave.endDate.year}';
 
               return Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
+                decoration: BoxDecoration(
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: Theme.of(context).colorScheme.outline)),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: _accentBlue.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(Icons.event_note_rounded, color: _accentBlue, size: 20),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.event_note_rounded,
+                          color: Color(0xFF4CAF50), size: 20),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -334,16 +448,33 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
                           Row(
                             children: [
                               Expanded(
-                                child: Text(title, style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14), overflow: TextOverflow.ellipsis),
+                                child: Text(title,
+                                    style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14),
+                                    overflow: TextOverflow.ellipsis),
                               ),
                               const SizedBox(width: 8),
                               _buildLeaveStatusChip(leave.status),
                             ],
                           ),
                           const SizedBox(height: 6),
-                          Text(dateText, style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                          Text(dateText,
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  fontSize: 12)),
                           const SizedBox(height: 6),
-                          Text('Days: ${leave.totalDays}', style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                          Text('Days: ${leave.totalDays}',
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  fontSize: 12)),
                         ],
                       ),
                     ),
@@ -357,20 +488,29 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
     );
   }
 
-  Widget _buildMyPermissions(BuildContext context, dynamic session, bool isDesktop) {
+  Widget _buildMyPermissions(
+      BuildContext context, dynamic session, bool isDesktop) {
     final schoolId = session.schoolId as String?;
     if (schoolId == null) {
-      return const Center(child: Text('No school selected', style: TextStyle(color: _textSecondary)));
+      return Center(
+          child: Text('No school selected',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)));
     }
 
-    final permissionsAsync = ref.watch(staffPermissionRequestsProvider((schoolId: schoolId, applicantId: session.uid)));
+    final permissionsAsync = ref.watch(staffPermissionRequestsProvider(
+        (schoolId: schoolId, applicantId: session.uid)));
     final typesAsync = ref.watch(activePermissionTypesProvider(schoolId));
 
     return Padding(
       padding: EdgeInsets.all(isDesktop ? 28 : 16),
       child: permissionsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
-        error: (e, __) => Center(child: Text('Failed to load permission history: $e', style: const TextStyle(color: _textSecondary))),
+        loading: () => Center(
+            child: CircularProgressIndicator(color: const Color(0xFF4CAF50))),
+        error: (e, __) => Center(
+            child: Text('Failed to load permission history: $e',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant))),
         data: (permissions) {
           if (permissions.isEmpty) {
             return Center(
@@ -379,13 +519,26 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(color: _cardDark, shape: BoxShape.circle),
-                    child: const Icon(Icons.fact_check_rounded, size: 56, color: _textSecondary),
+                    decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                        shape: BoxShape.circle),
+                    child: Icon(Icons.fact_check_rounded,
+                        size: 56,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: 20),
-                  const Text('My Permissions', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _textPrimary)),
+                  Text('My Permissions',
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface)),
                   const SizedBox(height: 8),
-                  const Text('No permission requests yet', style: TextStyle(color: _textSecondary)),
+                  Text('No permission requests yet',
+                      style: TextStyle(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant)),
                 ],
               ),
             );
@@ -404,19 +557,30 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final p = permissions[index];
-              final typeName = typeMap[p.permissionTypeId] ?? (p.metadata?['permissionTypeName'] as String?) ?? 'Permission';
-              final dateText = '${p.requestDate.day.toString().padLeft(2, '0')}/${p.requestDate.month.toString().padLeft(2, '0')}/${p.requestDate.year}';
+              final typeName = typeMap[p.permissionTypeId] ??
+                  (p.metadata?['permissionTypeName'] as String?) ??
+                  'Permission';
+              final dateText =
+                  '${p.requestDate.day.toString().padLeft(2, '0')}/${p.requestDate.month.toString().padLeft(2, '0')}/${p.requestDate.year}';
 
               return Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
+                decoration: BoxDecoration(
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: Theme.of(context).colorScheme.outline)),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: const Color(0xFF8B5CF6).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(Icons.access_time_rounded, color: Color(0xFF8B5CF6), size: 20),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.access_time_rounded,
+                          color: Color(0xFF8B5CF6), size: 20),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -426,16 +590,33 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
                           Row(
                             children: [
                               Expanded(
-                                child: Text(typeName, style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14), overflow: TextOverflow.ellipsis),
+                                child: Text(typeName,
+                                    style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14),
+                                    overflow: TextOverflow.ellipsis),
                               ),
                               const SizedBox(width: 8),
                               _buildPermissionStatusChip(p.status),
                             ],
                           ),
                           const SizedBox(height: 6),
-                          Text(dateText, style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                          Text(dateText,
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  fontSize: 12)),
                           const SizedBox(height: 6),
-                          Text('Duration: ${p.durationDisplayText}', style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                          Text('Duration: ${p.durationDisplayText}',
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  fontSize: 12)),
                         ],
                       ),
                     ),
@@ -473,8 +654,13 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999), border: Border.all(color: fg.withOpacity(0.3))),
-      child: Text(status.name, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
+      decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: fg.withOpacity(0.3))),
+      child: Text(status.name,
+          style:
+              TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 
@@ -502,8 +688,13 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999), border: Border.all(color: fg.withOpacity(0.3))),
-      child: Text(status.name, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
+      decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: fg.withOpacity(0.3))),
+      child: Text(status.name,
+          style:
+              TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 
@@ -512,7 +703,9 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       child: Material(
-        color: isSelected ? _accentBlue.withOpacity(0.15) : Colors.transparent,
+        color: isSelected
+            ? const Color(0xFF4CAF50).withOpacity(0.15)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           onTap: () => setState(() => _selectedIndex = index),
@@ -521,9 +714,20 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             child: Row(
               children: [
-                Icon(icon, color: isSelected ? _accentBlue : _textSecondary, size: 20),
+                Icon(icon,
+                    color: isSelected
+                        ? const Color(0xFF4CAF50)
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    size: 20),
                 const SizedBox(width: 12),
-                Text(label, style: TextStyle(color: isSelected ? _textPrimary : _textSecondary, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, fontSize: 13)),
+                Text(label,
+                    style: TextStyle(
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.onSurface
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                        fontSize: 13)),
               ],
             ),
           ),
@@ -534,14 +738,20 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
 
   Widget _buildTopBar(BuildContext context, dynamic session, bool isDesktop) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isDesktop ? 28 : 16, vertical: 14),
-      decoration: const BoxDecoration(color: _bgDark, border: Border(bottom: BorderSide(color: _borderColor, width: 1))),
+      padding:
+          EdgeInsets.symmetric(horizontal: isDesktop ? 28 : 16, vertical: 14),
+      decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border(
+              bottom: BorderSide(
+                  color: Theme.of(context).colorScheme.outline, width: 1))),
       child: Row(
         children: [
           if (!isDesktop) ...[
             Builder(
               builder: (ctx) => IconButton(
-                icon: const Icon(Icons.menu_rounded, color: _textPrimary, size: 24),
+                icon: Icon(Icons.menu_rounded,
+                    color: Theme.of(context).colorScheme.onSurface, size: 24),
                 onPressed: () => Scaffold.of(ctx).openDrawer(),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -550,69 +760,119 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
             const SizedBox(width: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.asset('assets/images/eazyschool.png', width: 36, height: 36, fit: BoxFit.contain),
+              child: Image.asset('assets/images/eazyschool.png',
+                  width: 36, height: 36, fit: BoxFit.contain),
             ),
             const SizedBox(width: 12),
           ],
-          
-          Text(_getPageTitle(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary)),
-          
+
+          Text(_getPageTitle(),
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface)),
+
           const Spacer(),
-          
+
+          // Theme toggle button
+          const ThemeToggleButton(),
+          const SizedBox(width: 12),
+
           // Notifications
           Stack(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(8), border: Border.all(color: _borderColor)),
-                child: const Icon(Icons.notifications_outlined, color: _textSecondary, size: 20),
+                decoration: BoxDecoration(
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: Theme.of(context).colorScheme.outline)),
+                child: Icon(Icons.notifications_outlined,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    size: 20),
               ),
-              Positioned(right: 4, top: 4, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle))),
+              Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                          color: Colors.red, shape: BoxShape.circle))),
             ],
           ),
-          
+
           const SizedBox(width: 12),
-          
+
           // User Menu
           PopupMenuButton<String>(
             offset: const Offset(0, 46),
-            color: _cardDark,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             onSelected: (value) async {
               if (value == 'logout') {
                 await ref.read(authProvider.notifier).signOut();
                 if (!context.mounted) return;
                 Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const EnhancedLoginScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const EnhancedLoginScreen()),
                   (route) => false,
                 );
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'logout', child: Text('Logout', style: TextStyle(color: _textPrimary))),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                  value: 'logout',
+                  child: Text('Logout',
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface))),
             ],
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(8), border: Border.all(color: _borderColor)),
+              decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                  border:
+                      Border.all(color: Theme.of(context).colorScheme.outline)),
               child: Row(
                 children: [
                   CircleAvatar(
-                    backgroundColor: _accentBlue,
+                    backgroundColor: const Color(0xFF4CAF50),
                     radius: 14,
-                    child: Text((session.displayName as String? ?? 'S')[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    child: Text(
+                        (session.displayName as String? ?? 'S')[0]
+                            .toUpperCase(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12)),
                   ),
                   if (isDesktop) ...[
                     const SizedBox(width: 8),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(session.displayName as String? ?? 'Staff', style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 12)),
-                        const Text('Staff Member', style: TextStyle(color: _textSecondary, fontSize: 10)),
+                        Text(session.displayName as String? ?? 'Staff',
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12)),
+                        Text('Staff Member',
+                            style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                                fontSize: 10)),
                       ],
                     ),
                   ],
                   const SizedBox(width: 6),
-                  const Icon(Icons.keyboard_arrow_down_rounded, color: _textSecondary, size: 18),
+                  Icon(Icons.keyboard_arrow_down_rounded,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: 18),
                 ],
               ),
             ),
@@ -624,58 +884,86 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
 
   String _getPageTitle() {
     switch (_selectedIndex) {
-      case 0: return 'Dashboard';
-      case 1: return 'Apply Leave';
-      case 2: return 'Request Permission';
-      case 5: return 'My Permissions';
-      case 6: return 'Holiday Calendar';
-      case 7: return 'My Payslips';
-      case 3: return 'My Profile';
-      case 4: return 'My Leaves';
-      default: return 'Dashboard';
+      case 0:
+        return 'Dashboard';
+      case 1:
+        return 'Apply Leave';
+      case 2:
+        return 'Request Permission';
+      case 5:
+        return 'My Permissions';
+      case 6:
+        return 'Holiday Calendar';
+      case 7:
+        return 'My Payslips';
+      case 3:
+        return 'My Profile';
+      case 4:
+        return 'My Leaves';
+      default:
+        return 'Dashboard';
     }
   }
 
-  Widget _buildContent(BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
+  Widget _buildContent(
+      BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
     switch (_selectedIndex) {
-      case 0: return _buildDashboardHome(context, session, isDesktop, isTablet);
-      case 1: return const ApplyLeaveScreen();
-      case 2: return const RequestPermissionScreen();
-      case 3: return const StaffProfileScreen();
-      case 4: return _buildMyLeaves(context, session, isDesktop);
-      case 5: return _buildMyPermissions(context, session, isDesktop);
-      case 6: return const HolidayCalendarScreen();
-      case 7: return const MyPayslipsScreen();
-      case 8: return const ClassTeacherLeaveScreen();
-      default: return _buildDashboardHome(context, session, isDesktop, isTablet);
+      case 0:
+        return _buildDashboardHome(context, session, isDesktop, isTablet);
+      case 1:
+        return const ApplyLeaveScreen();
+      case 2:
+        return const RequestPermissionScreen();
+      case 3:
+        return const StaffProfileScreen();
+      case 4:
+        return _buildMyLeaves(context, session, isDesktop);
+      case 5:
+        return _buildMyPermissions(context, session, isDesktop);
+      case 6:
+        return const HolidayCalendarScreen();
+      case 7:
+        return const MyPayslipsScreen();
+      case 8:
+        return const ClassTeacherLeaveScreen();
+      default:
+        return _buildDashboardHome(context, session, isDesktop, isTablet);
     }
   }
 
-  Widget _buildDashboardHome(BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
+  Widget _buildDashboardHome(
+      BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
     final padding = isDesktop ? 28.0 : 16.0;
-    
+
     return SingleChildScrollView(
       padding: EdgeInsets.all(padding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Welcome
-          Text('Welcome back, ${session.displayName ?? 'Staff'}!', style: TextStyle(fontSize: isDesktop ? 24 : 20, fontWeight: FontWeight.bold, color: _textPrimary)),
+          Text('Welcome back, ${session.displayName ?? 'Staff'}!',
+              style: TextStyle(
+                  fontSize: isDesktop ? 24 : 20,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: 4),
-          const Text('Here\'s your leave and permission overview.', style: TextStyle(color: _textSecondary, fontSize: 14)),
-          
+          Text('Here\'s your leave and permission overview.',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 14)),
+
           const SizedBox(height: 24),
-          
+
           // Leave Balance Cards
           _buildLeaveBalanceRow(isDesktop, isTablet),
-          
+
           const SizedBox(height: 24),
 
           // Permission Metrics Cards
           _buildPermissionMetricsRow(isDesktop),
-          
+
           const SizedBox(height: 24),
-          
+
           // Quick Actions and Recent
           _buildQuickActions(),
         ],
@@ -695,35 +983,48 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
     )));
 
     return staffAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
+      loading: () => Center(
+          child: CircularProgressIndicator(color: const Color(0xFF4CAF50))),
       error: (_, __) => const SizedBox.shrink(),
       data: (staff) {
         if (staff == null) return const SizedBox.shrink();
 
         final now = DateTime.now();
         final month = '${now.year}-${now.month.toString().padLeft(2, '0')}';
-        final typesAsync = ref.watch(activePermissionTypesProvider(session.schoolId!));
-        final usageByTypeAsync = ref.watch(monthlyPermissionUsageByTypeProvider((
+        final typesAsync =
+            ref.watch(activePermissionTypesProvider(session.schoolId!));
+        final usageByTypeAsync =
+            ref.watch(monthlyPermissionUsageByTypeProvider((
           schoolId: session.schoolId!,
-          staffId: staff.id,
           month: month,
+          staffId: staff.id,
         )));
 
         return typesAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
+          loading: () => Center(
+              child: CircularProgressIndicator(color: const Color(0xFF4CAF50))),
           error: (_, __) => const SizedBox.shrink(),
           data: (types) {
             if (types.isEmpty) return const SizedBox.shrink();
 
-            final usageByType = usageByTypeAsync.valueOrNull ?? const <String, int>{};
+            final usageByType =
+                usageByTypeAsync.valueOrNull ?? const <String, int>{};
 
             return Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
+              decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: Theme.of(context).colorScheme.outline)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Permission Metrics', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary)),
+                  Text('Permission Metrics',
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface)),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -736,10 +1037,12 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
                         final remaining = total - used;
                         final color = const Color(0xFF8B5CF6);
                         return Padding(
-                          padding: EdgeInsets.only(right: index == types.length - 1 ? 0 : 12),
+                          padding: EdgeInsets.only(
+                              right: index == types.length - 1 ? 0 : 12),
                           child: SizedBox(
                             width: isDesktop ? 220 : 180,
-                            child: _buildPermissionCard(type.name, used, total, remaining, color),
+                            child: _buildPermissionCard(
+                                type.name, used, total, remaining, color),
                           ),
                         );
                       }).toList(),
@@ -754,12 +1057,16 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
     );
   }
 
-  Widget _buildPermissionCard(String type, int used, int total, int remaining, Color color) {
+  Widget _buildPermissionCard(
+      String type, int used, int total, int remaining, Color color) {
     final safeTotal = total <= 0 ? 1 : total;
     final progress = used / safeTotal;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _bgDark, borderRadius: BorderRadius.circular(10), border: Border.all(color: _borderColor)),
+      decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Theme.of(context).colorScheme.outline)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -767,11 +1074,18 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Text(type, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12), overflow: TextOverflow.ellipsis),
+                child: Text(type,
+                    style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12),
+                    overflow: TextOverflow.ellipsis),
               ),
               Container(
                 padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6)),
                 child: Icon(Icons.access_time_rounded, color: color, size: 12),
               ),
             ],
@@ -780,16 +1094,24 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('$remaining', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
+              Text('$remaining',
+                  style: TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.bold, color: color)),
               const SizedBox(width: 4),
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: Text('/ $total', style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                child: Text('/ $total',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12)),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          Text('Availed: $used', style: const TextStyle(color: _textSecondary, fontSize: 12)),
+          Text('Availed: $used',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 12)),
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(3),
@@ -808,7 +1130,10 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
   Widget _buildLeaveBalanceRow(bool isDesktop, bool isTablet) {
     final session = ref.watch(currentSessionProvider);
     if (session?.schoolId == null) {
-      return const Center(child: Text('No school selected', style: TextStyle(color: _textSecondary)));
+      return Center(
+          child: Text('No school selected',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)));
     }
 
     // Get staff profile first to get staffId
@@ -820,7 +1145,8 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
     return staffAsync.when(
       loading: () {
         debugPrint('🔄 Loading staff profile for userId: ${session.uid}');
-        return const Center(child: CircularProgressIndicator(color: _accentBlue));
+        return Center(
+            child: CircularProgressIndicator(color: const Color(0xFF4CAF50)));
       },
       error: (e, stack) {
         debugPrint('❌ Error loading staff profile: $e');
@@ -831,9 +1157,16 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
             children: [
               const Icon(Icons.error_outline, color: Colors.red, size: 48),
               const SizedBox(height: 16),
-              Text('Error loading profile', style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
+              Text('Error loading profile',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text('$e', style: const TextStyle(color: _textSecondary, fontSize: 12), textAlign: TextAlign.center),
+              Text('$e',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 12),
+                  textAlign: TextAlign.center),
             ],
           ),
         );
@@ -845,13 +1178,24 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.person_off_outlined, color: _textSecondary, size: 48),
+                Icon(Icons.person_off_outlined,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    size: 48),
                 const SizedBox(height: 16),
-                const Text('Staff profile not found', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
+                Text('Staff profile not found',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                Text('User ID: ${session.uid}', style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                Text('User ID: ${session.uid}',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12)),
                 const SizedBox(height: 8),
-                const Text('Contact your administrator', style: TextStyle(color: _textSecondary, fontSize: 12)),
+                Text('Contact your administrator',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12)),
               ],
             ),
           );
@@ -866,18 +1210,35 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
         return balancesAsync.when(
           loading: () {
             debugPrint('🔄 Loading leave balances for staffId: ${staff.id}');
-            return const Center(child: CircularProgressIndicator(color: _accentBlue));
+            return Center(
+                child:
+                    CircularProgressIndicator(color: const Color(0xFF4CAF50)));
           },
           error: (e, stack) {
             debugPrint('❌ Error loading balances: $e');
-            return Center(child: Text('Error loading balances: $e', style: const TextStyle(color: _textSecondary, fontSize: 12), textAlign: TextAlign.center));
+            return Center(
+                child: Text('Error loading balances: $e',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12),
+                    textAlign: TextAlign.center));
           },
           data: (balances) {
             if (balances.isEmpty) {
               return Container(
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
-                child: const Center(child: Text('No leave balances configured', style: TextStyle(color: _textSecondary))),
+                decoration: BoxDecoration(
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: Theme.of(context).colorScheme.outline)),
+                child: Center(
+                    child: Text('No leave balances configured',
+                        style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant))),
               );
             }
 
@@ -893,11 +1254,19 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
 
             return Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
+              decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: Theme.of(context).colorScheme.outline)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Leave Metrics', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary)),
+                  Text('Leave Metrics',
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface)),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -906,15 +1275,21 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
                         final index = entry.key;
                         final balance = entry.value;
                         final color = colors[index % colors.length];
-                        final derivedUsed = (balance.totalAllowed + balance.carriedForward) - balance.available - balance.pending;
-                        final usedRaw = balance.used > 0 ? balance.used : derivedUsed;
+                        final derivedUsed =
+                            (balance.totalAllowed + balance.carriedForward) -
+                                balance.available -
+                                balance.pending;
+                        final usedRaw =
+                            balance.used > 0 ? balance.used : derivedUsed;
                         final used = usedRaw < 0 ? 0 : usedRaw;
                         return Padding(
-                          padding: EdgeInsets.only(right: index == balances.length - 1 ? 0 : 12),
+                          padding: EdgeInsets.only(
+                              right: index == balances.length - 1 ? 0 : 12),
                           child: SizedBox(
                             width: isDesktop ? 220 : 180,
                             child: _buildLeaveCard(
-                              balance.metadata?['leaveTypeName'] as String? ?? balance.leaveTypeCode,
+                              balance.metadata?['leaveTypeName'] as String? ??
+                                  balance.leaveTypeCode,
                               used,
                               balance.totalAllowed,
                               color,
@@ -936,20 +1311,27 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
   Widget _buildLeaveCard(String type, int used, int total, Color color) {
     final remaining = total - used;
     final progress = used / total;
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _bgDark, borderRadius: BorderRadius.circular(10), border: Border.all(color: _borderColor)),
+      decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Theme.of(context).colorScheme.outline)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(type, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
+              Text(type,
+                  style: TextStyle(
+                      color: color, fontWeight: FontWeight.w600, fontSize: 12)),
               Container(
                 padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6)),
                 child: Icon(Icons.calendar_today, color: color, size: 12),
               ),
             ],
@@ -958,15 +1340,26 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('$remaining', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
+              Text('$remaining',
+                  style: TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.bold, color: color)),
               const SizedBox(width: 4),
-              Padding(padding: const EdgeInsets.only(bottom: 4), child: Text('/ $total', style: const TextStyle(color: _textSecondary, fontSize: 12))),
+              Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text('/ $total',
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 12))),
             ],
           ),
           const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(value: progress, backgroundColor: color.withOpacity(0.15), valueColor: AlwaysStoppedAnimation<Color>(color), minHeight: 4),
+            child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: color.withOpacity(0.15),
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+                minHeight: 4),
           ),
         ],
       ),
@@ -976,16 +1369,25 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
   Widget _buildQuickActions() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
+      decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Theme.of(context).colorScheme.outline)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Quick Actions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary)),
+          Text('Quick Actions',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: 16),
           _buildQuickActionItem('Apply for Leave', Icons.event_note_rounded, 1),
-          _buildQuickActionItem('Request Permission', Icons.access_time_rounded, 2),
+          _buildQuickActionItem(
+              'Request Permission', Icons.access_time_rounded, 2),
           _buildQuickActionItem('View Leave History', Icons.history_rounded, 4),
-          _buildQuickActionItem('View Permission History', Icons.fact_check_rounded, 5),
+          _buildQuickActionItem(
+              'View Permission History', Icons.fact_check_rounded, 5),
           _buildQuickActionItem('My Profile', Icons.person_rounded, 3),
         ],
       ),
@@ -996,7 +1398,7 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: _bgDark,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           onTap: () => setState(() => _selectedIndex = index),
@@ -1005,9 +1407,13 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
-                Icon(icon, color: _accentBlue, size: 18),
+                Icon(icon, color: const Color(0xFF4CAF50), size: 18),
                 const SizedBox(width: 12),
-                Text(title, style: const TextStyle(color: _textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
+                Text(title,
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -1023,16 +1429,25 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: _cardDark, shape: BoxShape.circle),
-            child: const Icon(Icons.history_rounded, size: 56, color: _textSecondary),
+            decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                shape: BoxShape.circle),
+            child: Icon(Icons.history_rounded,
+                size: 56,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 20),
-          const Text('My Leaves', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _textPrimary)),
+          Text('My Leaves',
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: 8),
-          const Text('Leave history coming soon', style: TextStyle(color: _textSecondary)),
+          Text('Leave history coming soon',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ],
       ),
     );
   }
-
 }

@@ -6,37 +6,51 @@ class ResponsiveTheme {
   // Breakpoint definitions
   static const double mobileBreakpoint = 600;
   static const double tabletBreakpoint = 1024;
-  
+
   // Base color palette - neutral with professional accents
   static const Color _primaryBlue = Color(0xFF1976D2);
-  static const Color _surfaceGrey = Color(0xFFF5F5F5);
-  static const Color _backgroundWhite = Color(0xFFFFFFFF);
-  static const Color _onSurfaceGrey = Color(0xFF424242);
-  static const Color _outlineGrey = Color(0xFFE0E0E0);
-  
+
+  // Light mode colors
+  static const Color _lightSurfaceGrey = Color(0xFFF5F5F5);
+  static const Color _lightBackgroundWhite = Color(0xFFFFFFFF);
+  static const Color _lightOnSurfaceGrey = Color(0xFF424242);
+  static const Color _lightOutlineGrey = Color(0xFFE0E0E0);
+
+  // Dark mode colors
+  static const Color _darkSurfaceGrey = Color(0xFF1E293B);
+  static const Color _darkBackgroundWhite = Color(0xFF0F172A);
+  static const Color _darkOnSurfaceGrey = Color(0xFFF1F5F9);
+  static const Color _darkOutlineGrey = Color(0xFF334155);
+
   // Role-specific accent colors
   static const Color superAdminAccent = Color(0xFF6A1B9A); // Deep Purple
-  static const Color adminAccent = Color(0xFF1976D2);      // Blue
-  static const Color staffAccent = Color(0xFF388E3C);      // Green
-  
+  static const Color adminAccent = Color(0xFF1976D2); // Blue
+  static const Color staffAccent = Color(0xFF388E3C); // Green
+
   /// Get theme data for the application
-  static ThemeData getThemeData({Color? roleAccent}) {
+  static ThemeData getThemeData({Color? roleAccent, bool isDark = false}) {
+    final brightness = isDark ? Brightness.dark : Brightness.light;
+    final surface = isDark ? _darkSurfaceGrey : _lightSurfaceGrey;
+    final background = isDark ? _darkBackgroundWhite : _lightBackgroundWhite;
+    final onSurface = isDark ? _darkOnSurfaceGrey : _lightOnSurfaceGrey;
+    final outline = isDark ? _darkOutlineGrey : _lightOutlineGrey;
+
     final ColorScheme colorScheme = ColorScheme.fromSeed(
       seedColor: roleAccent ?? _primaryBlue,
-      brightness: Brightness.light,
-      surface: _surfaceGrey,
-      background: _backgroundWhite,
-      onSurface: _onSurfaceGrey,
-      outline: _outlineGrey,
+      brightness: brightness,
+      surface: surface,
+      background: background,
+      onSurface: onSurface,
+      outline: outline,
     );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      
+
       // Typography scale - consistent across all screens
-      textTheme: _buildTextTheme(),
-      
+      textTheme: _buildTextTheme(colorScheme),
+
       // Component themes
       appBarTheme: _buildAppBarTheme(colorScheme),
       cardTheme: CardThemeData(
@@ -52,113 +66,128 @@ class ResponsiveTheme {
       inputDecorationTheme: _buildInputDecorationTheme(colorScheme),
       navigationBarTheme: _buildNavigationBarTheme(colorScheme),
       drawerTheme: _buildDrawerTheme(),
-      
+
       // Layout spacing
       visualDensity: VisualDensity.adaptivePlatformDensity,
     );
   }
 
   /// Professional typography scale
-  static TextTheme _buildTextTheme() {
-    return const TextTheme(
+  static TextTheme _buildTextTheme(ColorScheme colorScheme) {
+    return TextTheme(
       // Display styles - for hero content
       displayLarge: TextStyle(
         fontSize: 57,
         fontWeight: FontWeight.w400,
         letterSpacing: -0.25,
         height: 1.12,
+        color: colorScheme.onSurface,
       ),
       displayMedium: TextStyle(
         fontSize: 45,
         fontWeight: FontWeight.w400,
         letterSpacing: 0,
         height: 1.16,
+        color: colorScheme.onSurface,
       ),
       displaySmall: TextStyle(
         fontSize: 36,
         fontWeight: FontWeight.w400,
         letterSpacing: 0,
         height: 1.22,
+        color: colorScheme.onSurface,
       ),
-      
+
       // Headline styles - for section headers
       headlineLarge: TextStyle(
         fontSize: 32,
         fontWeight: FontWeight.w400,
         letterSpacing: 0,
         height: 1.25,
+        color: colorScheme.onSurface,
       ),
       headlineMedium: TextStyle(
         fontSize: 28,
         fontWeight: FontWeight.w400,
         letterSpacing: 0,
         height: 1.29,
+        color: colorScheme.onSurface,
       ),
       headlineSmall: TextStyle(
         fontSize: 24,
         fontWeight: FontWeight.w400,
         letterSpacing: 0,
         height: 1.33,
+        color: colorScheme.onSurface,
       ),
-      
+
       // Title styles - for card headers, dialog titles
       titleLarge: TextStyle(
         fontSize: 22,
         fontWeight: FontWeight.w500,
         letterSpacing: 0,
         height: 1.27,
+        color: colorScheme.onSurface,
       ),
       titleMedium: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         letterSpacing: 0.15,
         height: 1.50,
+        color: colorScheme.onSurface,
       ),
       titleSmall: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         letterSpacing: 0.1,
         height: 1.43,
+        color: colorScheme.onSurface,
       ),
-      
+
       // Body styles - for main content
       bodyLarge: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w400,
         letterSpacing: 0.5,
         height: 1.50,
+        color: colorScheme.onSurface,
       ),
       bodyMedium: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w400,
         letterSpacing: 0.25,
         height: 1.43,
+        color: colorScheme.onSurface,
       ),
       bodySmall: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w400,
         letterSpacing: 0.4,
         height: 1.33,
+        color: colorScheme.onSurfaceVariant,
       ),
-      
+
       // Label styles - for buttons, tabs
       labelLarge: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         letterSpacing: 0.1,
         height: 1.43,
+        color: colorScheme.onSurface,
       ),
       labelMedium: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         letterSpacing: 0.5,
         height: 1.33,
+        color: colorScheme.onSurfaceVariant,
       ),
       labelSmall: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w500,
         letterSpacing: 0.5,
         height: 1.45,
+        color: colorScheme.onSurfaceVariant,
       ),
     );
   }
@@ -178,8 +207,8 @@ class ResponsiveTheme {
     );
   }
 
-
-  static ElevatedButtonThemeData _buildElevatedButtonTheme(ColorScheme colorScheme) {
+  static ElevatedButtonThemeData _buildElevatedButtonTheme(
+      ColorScheme colorScheme) {
     return ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         elevation: 1,
@@ -196,7 +225,8 @@ class ResponsiveTheme {
     );
   }
 
-  static OutlinedButtonThemeData _buildOutlinedButtonTheme(ColorScheme colorScheme) {
+  static OutlinedButtonThemeData _buildOutlinedButtonTheme(
+      ColorScheme colorScheme) {
     return OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -229,7 +259,8 @@ class ResponsiveTheme {
     );
   }
 
-  static InputDecorationTheme _buildInputDecorationTheme(ColorScheme colorScheme) {
+  static InputDecorationTheme _buildInputDecorationTheme(
+      ColorScheme colorScheme) {
     return InputDecorationTheme(
       filled: true,
       fillColor: colorScheme.surface,
@@ -253,7 +284,8 @@ class ResponsiveTheme {
     );
   }
 
-  static NavigationBarThemeData _buildNavigationBarTheme(ColorScheme colorScheme) {
+  static NavigationBarThemeData _buildNavigationBarTheme(
+      ColorScheme colorScheme) {
     return NavigationBarThemeData(
       elevation: 1,
       backgroundColor: colorScheme.surface,
@@ -281,7 +313,7 @@ class ResponsiveTheme {
   }
 
   /// Get role-specific theme
-  static ThemeData getRoleTheme(String role) {
+  static ThemeData getRoleTheme(String role, {bool isDark = false}) {
     Color accent;
     switch (role.toUpperCase()) {
       case 'SUPER_ADMIN':
@@ -296,7 +328,7 @@ class ResponsiveTheme {
       default:
         accent = _primaryBlue;
     }
-    return getThemeData(roleAccent: accent);
+    return getThemeData(roleAccent: accent, isDark: isDark);
   }
 }
 
@@ -308,12 +340,13 @@ class ResponsiveBreakpoints {
 
   static bool isTablet(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    return width >= ResponsiveTheme.mobileBreakpoint && 
-           width < ResponsiveTheme.tabletBreakpoint;
+    return width >= ResponsiveTheme.mobileBreakpoint &&
+        width < ResponsiveTheme.tabletBreakpoint;
   }
 
   static bool isDesktop(BuildContext context) {
-    return MediaQuery.of(context).size.width >= ResponsiveTheme.tabletBreakpoint;
+    return MediaQuery.of(context).size.width >=
+        ResponsiveTheme.tabletBreakpoint;
   }
 
   static bool isCompact(BuildContext context) {
@@ -322,11 +355,12 @@ class ResponsiveBreakpoints {
 
   static bool isMedium(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    return width >= ResponsiveTheme.mobileBreakpoint && 
-           width < ResponsiveTheme.tabletBreakpoint;
+    return width >= ResponsiveTheme.mobileBreakpoint &&
+        width < ResponsiveTheme.tabletBreakpoint;
   }
 
   static bool isExpanded(BuildContext context) {
-    return MediaQuery.of(context).size.width >= ResponsiveTheme.tabletBreakpoint;
+    return MediaQuery.of(context).size.width >=
+        ResponsiveTheme.tabletBreakpoint;
   }
 }

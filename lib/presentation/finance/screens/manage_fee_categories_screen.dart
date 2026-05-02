@@ -31,8 +31,7 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
       return const Scaffold(
         backgroundColor: _bgDark,
         body: Center(
-          child: Text('Access Denied',
-              style: TextStyle(color: _textPrimary)),
+          child: Text('Access Denied', style: TextStyle(color: _textPrimary)),
         ),
       );
     }
@@ -45,8 +44,7 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
         backgroundColor: _bgDark,
         elevation: 0,
         title: const Text('Fee Categories',
-            style: TextStyle(
-                color: _textPrimary, fontWeight: FontWeight.bold)),
+            style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
         iconTheme: const IconThemeData(color: _textPrimary),
         actions: [
           TextButton.icon(
@@ -59,15 +57,14 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
         ],
       ),
       body: categoriesAsync.when(
-        loading: () => const Center(
-            child: CircularProgressIndicator(color: _accentGreen)),
+        loading: () =>
+            const Center(child: CircularProgressIndicator(color: _accentGreen)),
         error: (e, _) => Center(
             child: Text('Error: $e',
                 style: const TextStyle(color: _textSecondary))),
         data: (categories) {
           if (categories.isEmpty) {
-            return _emptyState(() =>
-                _openEditor(context, ref, schoolId, null));
+            return _emptyState(() => _openEditor(context, ref, schoolId, null));
           }
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -108,8 +105,7 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
 
   Widget _emptyState(VoidCallback onAdd) => Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.category_outlined,
-              size: 64, color: _textSecondary),
+          const Icon(Icons.category_outlined, size: 64, color: _textSecondary),
           const SizedBox(height: 16),
           const Text('No fee categories yet',
               style: TextStyle(color: _textPrimary, fontSize: 18)),
@@ -126,12 +122,13 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
         ]),
       );
 
-  Widget _categoryCard(BuildContext context, WidgetRef ref, String schoolId,
-      FeeCategory cat) {
+  Widget _categoryCard(
+      BuildContext context, WidgetRef ref, String schoolId, FeeCategory cat) {
     final classes = cat.applicableClassIds.isEmpty
         ? 'All classes'
         : '${cat.applicableClassIds.length} class${cat.applicableClassIds.length == 1 ? '' : 'es'}';
-    final money = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final money =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -180,8 +177,7 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
               ]),
               const SizedBox(height: 4),
               Row(children: [
-                const Icon(Icons.qr_code,
-                    size: 12, color: _textSecondary),
+                const Icon(Icons.qr_code, size: 12, color: _textSecondary),
                 const SizedBox(width: 4),
                 Text(cat.code,
                     style: const TextStyle(
@@ -193,14 +189,14 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
                     size: 12, color: _textSecondary),
                 const SizedBox(width: 4),
                 Text(classes,
-                    style: const TextStyle(
-                        color: _textSecondary, fontSize: 11)),
+                    style:
+                        const TextStyle(color: _textSecondary, fontSize: 11)),
               ]),
               if (cat.description.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(cat.description,
-                    style: const TextStyle(
-                        color: _textSecondary, fontSize: 11)),
+                    style:
+                        const TextStyle(color: _textSecondary, fontSize: 11)),
               ],
             ],
           ),
@@ -208,23 +204,20 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
         IconButton(
           tooltip: 'Edit',
           onPressed: () => _openEditor(context, ref, schoolId, cat),
-          icon: const Icon(Icons.edit_outlined,
-              color: _accentBlue, size: 18),
+          icon: const Icon(Icons.edit_outlined, color: _accentBlue, size: 18),
         ),
         if (!cat.isStandard)
           IconButton(
             tooltip: 'Delete',
             onPressed: () => _confirmDelete(context, ref, schoolId, cat),
-            icon: const Icon(Icons.delete_outline,
-                color: _accentRed, size: 18),
+            icon: const Icon(Icons.delete_outline, color: _accentRed, size: 18),
           ),
       ]),
     );
   }
 
   Widget _chip(String label, Color color) => Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
           color: color.withOpacity(0.15),
           borderRadius: BorderRadius.circular(4),
@@ -241,8 +234,8 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
       FeeCategory? existing) {
     showDialog(
       context: context,
-      builder: (ctx) => _CategoryEditorDialog(
-          schoolId: schoolId, existing: existing),
+      builder: (ctx) =>
+          _CategoryEditorDialog(schoolId: schoolId, existing: existing),
     );
   }
 
@@ -262,13 +255,12 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel',
-                style: TextStyle(color: _textSecondary)),
+            child:
+                const Text('Cancel', style: TextStyle(color: _textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: _accentRed,
-                foregroundColor: Colors.white),
+                backgroundColor: _accentRed, foregroundColor: Colors.white),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Delete'),
           ),
@@ -277,9 +269,7 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
     );
     if (ok != true) return;
     try {
-      await ref
-          .read(feeCategoryRepositoryProvider)
-          .delete(schoolId, cat.code);
+      await ref.read(feeCategoryRepositoryProvider).delete(schoolId, cat.code);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -290,9 +280,7 @@ class ManageFeeCategoriesScreen extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Failed: $e'),
-              backgroundColor: _accentRed),
+          SnackBar(content: Text('Failed: $e'), backgroundColor: _accentRed),
         );
       }
     }
@@ -310,13 +298,11 @@ class _CategoryEditorDialog extends ConsumerStatefulWidget {
       _CategoryEditorDialogState();
 }
 
-class _CategoryEditorDialogState
-    extends ConsumerState<_CategoryEditorDialog> {
+class _CategoryEditorDialogState extends ConsumerState<_CategoryEditorDialog> {
   final _nameCtrl = TextEditingController();
   final _codeCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _sortCtrl = TextEditingController(text: '100');
-  final _amountCtrl = TextEditingController();
   bool _isActive = true;
   final Set<String> _classes = {};
   bool _saving = false;
@@ -333,7 +319,6 @@ class _CategoryEditorDialogState
       _codeCtrl.text = e.code;
       _descCtrl.text = e.description;
       _sortCtrl.text = e.sortOrder.toString();
-      _amountCtrl.text = e.defaultAmount > 0 ? e.defaultAmount.toStringAsFixed(0) : '';
       _isActive = e.isActive;
       _classes.addAll(e.applicableClassIds);
     }
@@ -345,7 +330,6 @@ class _CategoryEditorDialogState
     _codeCtrl.dispose();
     _descCtrl.dispose();
     _sortCtrl.dispose();
-    _amountCtrl.dispose();
     super.dispose();
   }
 
@@ -353,8 +337,7 @@ class _CategoryEditorDialogState
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: _cardDark,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520, maxHeight: 640),
         child: Padding(
@@ -364,8 +347,7 @@ class _CategoryEditorDialogState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                const Icon(Icons.label_outline,
-                    color: _accentBlue, size: 22),
+                const Icon(Icons.label_outline, color: _accentBlue, size: 22),
                 const SizedBox(width: 10),
                 Text(
                   _isEditing ? 'Edit category' : 'Add fee category',
@@ -376,8 +358,8 @@ class _CategoryEditorDialogState
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.close,
-                      color: _textSecondary, size: 20),
+                  icon:
+                      const Icon(Icons.close, color: _textSecondary, size: 20),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ]),
@@ -410,18 +392,15 @@ class _CategoryEditorDialogState
                               RegExp(r'[A-Z0-9_]')),
                         ],
                         style: const TextStyle(
-                            color: _textPrimary,
-                            fontFamily: 'monospace'),
+                            color: _textPrimary, fontFamily: 'monospace'),
                         decoration: _input('e.g. SPORTS_FEE'),
                       ),
                       if (_isEditing)
                         const Padding(
                           padding: EdgeInsets.only(top: 4),
-                          child: Text(
-                              'Code is immutable once created.',
+                          child: Text('Code is immutable once created.',
                               style: TextStyle(
-                                  color: _textSecondary,
-                                  fontSize: 11)),
+                                  color: _textSecondary, fontSize: 11)),
                         ),
                       const SizedBox(height: 12),
                       _label('Description (optional)'),
@@ -429,48 +408,20 @@ class _CategoryEditorDialogState
                         controller: _descCtrl,
                         maxLines: 2,
                         style: const TextStyle(color: _textPrimary),
-                        decoration: _input(
-                            'Optional note shown in the admin UI'),
+                        decoration:
+                            _input('Optional note shown in the admin UI'),
                       ),
                       const SizedBox(height: 12),
-                      Row(children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _label('Default Amount (₹)'),
-                              TextField(
-                                controller: _amountCtrl,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))
-                                ],
-                                style: const TextStyle(color: _textPrimary),
-                                decoration: _input('e.g. 5000'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _label('Sort order'),
-                              TextField(
-                                controller: _sortCtrl,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly
-                                ],
-                                style: const TextStyle(
-                                    color: _textPrimary),
-                                decoration: _input('100'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ]),
+                      _label('Sort order'),
+                      TextField(
+                        controller: _sortCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        style: const TextStyle(color: _textPrimary),
+                        decoration: _input('100'),
+                      ),
                       const SizedBox(height: 12),
                       Row(children: [
                         Expanded(
@@ -479,18 +430,16 @@ class _CategoryEditorDialogState
                             children: [
                               _label('Status'),
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
                                 decoration: BoxDecoration(
                                   color: _bgDark,
                                   borderRadius: BorderRadius.circular(8),
-                                  border:
-                                      Border.all(color: _borderColor),
+                                  border: Border.all(color: _borderColor),
                                 ),
                                 child: Row(children: [
                                   const Text('Active',
-                                      style: TextStyle(
-                                          color: _textPrimary)),
+                                      style: TextStyle(color: _textPrimary)),
                                   const Spacer(),
                                   Switch(
                                     value: _isActive,
@@ -505,8 +454,7 @@ class _CategoryEditorDialogState
                         ),
                       ]),
                       const SizedBox(height: 16),
-                      _label(
-                          'Applicable classes (empty = all classes)'),
+                      _label('Applicable classes (empty = all classes)'),
                       const SizedBox(height: 6),
                       _classPicker(),
                     ],
@@ -518,9 +466,8 @@ class _CategoryEditorDialogState
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: _saving
-                        ? null
-                        : () => Navigator.of(context).pop(),
+                    onPressed:
+                        _saving ? null : () => Navigator.of(context).pop(),
                     child: const Text('Cancel',
                         style: TextStyle(color: _textSecondary)),
                   ),
@@ -536,8 +483,7 @@ class _CategoryEditorDialogState
                             width: 16,
                             height: 16,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white))
+                                strokeWidth: 2, color: Colors.white))
                         : Text(_isEditing ? 'Update' : 'Create'),
                   ),
                 ],
@@ -550,12 +496,10 @@ class _CategoryEditorDialogState
   }
 
   Widget _classPicker() {
-    final studentsAsync =
-        ref.watch(schoolStudentsProvider(widget.schoolId));
+    final studentsAsync = ref.watch(schoolStudentsProvider(widget.schoolId));
     return studentsAsync.when(
       loading: () => const SizedBox(
-          height: 24,
-          child: LinearProgressIndicator(color: _accentBlue)),
+          height: 24, child: LinearProgressIndicator(color: _accentBlue)),
       error: (e, _) => Text('Failed to load classes: $e',
           style: const TextStyle(color: _accentRed, fontSize: 12)),
       data: (students) {
@@ -568,10 +512,8 @@ class _CategoryEditorDialogState
         // Include any pre-existing classes that are not in the student set
         final union = {...classes, ..._classes}.toList()..sort();
         if (union.isEmpty) {
-          return const Text(
-              'No classes available — add students first.',
-              style: TextStyle(
-                  color: _textSecondary, fontSize: 12));
+          return const Text('No classes available — add students first.',
+              style: TextStyle(color: _textSecondary, fontSize: 12));
         }
         return Wrap(
           spacing: 6,
@@ -597,8 +539,7 @@ class _CategoryEditorDialogState
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(6),
-                side: BorderSide(
-                    color: selected ? _accentGreen : _borderColor),
+                side: BorderSide(color: selected ? _accentGreen : _borderColor),
               ),
             );
           }).toList(),
@@ -610,8 +551,7 @@ class _CategoryEditorDialogState
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: Text(text,
-            style:
-                const TextStyle(color: _textSecondary, fontSize: 12)),
+            style: const TextStyle(color: _textSecondary, fontSize: 12)),
       );
 
   InputDecoration _input(String hint) => InputDecoration(
@@ -620,8 +560,8 @@ class _CategoryEditorDialogState
         filled: true,
         fillColor: _bgDark,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: 10, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: _borderColor),
@@ -646,7 +586,9 @@ class _CategoryEditorDialogState
 
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
-    final code = _codeCtrl.text.trim().toUpperCase();
+    final code = _isEditing
+        ? widget.existing!.code
+        : _codeCtrl.text.trim().toUpperCase();
     if (name.isEmpty) {
       _toast('Name is required', err: true);
       return;
@@ -655,7 +597,7 @@ class _CategoryEditorDialogState
       _toast('Code is required', err: true);
       return;
     }
-    if (!RegExp(r'^[A-Z][A-Z0-9_]*$').hasMatch(code)) {
+    if (!_isEditing && !RegExp(r'^[A-Z][A-Z0-9_]*$').hasMatch(code)) {
       _toast('Code must be UPPER_SNAKE_CASE and start with a letter',
           err: true);
       return;
@@ -672,16 +614,16 @@ class _CategoryEditorDialogState
         isActive: _isActive,
         applicableClassIds: _classes.toList()..sort(),
         sortOrder: int.tryParse(_sortCtrl.text.trim()) ?? 100,
-        defaultAmount: double.tryParse(_amountCtrl.text.trim()) ?? 0,
+        defaultAmount: widget.existing?.defaultAmount ?? 0,
         createdAt: widget.existing?.createdAt,
+        updatedAt: widget.existing?.updatedAt,
       );
       await repo.upsert(widget.schoolId, category);
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(_isEditing ? 'Updated $name' : 'Created $name'),
+              content: Text(_isEditing ? 'Updated $name' : 'Created $name'),
               backgroundColor: _accentGreen),
         );
       }

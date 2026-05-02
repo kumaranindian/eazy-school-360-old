@@ -5,13 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/responsive_theme.dart';
 import 'core/security/firebase_rules_verifier.dart';
 import 'core/security/firebase_indexes_verifier.dart';
-import 'core/providers/auth_provider.dart';
+import 'core/providers/theme_provider.dart';
 import 'presentation/auth/screens/splash_screen.dart';
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Firebase
   try {
     print('Initializing Firebase...');
@@ -22,7 +22,7 @@ void main() async {
   } catch (e) {
     print('Error initializing Firebase: $e');
   }
-  
+
   runApp(
     const ProviderScope(
       child: EazySchool360App(),
@@ -42,7 +42,9 @@ class EazySchool360App extends ConsumerWidget {
           return MaterialApp(
             title: 'Eazy School 360',
             debugShowCheckedModeBanner: false,
-            theme: ResponsiveTheme.getThemeData(),
+            theme: ResponsiveTheme.getThemeData(isDark: false),
+            darkTheme: ResponsiveTheme.getThemeData(isDark: true),
+            themeMode: ThemeMode.system,
             home: const Scaffold(
               body: Center(
                 child: CircularProgressIndicator(),
@@ -55,7 +57,9 @@ class EazySchool360App extends ConsumerWidget {
           return MaterialApp(
             title: 'Eazy School 360',
             debugShowCheckedModeBanner: false,
-            theme: ResponsiveTheme.getThemeData(),
+            theme: ResponsiveTheme.getThemeData(isDark: false),
+            darkTheme: ResponsiveTheme.getThemeData(isDark: true),
+            themeMode: ThemeMode.system,
             home: Scaffold(
               body: Center(
                 child: Column(
@@ -90,15 +94,14 @@ class EazySchool360App extends ConsumerWidget {
 
         return Consumer(
           builder: (context, ref, child) {
-            final session = ref.watch(currentSessionProvider);
-            final roleTheme = session != null 
-              ? ResponsiveTheme.getRoleTheme(session.role.name)
-              : ResponsiveTheme.getThemeData();
+            final themeMode = ref.watch(themeModeProvider);
 
             return MaterialApp(
               title: 'Eazy School 360',
               debugShowCheckedModeBanner: false,
-              theme: roleTheme,
+              theme: ResponsiveTheme.getThemeData(isDark: false),
+              darkTheme: ResponsiveTheme.getThemeData(isDark: true),
+              themeMode: themeMode,
               home: const SplashScreen(),
             );
           },
@@ -115,37 +118,39 @@ class EazySchool360App extends ConsumerWidget {
         projectId: 'your-firebase-project-id', // Replace with actual project ID
         enforceInProduction: true,
       );
-      
+
       if (!rulesValid) {
         print('❌ Firebase security rules verification failed');
         return false;
       }
-      
+
       print('🔍 Verifying Firebase Indexes...');
       // Verify Firebase indexes are deployed and up-to-date
       final indexesValid = await FirebaseIndexesVerifier.verifyIndexes();
-      
+
       if (!indexesValid) {
-        print('⚠️ Firebase indexes verification failed - attempting auto-deployment');
-        
+        print(
+            '⚠️ Firebase indexes verification failed - attempting auto-deployment');
+
         // Try to deploy indexes automatically
         final deploymentSuccess = await FirebaseIndexesVerifier.deployIndexes();
         if (!deploymentSuccess) {
           print('❌ Failed to deploy indexes automatically');
           return false;
         }
-        
+
         // Verify again after deployment
-        final indexesValidAfterDeploy = await FirebaseIndexesVerifier.verifyIndexes();
+        final indexesValidAfterDeploy =
+            await FirebaseIndexesVerifier.verifyIndexes();
         if (!indexesValidAfterDeploy) {
           print('❌ Indexes still invalid after deployment');
           return false;
         }
       }
-      
+
       // Log status
       await FirebaseIndexesVerifier.logIndexesStatus();
-      
+
       print('✅ App start allowed - all verifications passed');
       return true;
     } catch (error) {
