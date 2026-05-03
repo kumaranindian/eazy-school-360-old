@@ -90,7 +90,7 @@ class _AdHocFeeAssignmentScreenState
   Future<void> _submit() async {
     // Prevent race condition - don't allow multiple submissions
     if (_isLoading) return;
-    
+
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCategory.isEmpty) {
       _showError('Please select a fee category');
@@ -129,7 +129,7 @@ class _AdHocFeeAssignmentScreenState
       if (mounted) {
         // Clear form data after successful submission
         _clearForm();
-        
+
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           backgroundColor: _accentGreen,
@@ -137,7 +137,7 @@ class _AdHocFeeAssignmentScreenState
               'Successfully assigned fee to ${result.studentsAssigned} students (₹${result.totalAmount.toStringAsFixed(0)})'),
           duration: const Duration(seconds: 3),
         ));
-        
+
         // If callback provided (inline rendering), use it
         if (widget.onSuccess != null) {
           widget.onSuccess!();
@@ -210,8 +210,7 @@ class _AdHocFeeAssignmentScreenState
                 controller: _nameCtrl,
                 label: 'Assignment Name',
                 hint: 'e.g., Sports Day 2026, Annual Day Fee',
-                validator: (v) =>
-                    v?.trim().isEmpty ?? true ? 'Required' : null,
+                validator: (v) => v?.trim().isEmpty ?? true ? 'Required' : null,
               ),
               const SizedBox(height: 16),
 
@@ -499,7 +498,23 @@ class _AdHocFeeAssignmentScreenState
 
   Widget _buildClassSelector() {
     // Simplified - in production, fetch from repository
-    final classes = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+    final classes = [
+      'LKG',
+      'UKG',
+      'KG',
+      'I',
+      'II',
+      'III',
+      'IV',
+      'V',
+      'VI',
+      'VII',
+      'VIII',
+      'IX',
+      'X',
+      'XI',
+      'XII'
+    ];
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -589,7 +604,8 @@ class _AdHocFeeAssignmentScreenState
           _previewRow('Total Amount', money.format(preview.totalAmount)),
           if (preview.studentCount > 0) ...[
             const SizedBox(height: 8),
-            Text('Per student: ${money.format(preview.totalAmount / preview.studentCount)}',
+            Text(
+                'Per student: ${money.format(preview.totalAmount / preview.studentCount)}',
                 style: const TextStyle(color: _textSecondary, fontSize: 12)),
           ],
         ],
@@ -603,7 +619,8 @@ class _AdHocFeeAssignmentScreenState
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: _textSecondary, fontSize: 13)),
+          Text(label,
+              style: const TextStyle(color: _textSecondary, fontSize: 13)),
           Text(value,
               style: const TextStyle(
                   color: _textPrimary,

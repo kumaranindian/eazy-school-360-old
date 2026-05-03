@@ -375,24 +375,25 @@ class TermFeePaymentRepository {
 
       print('[Payment Repo] Unique AYs with arrears: ${uniqueAySet.toList()}');
 
-      // For each unique AY with arrears, fetch the student_fee_details record
-      for (final ay in uniqueAySet) {
-        final arrearsQuery = _firestore
-            .collection('schools')
-            .doc(req.schoolId)
-            .collection('student_fee_details')
-            .where('stuId', isEqualTo: int.tryParse(ledger.studentId) ?? 0)
-            .where('academicYear', isEqualTo: ay)
-            .where('isArrearsRecord', isEqualTo: true)
-            .limit(1);
-        final arrearsSnap = await arrearsQuery.get();
-        if (arrearsSnap.docs.isNotEmpty) {
-          arrearsDocRefs.add(arrearsSnap.docs.first.reference);
-          arrearsDocSnaps.add(arrearsSnap.docs.first);
-          print('[Payment Repo] Loaded arrears doc for AY: $ay');
-        } else {
-          print('[Payment Repo] No arrears doc found for AY: $ay');
-        }
+      // Since arrears are now stored in the current year's student_fee_details record,
+      // we only need to fetch the current year record
+      final currentAy = ledger.academicYear;
+      final currentYearQuery = _firestore
+          .collection('schools')
+          .doc(req.schoolId)
+          .collection('student_fee_details')
+          .where('stuId', isEqualTo: int.tryParse(ledger.studentId) ?? 0)
+          .where('academicYear', isEqualTo: currentAy)
+          .limit(1);
+      final currentYearSnap = await currentYearQuery.get();
+      if (currentYearSnap.docs.isNotEmpty) {
+        arrearsDocRefs.add(currentYearSnap.docs.first.reference);
+        arrearsDocSnaps.add(currentYearSnap.docs.first);
+        print(
+            '[Payment Repo] Loaded current year student_fee_details for AY: $currentAy');
+      } else {
+        print(
+            '[Payment Repo] No student_fee_details found for current AY: $currentAy');
       }
 
       // === PHASE 2: PROCESS DATA ===
@@ -665,32 +666,29 @@ class TermFeePaymentRepository {
       // 4) update student_fee_details for arrears payments
       print(
           '[Payment Repo] Starting arrears updates. Docs to update: ${arrearsDocRefs.length}');
-      for (int i = 0; i < arrearsDocRefs.length; i++) {
-        final docRef = arrearsDocRefs[i];
-        final currentData = arrearsDocSnaps[i].data() as Map<String, dynamic>;
-        final academicYear = currentData['academicYear'] as String;
+      if (arrearsDocRefs.isNotEmpty) {
+        final docRef = arrearsDocRefs[0];
+        final currentData = arrearsDocSnaps[0].data() as Map<String, dynamic>;
 
-        print('[Payment Repo] Processing arrears doc for AY: $academicYear');
+        print('[Payment Repo] Processing current year student_fee_details');
 
         // Build the update map from tracked arrears updates
         final updateMap = <String, dynamic>{};
 
-        // Find all updates for this academic year
+        // Apply all tracked arrears updates (they all go to the current year record)
         for (final update in arrearsUpdates.values) {
-          if (update['academicYear'] as String == academicYear) {
-            for (final key in update.keys) {
-              if (key == 'schoolId' ||
-                  key == 'studentId' ||
-                  key == 'academicYear') {
-                continue; // Skip metadata fields
-              }
-              final currentVal = currentData[key] as num? ?? 0.0;
-              final newVal = update[key] as num? ?? 0.0;
-              if (newVal != 0) {
-                updateMap[key] = currentVal + newVal;
-                print(
-                    '[Payment Repo] Field update: $key, current: $currentVal, delta: $newVal, new: ${currentVal + newVal}');
-              }
+          for (final key in update.keys) {
+            if (key == 'schoolId' ||
+                key == 'studentId' ||
+                key == 'academicYear') {
+              continue; // Skip metadata fields
+            }
+            final currentVal = currentData[key] as num? ?? 0.0;
+            final newVal = update[key] as num? ?? 0.0;
+            if (newVal != 0) {
+              updateMap[key] = currentVal + newVal;
+              print(
+                  '[Payment Repo] Field update: $key, current: $currentVal, delta: $newVal, new: ${currentVal + newVal}');
             }
           }
         }
@@ -712,19 +710,20 @@ class TermFeePaymentRepository {
                   .clamp(0, double.infinity);
           updateMap['updatedAt'] = FieldValue.serverTimestamp();
 
-          print('[Payment Repo] Applying update to arrears doc: $updateMap');
+          print(
+              '[Payment Repo] Applying update to student_fee_details: $updateMap');
           txn.update(docRef, updateMap);
-          print('[Payment Repo] Arrears record updated for AY $academicYear');
+          print('[Payment Repo] student_fee_details updated');
         } else {
-          print('[Payment Repo] No updates to apply for AY $academicYear');
+          print('[Payment Repo] No arrears updates to apply');
         }
-      }
-
-      if (arrearsDocRefs.isEmpty && arrearsUpdates.isNotEmpty) {
-        print(
-            '[Payment Repo] WARNING: Arrears updates tracked but no documents found to update');
-        print(
-            '[Payment Repo] Tracked updates: ${arrearsUpdates.keys.toList()}');
+      } else {
+        if (arrearsUpdates.isNotEmpty) {
+          print(
+              '[Payment Repo] WARNING: Arrears updates tracked but no student_fee_details document found');
+          print(
+              '[Payment Repo] Tracked updates: ${arrearsUpdates.keys.toList()}');
+        }
       }
 
       // 5) bump receipt counter

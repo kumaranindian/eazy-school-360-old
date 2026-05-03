@@ -24,14 +24,15 @@ class BillManagementScreen extends ConsumerStatefulWidget {
   const BillManagementScreen({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<BillManagementScreen> createState() => _BillManagementScreenState();
+  ConsumerState<BillManagementScreen> createState() =>
+      _BillManagementScreenState();
 }
 
 class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
-  DateTime _startDate = DateTime(DateTime.now().year, 1, 1);
-  DateTime _endDate = DateTime(DateTime.now().year, 12, 31, 23, 59, 59);
+  DateTime _startDate = _startOfCurrentWeek();
+  DateTime _endDate = _endOfCurrentWeek();
   String _filterType = 'Both';
-  String _quickRange = 'year';
+  String _quickRange = 'week';
   List<Map<String, dynamic>> _revenueBills = [];
   List<Map<String, dynamic>> _expenseBills = [];
   bool _isLoading = false;
@@ -73,13 +74,17 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     try {
       final revenueResults = <Map<String, dynamic>>[];
       final expenseResults = <Map<String, dynamic>>[];
-      final rangeStart = Timestamp.fromDate(DateTime(_startDate.year, _startDate.month, _startDate.day));
-      final rangeEnd = Timestamp.fromDate(DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59, 999));
-      
+      final rangeStart = Timestamp.fromDate(
+          DateTime(_startDate.year, _startDate.month, _startDate.day));
+      final rangeEnd = Timestamp.fromDate(DateTime(
+          _endDate.year, _endDate.month, _endDate.day, 23, 59, 59, 999));
+
       // Fetch Revenue bills (term fee payments)
       if (_filterType == 'Both' || _filterType == 'Revenue') {
         final termPayments = await FirebaseFirestore.instance
-            .collection('schools').doc(_schoolId).collection('termFeePayments')
+            .collection('schools')
+            .doc(_schoolId)
+            .collection('termFeePayments')
             .where('paidAt', isGreaterThanOrEqualTo: rangeStart)
             .where('paidAt', isLessThanOrEqualTo: rangeEnd)
             .orderBy('paidAt', descending: true)
@@ -93,20 +98,23 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
             revenueResults.add(d);
           }
         }
-        
+
         // Fetch ad-hoc fee items with payments
         try {
           final adhocItems = await FirebaseFirestore.instance
-              .collection('schools').doc(_schoolId).collection('studentFeeItems')
+              .collection('schools')
+              .doc(_schoolId)
+              .collection('studentFeeItems')
               .where('isActive', isEqualTo: true)
               .where('paidAmount', isGreaterThan: 0)
               .get();
-          
+
           for (final doc in adhocItems.docs) {
             final d = doc.data();
-            final updatedAt = (d['updatedAt'] as Timestamp?) ?? (d['assignedAt'] as Timestamp?);
-            if (updatedAt != null && 
-                updatedAt.compareTo(rangeStart) >= 0 && 
+            final updatedAt = (d['updatedAt'] as Timestamp?) ??
+                (d['assignedAt'] as Timestamp?);
+            if (updatedAt != null &&
+                updatedAt.compareTo(rangeStart) >= 0 &&
                 updatedAt.compareTo(rangeEnd) <= 0) {
               revenueResults.add({
                 'id': doc.id,
@@ -127,11 +135,13 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           print('Error fetching ad-hoc payments: $e');
         }
       }
-      
+
       // Fetch Expense bills
       if (_filterType == 'Both' || _filterType == 'Expense') {
         final expenseBills = await FirebaseFirestore.instance
-            .collection('schools').doc(_schoolId).collection('bills')
+            .collection('schools')
+            .doc(_schoolId)
+            .collection('bills')
             .where('billType', isEqualTo: 'Expense')
             .where('billDate', isGreaterThanOrEqualTo: rangeStart)
             .where('billDate', isLessThanOrEqualTo: rangeEnd)
@@ -146,7 +156,7 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           }
         }
       }
-      
+
       setState(() {
         _revenueBills = revenueResults;
         _expenseBills = expenseResults;
@@ -157,7 +167,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error fetching bills: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error fetching bills: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
@@ -170,7 +182,11 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     final isMobile = screenSize.width < 600;
 
     return SingleChildScrollView(
-      padding: EdgeInsets.all(isDesktop ? 28 : isMobile ? 12 : 16),
+      padding: EdgeInsets.all(isDesktop
+          ? 28
+          : isMobile
+              ? 12
+              : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -180,7 +196,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           SizedBox(height: isMobile ? 12 : 16),
           if (_isLoading)
             const Center(child: CircularProgressIndicator(color: _accentGreen))
-          else ..._buildBillsTables(isDesktop, isMobile),
+          else
+            ..._buildBillsTables(isDesktop, isMobile),
         ],
       ),
     );
@@ -191,7 +208,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     return Container(
       padding: EdgeInsets.all(isMobile ? 16 : 20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)]),
+        gradient: const LinearGradient(
+            colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)]),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(children: [
@@ -201,7 +219,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
             color: Colors.white.withOpacity(0.2),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(Icons.receipt_long_rounded, color: Colors.white, size: isMobile ? 24 : 28),
+          child: Icon(Icons.receipt_long_rounded,
+              color: Colors.white, size: isMobile ? 24 : 28),
         ),
         SizedBox(width: isMobile ? 12 : 16),
         Expanded(
@@ -287,28 +306,42 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
   Widget _buildFilterBar(bool isDesktop, bool isMobile) {
     return Container(
       padding: EdgeInsets.all(isMobile ? 12 : 16),
-      decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
+      decoration: BoxDecoration(
+          color: _cardDark,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _borderColor)),
       child: Wrap(
         spacing: isMobile ? 8 : 12,
         runSpacing: isMobile ? 8 : 12,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Icon(Icons.filter_list_rounded, color: _accentGreen, size: isMobile ? 18 : 20),
-          Text('Filter', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: isMobile ? 12 : 14)),
+          Icon(Icons.filter_list_rounded,
+              color: _accentGreen, size: isMobile ? 18 : 20),
+          Text('Filter',
+              style: TextStyle(
+                  color: _textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: isMobile ? 12 : 14)),
           _buildQuickChip('Today', 'today', isMobile),
           _buildQuickChip('This Week', 'week', isMobile),
           _buildQuickChip('This Month', 'month', isMobile),
           _buildQuickChip('This Year', 'year', isMobile),
           _buildQuickChip('Custom', 'custom', isMobile),
-          _buildDateButton('From', _startDate, (d) => setState(() => _startDate = d),
+          _buildDateButton(
+              'From', _startDate, (d) => setState(() => _startDate = d),
               enabled: _quickRange == 'custom', isMobile: isMobile),
           _buildDateButton('To', _endDate, (d) => setState(() => _endDate = d),
               enabled: _quickRange == 'custom', isMobile: isMobile),
           _buildTypeDropdown(isMobile),
           ElevatedButton.icon(
             icon: Icon(Icons.search_rounded, size: isMobile ? 16 : 18),
-            label: Text('Apply Filter', style: TextStyle(fontSize: isMobile ? 12 : 14)),
-            style: ElevatedButton.styleFrom(backgroundColor: _accentGreen, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            label: Text('Apply Filter',
+                style: TextStyle(fontSize: isMobile ? 12 : 14)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _accentGreen,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8))),
             onPressed: _fetchBills,
           ),
         ],
@@ -322,7 +355,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
       onTap: () => _applyQuickRange(key),
       borderRadius: BorderRadius.circular(20),
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 12, vertical: isMobile ? 6 : 8),
+        padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 10 : 12, vertical: isMobile ? 6 : 8),
         decoration: BoxDecoration(
           color: selected ? _accentGreen.withValues(alpha: 0.15) : _bgDark,
           borderRadius: BorderRadius.circular(20),
@@ -340,7 +374,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     );
   }
 
-  Widget _buildDateButton(String label, DateTime date, Function(DateTime) onPicked,
+  Widget _buildDateButton(
+      String label, DateTime date, Function(DateTime) onPicked,
       {bool enabled = true, bool isMobile = false}) {
     return Opacity(
       opacity: enabled ? 1.0 : 0.5,
@@ -370,7 +405,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
               border: Border.all(color: _borderColor)),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(
-                enabled ? Icons.calendar_today_rounded : Icons.lock_outline_rounded,
+                enabled
+                    ? Icons.calendar_today_rounded
+                    : Icons.lock_outline_rounded,
                 size: 14,
                 color: enabled ? _accentGreen : _textSecondary),
             const SizedBox(width: 8),
@@ -379,9 +416,11 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(label,
-                      style: const TextStyle(fontSize: 10, color: _textSecondary)),
+                      style:
+                          const TextStyle(fontSize: 10, color: _textSecondary)),
                   Text(DateFormat('yyyy-MM-dd').format(date),
-                      style: const TextStyle(color: _textPrimary, fontSize: 13)),
+                      style:
+                          const TextStyle(color: _textPrimary, fontSize: 13)),
                 ]),
           ]),
         ),
@@ -397,14 +436,17 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         items: const ['Both', 'Revenue', 'Expense'],
         itemLabel: (v) => v,
         hint: 'Type',
-        onChanged: (v) { if (v != null) setState(() => _filterType = v); },
+        onChanged: (v) {
+          if (v != null) setState(() => _filterType = v);
+        },
       ),
     );
   }
 
-  Widget _buildActionBar(String billType, bool isMobile, int billCount, Set<String> selectedBills) {
+  Widget _buildActionBar(String billType, bool isMobile, int billCount,
+      Set<String> selectedBills) {
     final hasSelection = selectedBills.isNotEmpty;
-    
+
     return Wrap(
       spacing: isMobile ? 6 : 8,
       runSpacing: isMobile ? 6 : 8,
@@ -413,46 +455,58 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         if (hasSelection) ...[
           ElevatedButton.icon(
             icon: Icon(Icons.print_rounded, size: isMobile ? 14 : 16),
-            label: Text('Print Selected (${selectedBills.length})', style: TextStyle(fontSize: isMobile ? 11 : 13)),
+            label: Text('Print Selected (${selectedBills.length})',
+                style: TextStyle(fontSize: isMobile ? 11 : 13)),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF8B5CF6),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              padding: EdgeInsets.symmetric(vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              padding: EdgeInsets.symmetric(
+                  vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
             ),
             onPressed: () => _printSelectedBills(billType, selectedBills),
           ),
           ElevatedButton.icon(
             icon: Icon(Icons.delete_rounded, size: isMobile ? 14 : 16),
-            label: Text('Delete Selected (${selectedBills.length})', style: TextStyle(fontSize: isMobile ? 11 : 13)),
+            label: Text('Delete Selected (${selectedBills.length})',
+                style: TextStyle(fontSize: isMobile ? 11 : 13)),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFEF4444),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              padding: EdgeInsets.symmetric(vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              padding: EdgeInsets.symmetric(
+                  vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
             ),
             onPressed: () => _deleteSelectedBills(billType, selectedBills),
           ),
         ],
         ElevatedButton.icon(
           icon: Icon(Icons.print_rounded, size: isMobile ? 14 : 16),
-          label: Text('Print All', style: TextStyle(fontSize: isMobile ? 11 : 13)),
+          label:
+              Text('Print All', style: TextStyle(fontSize: isMobile ? 11 : 13)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF3B82F6),
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            padding: EdgeInsets.symmetric(vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: EdgeInsets.symmetric(
+                vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
           ),
           onPressed: billCount == 0 ? null : () => _printAllBills(billType),
         ),
         ElevatedButton.icon(
           icon: Icon(Icons.download_rounded, size: isMobile ? 14 : 16),
-          label: Text('Export CSV', style: TextStyle(fontSize: isMobile ? 11 : 13)),
+          label: Text('Export CSV',
+              style: TextStyle(fontSize: isMobile ? 11 : 13)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF10B981),
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            padding: EdgeInsets.symmetric(vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: EdgeInsets.symmetric(
+                vertical: isMobile ? 8 : 10, horizontal: isMobile ? 10 : 14),
           ),
           onPressed: billCount == 0 ? null : () => _exportCsv(billType),
         ),
@@ -462,32 +516,39 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
 
   List<Widget> _buildBillsTables(bool isDesktop, bool isMobile) {
     final tables = <Widget>[];
-    
+
     // Revenue Bills Table
     if (_filterType == 'Both' || _filterType == 'Revenue') {
-      tables.add(_buildSectionHeader('Revenue Bills', _revenueBills.length, isMobile));
+      tables.add(
+          _buildSectionHeader('Revenue Bills', _revenueBills.length, isMobile));
       tables.add(const SizedBox(height: 12));
-      tables.add(_buildActionBar('Revenue', isMobile, _revenueBills.length, _selectedRevenueBills));
+      tables.add(_buildActionBar(
+          'Revenue', isMobile, _revenueBills.length, _selectedRevenueBills));
       tables.add(const SizedBox(height: 12));
-      tables.add(_buildSingleTable('Revenue', _revenueBills, _selectedRevenueBills, isDesktop, isMobile));
+      tables.add(_buildSingleTable('Revenue', _revenueBills,
+          _selectedRevenueBills, isDesktop, isMobile));
       tables.add(const SizedBox(height: 24));
     }
-    
+
     // Expense Bills Table
     if (_filterType == 'Both' || _filterType == 'Expense') {
-      tables.add(_buildSectionHeader('Expense Bills', _expenseBills.length, isMobile));
+      tables.add(
+          _buildSectionHeader('Expense Bills', _expenseBills.length, isMobile));
       tables.add(const SizedBox(height: 12));
-      tables.add(_buildActionBar('Expense', isMobile, _expenseBills.length, _selectedExpenseBills));
+      tables.add(_buildActionBar(
+          'Expense', isMobile, _expenseBills.length, _selectedExpenseBills));
       tables.add(const SizedBox(height: 12));
-      tables.add(_buildSingleTable('Expense', _expenseBills, _selectedExpenseBills, isDesktop, isMobile));
+      tables.add(_buildSingleTable('Expense', _expenseBills,
+          _selectedExpenseBills, isDesktop, isMobile));
     }
-    
+
     return tables;
   }
 
   Widget _buildSectionHeader(String title, int count, bool isMobile) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16, vertical: isMobile ? 10 : 12),
+      padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 12 : 16, vertical: isMobile ? 10 : 12),
       decoration: BoxDecoration(
         color: _cardDark,
         borderRadius: BorderRadius.circular(8),
@@ -497,7 +558,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         children: [
           Icon(
             title.contains('Revenue') ? Icons.trending_up : Icons.trending_down,
-            color: title.contains('Revenue') ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+            color: title.contains('Revenue')
+                ? const Color(0xFF10B981)
+                : const Color(0xFFEF4444),
             size: isMobile ? 18 : 20,
           ),
           SizedBox(width: isMobile ? 8 : 12),
@@ -511,7 +574,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           ),
           const Spacer(),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 10, vertical: isMobile ? 3 : 4),
+            padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 8 : 10, vertical: isMobile ? 3 : 4),
             decoration: BoxDecoration(
               color: _accentGreen.withOpacity(0.15),
               borderRadius: BorderRadius.circular(12),
@@ -530,12 +594,19 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     );
   }
 
-  Widget _buildSingleTable(String billType, List<Map<String, dynamic>> bills, Set<String> selectedBills, bool isDesktop, bool isMobile) {
+  Widget _buildSingleTable(String billType, List<Map<String, dynamic>> bills,
+      Set<String> selectedBills, bool isDesktop, bool isMobile) {
     if (bills.isEmpty) {
       return Container(
         padding: EdgeInsets.all(isMobile ? 24 : 40),
-        decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
-        child: Center(child: Text('No $billType bills found.', style: TextStyle(color: _textSecondary, fontSize: isMobile ? 13 : 15))),
+        decoration: BoxDecoration(
+            color: _cardDark,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _borderColor)),
+        child: Center(
+            child: Text('No $billType bills found.',
+                style: TextStyle(
+                    color: _textSecondary, fontSize: isMobile ? 13 : 15))),
       );
     }
 
@@ -552,19 +623,21 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           final docId = b['docId']?.toString() ?? '';
           final isSelected = selectedBills.contains(docId);
           final isDeleted = b['isDeleted'] == true;
-          
+
           DateTime? dateField;
           double amount = 0;
           String identifier = '';
           String description = '';
           String name = '';
-          
+
           if (isRevenue) {
             amount = (b['amount'] as num?)?.toDouble() ?? 0;
-            dateField = (b['paidAt'] is Timestamp) ? (b['paidAt'] as Timestamp).toDate() : (b['paidAt'] as DateTime?);
+            dateField = (b['paidAt'] is Timestamp)
+                ? (b['paidAt'] as Timestamp).toDate()
+                : (b['paidAt'] as DateTime?);
             identifier = (b['receiptNumber'] ?? b['id'] ?? '').toString();
             name = (b['studentName'] ?? '').toString();
-            
+
             final isAdHoc = b['isAdHoc'] == true;
             if (isAdHoc) {
               description = (b['termName'] ?? 'Ad-hoc Fee').toString();
@@ -573,7 +646,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
               if (components != null && components.isNotEmpty) {
                 description = components.map((c) {
                   final comp = c as Map<String, dynamic>;
-                  final cName = (comp['termName'] as String?) ?? (comp['itemName'] as String?) ?? 'Fee';
+                  final cName = (comp['termName'] as String?) ??
+                      (comp['itemName'] as String?) ??
+                      'Fee';
                   final amt = (comp['amount'] as num?)?.toDouble() ?? 0;
                   return '$cName (₹${amt.toStringAsFixed(0)})';
                 }).join(', ');
@@ -582,19 +657,32 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
               }
             }
           } else {
-            amount = (b['expenseAmount'] as num?)?.toDouble() ?? (b['amount'] as num?)?.toDouble() ?? 0;
-            dateField = (b['billDate'] is Timestamp) ? (b['billDate'] as Timestamp).toDate() : (b['billDate'] as DateTime?);
+            amount = (b['expenseAmount'] as num?)?.toDouble() ??
+                (b['amount'] as num?)?.toDouble() ??
+                0;
+            dateField = (b['billDate'] is Timestamp)
+                ? (b['billDate'] as Timestamp).toDate()
+                : (b['billDate'] as DateTime?);
             identifier = 'EXP-${b['billId'] ?? ''}';
             name = (b['expensePOC'] ?? b['pointOfContact'] ?? '').toString();
-            description = (b['expenseType'] ?? b['categoryName'] ?? b['description'] ?? '').toString();
+            description = (b['expenseType'] ??
+                    b['categoryName'] ??
+                    b['description'] ??
+                    '')
+                .toString();
           }
 
           return Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isSelected ? _accentGreen.withOpacity(0.1) : (isDeleted ? const Color(0xFFEF4444).withOpacity(0.06) : _cardDark),
+              color: isSelected
+                  ? _accentGreen.withOpacity(0.1)
+                  : (isDeleted
+                      ? const Color(0xFFEF4444).withOpacity(0.06)
+                      : _cardDark),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: isSelected ? _accentGreen : _borderColor),
+              border:
+                  Border.all(color: isSelected ? _accentGreen : _borderColor),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -618,20 +706,28 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                       child: Text(
                         identifier,
                         style: TextStyle(
-                          color: isDeleted ? _textSecondary.withOpacity(0.5) : _textPrimary,
+                          color: isDeleted
+                              ? _textSecondary.withOpacity(0.5)
+                              : _textPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          decoration: isDeleted ? TextDecoration.lineThrough : null,
+                          decoration:
+                              isDeleted ? TextDecoration.lineThrough : null,
                         ),
                       ),
                     ),
                     Text(
                       '₹${amount.toStringAsFixed(2)}',
                       style: TextStyle(
-                        color: isDeleted ? _textSecondary.withOpacity(0.5) : (isRevenue ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
+                        color: isDeleted
+                            ? _textSecondary.withOpacity(0.5)
+                            : (isRevenue
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFFEF4444)),
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
-                        decoration: isDeleted ? TextDecoration.lineThrough : null,
+                        decoration:
+                            isDeleted ? TextDecoration.lineThrough : null,
                       ),
                     ),
                   ],
@@ -640,7 +736,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                 Text(
                   name.isEmpty ? 'N/A' : name,
                   style: TextStyle(
-                    color: isDeleted ? _textSecondary.withOpacity(0.5) : _textPrimary,
+                    color: isDeleted
+                        ? _textSecondary.withOpacity(0.5)
+                        : _textPrimary,
                     fontSize: 13,
                     decoration: isDeleted ? TextDecoration.lineThrough : null,
                   ),
@@ -649,7 +747,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                 Text(
                   description,
                   style: TextStyle(
-                    color: isDeleted ? _textSecondary.withOpacity(0.4) : _textSecondary,
+                    color: isDeleted
+                        ? _textSecondary.withOpacity(0.4)
+                        : _textSecondary,
                     fontSize: 11,
                     decoration: isDeleted ? TextDecoration.lineThrough : null,
                   ),
@@ -658,7 +758,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  dateField != null ? DateFormat('dd/MM/yyyy').format(dateField) : '',
+                  dateField != null
+                      ? DateFormat('dd/MM/yyyy').format(dateField)
+                      : '',
                   style: TextStyle(
                     color: _textSecondary.withOpacity(0.7),
                     fontSize: 10,
@@ -668,7 +770,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                 Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.print_rounded, color: Color(0xFF3B82F6), size: 16),
+                      icon: const Icon(Icons.print_rounded,
+                          color: Color(0xFF3B82F6), size: 16),
                       tooltip: 'Print',
                       onPressed: () => _printSingleBill(b, billType),
                       padding: EdgeInsets.zero,
@@ -676,7 +779,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                     ),
                     const SizedBox(width: 12),
                     IconButton(
-                      icon: const Icon(Icons.delete_rounded, color: Color(0xFFEF4444), size: 16),
+                      icon: const Icon(Icons.delete_rounded,
+                          color: Color(0xFFEF4444), size: 16),
                       tooltip: 'Delete',
                       onPressed: () => _confirmDeleteBill(b, billType),
                       padding: EdgeInsets.zero,
@@ -692,7 +796,10 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     }
 
     return Container(
-      decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
+      decoration: BoxDecoration(
+          color: _cardDark,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _borderColor)),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
@@ -707,7 +814,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                 onChanged: (val) {
                   setState(() {
                     if (val == true) {
-                      selectedBills.addAll(bills.map((b) => b['docId']?.toString() ?? ''));
+                      selectedBills.addAll(
+                          bills.map((b) => b['docId']?.toString() ?? ''));
                     } else {
                       selectedBills.clear();
                     }
@@ -716,30 +824,62 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                 activeColor: _accentGreen,
               ),
             ),
-            DataColumn(label: Text(isRevenue ? 'Receipt#' : 'Bill#', style: const TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            const DataColumn(label: Text('Date', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            DataColumn(label: Text(isRevenue ? 'Student Name' : 'POC', style: const TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            const DataColumn(label: Text('Description', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            const DataColumn(label: Text('Amount', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
-            const DataColumn(label: Text('Actions', style: TextStyle(color: _accentGreen, fontWeight: FontWeight.bold, fontSize: 12))),
+            DataColumn(
+                label: Text(isRevenue ? 'Receipt#' : 'Bill#',
+                    style: const TextStyle(
+                        color: _accentGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12))),
+            const DataColumn(
+                label: Text('Date',
+                    style: TextStyle(
+                        color: _accentGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12))),
+            DataColumn(
+                label: Text(isRevenue ? 'Student Name' : 'POC',
+                    style: const TextStyle(
+                        color: _accentGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12))),
+            const DataColumn(
+                label: Text('Amount',
+                    style: TextStyle(
+                        color: _accentGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12))),
+            const DataColumn(
+                label: Text('Actions',
+                    style: TextStyle(
+                        color: _accentGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12))),
+            const DataColumn(
+                label: Text('Description',
+                    style: TextStyle(
+                        color: _accentGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12))),
           ],
           rows: bills.map((b) {
             final docId = b['docId']?.toString() ?? '';
             final isSelected = selectedBills.contains(docId);
             final isDeleted = b['isDeleted'] == true;
-            
+
             DateTime? dateField;
             double amount = 0;
             String identifier = '';
             String description = '';
             String name = '';
-            
+
             if (isRevenue) {
               amount = (b['amount'] as num?)?.toDouble() ?? 0;
-              dateField = (b['paidAt'] is Timestamp) ? (b['paidAt'] as Timestamp).toDate() : (b['paidAt'] as DateTime?);
+              dateField = (b['paidAt'] is Timestamp)
+                  ? (b['paidAt'] as Timestamp).toDate()
+                  : (b['paidAt'] as DateTime?);
               identifier = (b['receiptNumber'] ?? b['id'] ?? '').toString();
               name = (b['studentName'] ?? '').toString();
-              
+
               final isAdHoc = b['isAdHoc'] == true;
               if (isAdHoc) {
                 description = (b['termName'] ?? 'Ad-hoc Fee').toString();
@@ -748,7 +888,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                 if (components != null && components.isNotEmpty) {
                   description = components.map((c) {
                     final comp = c as Map<String, dynamic>;
-                    final cName = (comp['termName'] as String?) ?? (comp['itemName'] as String?) ?? 'Fee';
+                    final cName = (comp['termName'] as String?) ??
+                        (comp['itemName'] as String?) ??
+                        'Fee';
                     final amt = (comp['amount'] as num?)?.toDouble() ?? 0;
                     return '$cName (₹${amt.toStringAsFixed(0)})';
                   }).join(', ');
@@ -757,11 +899,19 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                 }
               }
             } else {
-              amount = (b['expenseAmount'] as num?)?.toDouble() ?? (b['amount'] as num?)?.toDouble() ?? 0;
-              dateField = (b['billDate'] is Timestamp) ? (b['billDate'] as Timestamp).toDate() : (b['billDate'] as DateTime?);
+              amount = (b['expenseAmount'] as num?)?.toDouble() ??
+                  (b['amount'] as num?)?.toDouble() ??
+                  0;
+              dateField = (b['billDate'] is Timestamp)
+                  ? (b['billDate'] as Timestamp).toDate()
+                  : (b['billDate'] as DateTime?);
               identifier = 'EXP-${b['billId'] ?? ''}';
               name = (b['expensePOC'] ?? b['pointOfContact'] ?? '').toString();
-              description = (b['expenseType'] ?? b['categoryName'] ?? b['description'] ?? '').toString();
+              description = (b['expenseType'] ??
+                      b['categoryName'] ??
+                      b['description'] ??
+                      '')
+                  .toString();
             }
 
             final rowTextStyle = TextStyle(
@@ -771,7 +921,12 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
             );
 
             return DataRow(
-              color: isSelected ? WidgetStateProperty.all(_accentGreen.withOpacity(0.1)) : (isDeleted ? WidgetStateProperty.all(const Color(0xFFEF4444).withOpacity(0.06)) : null),
+              color: isSelected
+                  ? WidgetStateProperty.all(_accentGreen.withOpacity(0.1))
+                  : (isDeleted
+                      ? WidgetStateProperty.all(
+                          const Color(0xFFEF4444).withOpacity(0.06))
+                      : null),
               cells: [
                 DataCell(Checkbox(
                   value: isSelected,
@@ -787,18 +942,53 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                   activeColor: _accentGreen,
                 )),
                 DataCell(Text(identifier, style: rowTextStyle)),
-                DataCell(Text(dateField != null ? DateFormat('dd/MM/yyyy').format(dateField) : '', style: rowTextStyle)),
-                DataCell(Text(name.isEmpty ? 'N/A' : name, style: rowTextStyle)),
-                DataCell(Text(description, style: TextStyle(color: isDeleted ? _textSecondary.withOpacity(0.4) : _textSecondary, fontSize: 12, decoration: isDeleted ? TextDecoration.lineThrough : null))),
-                DataCell(Text('₹${amount.toStringAsFixed(2)}', style: TextStyle(
-                  color: isDeleted ? _textSecondary.withOpacity(0.5) : (isRevenue ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
-                  fontWeight: FontWeight.bold, fontSize: 12,
-                  decoration: isDeleted ? TextDecoration.lineThrough : null,
-                ))),
+                DataCell(Text(
+                    dateField != null
+                        ? DateFormat('dd/MM/yyyy').format(dateField)
+                        : '',
+                    style: rowTextStyle)),
+                DataCell(
+                    Text(name.isEmpty ? 'N/A' : name, style: rowTextStyle)),
+                DataCell(Text('₹${amount.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: isDeleted
+                          ? _textSecondary.withOpacity(0.5)
+                          : (isRevenue
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFFEF4444)),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      decoration: isDeleted ? TextDecoration.lineThrough : null,
+                    ))),
                 DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
-                  IconButton(icon: const Icon(Icons.print_rounded, color: Color(0xFF3B82F6), size: 18), tooltip: 'Print', onPressed: () => _printSingleBill(b, billType)),
-                  IconButton(icon: const Icon(Icons.delete_rounded, color: Color(0xFFEF4444), size: 18), tooltip: 'Delete', onPressed: () => _confirmDeleteBill(b, billType)),
+                  IconButton(
+                      icon: const Icon(Icons.print_rounded,
+                          color: Color(0xFF3B82F6), size: 18),
+                      tooltip: 'Print',
+                      onPressed: () => _printSingleBill(b, billType)),
+                  IconButton(
+                      icon: const Icon(Icons.delete_rounded,
+                          color: Color(0xFFEF4444), size: 18),
+                      tooltip: 'Delete',
+                      onPressed: () => _confirmDeleteBill(b, billType)),
                 ])),
+                DataCell(
+                  SizedBox(
+                    width: 200,
+                    child: Text(
+                      description,
+                      style: TextStyle(
+                        color: isDeleted
+                            ? _textSecondary.withOpacity(0.4)
+                            : _textSecondary,
+                        fontSize: 12,
+                        decoration:
+                            isDeleted ? TextDecoration.lineThrough : null,
+                      ),
+                      softWrap: true,
+                    ),
+                  ),
+                ),
               ],
             );
           }).toList(),
@@ -808,17 +998,21 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
   }
 
   // ============ PRINT SINGLE BILL ============
-  Future<void> _printSingleBill(Map<String, dynamic> bill, String billType) async {
+  Future<void> _printSingleBill(
+      Map<String, dynamic> bill, String billType) async {
     if (_schoolId == null) return;
     final branding = await PdfBranding.forSchool(_schoolId!);
     final pdf = pw.Document();
     final isRevenue = (bill['billType'] ?? '') == 'Revenue';
-    final amount = isRevenue ? (bill['revenueAmount'] as num?)?.toDouble() ?? 0 : (bill['expenseAmount'] as num?)?.toDouble() ?? 0;
+    final amount = isRevenue
+        ? (bill['revenueAmount'] as num?)?.toDouble() ?? 0
+        : (bill['expenseAmount'] as num?)?.toDouble() ?? 0;
     final date = (bill['billDate'] as Timestamp?)?.toDate() ?? DateTime.now();
     final ay = (bill['academicYear'] ?? '').toString();
     final origAy = (bill['originatingAcademicYear'] ?? '').toString();
     final origClass = (bill['originatingClass'] ?? '').toString();
-    final schoolName = branding.schoolName.isNotEmpty ? branding.schoolName : 'School';
+    final schoolName =
+        branding.schoolName.isNotEmpty ? branding.schoolName : 'School';
     final schoolAddr = branding.schoolAddress;
     final schoolPhone = branding.schoolPhone;
 
@@ -834,45 +1028,67 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             // School name + copy label
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-              pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                pw.Text(schoolName, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                if (schoolAddr.isNotEmpty) pw.Text(schoolAddr, style: small),
-                if (schoolPhone.isNotEmpty) pw.Text('Ph: $schoolPhone', style: small),
-              ])),
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
-                child: pw.Text(copyLabel, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
-              ),
-            ]),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Expanded(
+                      child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                        pw.Text(schoolName,
+                            style: pw.TextStyle(
+                                fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                        if (schoolAddr.isNotEmpty)
+                          pw.Text(schoolAddr, style: small),
+                        if (schoolPhone.isNotEmpty)
+                          pw.Text('Ph: $schoolPhone', style: small),
+                      ])),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration:
+                        pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
+                    child: pw.Text(copyLabel,
+                        style: pw.TextStyle(
+                            fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                  ),
+                ]),
             pw.Divider(thickness: 0.5, height: 8),
             // Title
-            pw.Center(child: pw.Text(
+            pw.Center(
+                child: pw.Text(
               isRevenue ? 'FEE RECEIPT' : 'EXPENSE VOUCHER',
               style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
             )),
             pw.SizedBox(height: 4),
             // Bill info row
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-              pw.Text('Bill No: ${bill['billId'] ?? ''}', style: bold),
-              pw.Text('Date: ${DateFormat('dd/MM/yyyy').format(date)}', style: bold),
-            ]),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Bill No: ${bill['billId'] ?? ''}', style: bold),
+                  pw.Text('Date: ${DateFormat('dd/MM/yyyy').format(date)}',
+                      style: bold),
+                ]),
             pw.SizedBox(height: 4),
             if (isRevenue) ...[
               pw.Row(children: [
                 pw.Text('Student: ', style: bold),
-                pw.Text('${bill['stuName'] ?? 'N/A'} (ID: ${bill['stuId'] ?? 'N/A'})', style: normal),
+                pw.Text(
+                    '${bill['stuName'] ?? 'N/A'} (ID: ${bill['stuId'] ?? 'N/A'})',
+                    style: normal),
               ]),
               pw.Row(children: [
                 pw.Text('Class: ', style: bold),
-                pw.Text('${bill['stuClass'] ?? ''} - ${bill['stuSection'] ?? ''}', style: normal),
+                pw.Text(
+                    '${bill['stuClass'] ?? ''} - ${bill['stuSection'] ?? ''}',
+                    style: normal),
                 pw.SizedBox(width: 20),
                 pw.Text('AY: ', style: bold),
                 pw.Text(ay, style: normal),
               ]),
               if (origAy.isNotEmpty && origAy != ay)
-                pw.Text('Arrears from: Class $origClass ($origAy)', style: small),
+                pw.Text('Arrears from: Class $origClass ($origAy)',
+                    style: small),
             ],
             if (!isRevenue) ...[
               pw.Row(children: [
@@ -882,27 +1098,41 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
             ],
             pw.Row(children: [
               pw.Text('Fee Type: ', style: bold),
-              pw.Text(isRevenue ? (bill['revenueType'] ?? '').toString() : (bill['expenseType'] ?? '').toString(), style: normal),
+              pw.Text(
+                  isRevenue
+                      ? (bill['revenueType'] ?? '').toString()
+                      : (bill['expenseType'] ?? '').toString(),
+                  style: normal),
             ]),
             pw.SizedBox(height: 6),
             // Amount box
             pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding:
+                  const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
-              child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-                pw.Text('AMOUNT:', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Rs. ${amount.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-              ]),
+              child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('AMOUNT:',
+                        style: pw.TextStyle(
+                            fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('Rs. ${amount.toStringAsFixed(2)}',
+                        style: pw.TextStyle(
+                            fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                  ]),
             ),
             if ((bill['remarks'] ?? '').toString().isNotEmpty) ...[
               pw.SizedBox(height: 3),
               pw.Text('Remarks: ${bill['remarks']}', style: small),
             ],
             pw.SizedBox(height: 6),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-              pw.Text('Cashier: ${bill['billCashierName'] ?? ''}', style: small),
-              pw.Text('Signature: _______________', style: small),
-            ]),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Cashier: ${bill['billCashierName'] ?? ''}',
+                      style: small),
+                  pw.Text('Signature: _______________', style: small),
+                ]),
           ],
         ),
       );
@@ -916,7 +1146,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         children: [
           buildReceiptCopy('SCHOOL COPY'),
           pw.SizedBox(height: 6),
-          pw.Center(child: pw.Text(
+          pw.Center(
+              child: pw.Text(
             '- - - - - - - - - - - - - - - - - -  Cut Here  - - - - - - - - - - - - - - - - - -',
             style: const pw.TextStyle(fontSize: 7),
           )),
@@ -927,18 +1158,22 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     ));
 
     final pdfBytes = await pdf.save();
-    _downloadFile(pdfBytes, 'Bill_${bill['billId']}_Receipt.pdf', 'application/pdf');
+    _downloadFile(
+        pdfBytes, 'Bill_${bill['billId']}_Receipt.pdf', 'application/pdf');
   }
 
   // ============ PRINT SELECTED BILLS ============
-  Future<void> _printSelectedBills(String billType, Set<String> selectedIds) async {
+  Future<void> _printSelectedBills(
+      String billType, Set<String> selectedIds) async {
     if (_schoolId == null || selectedIds.isEmpty) return;
-    
+
     final billsList = billType == 'Revenue' ? _revenueBills : _expenseBills;
-    final selectedBills = billsList.where((b) => selectedIds.contains(b['docId']?.toString() ?? '')).toList();
-    
+    final selectedBills = billsList
+        .where((b) => selectedIds.contains(b['docId']?.toString() ?? ''))
+        .toList();
+
     if (selectedBills.isEmpty) return;
-    
+
     final branding = await PdfBranding.forSchool(_schoolId!);
     final pdf = pw.Document();
 
@@ -947,24 +1182,31 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     }
 
     final pdfBytes = await pdf.save();
-    _downloadFile(pdfBytes, '${billType}_Bills_Selected_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf', 'application/pdf');
+    _downloadFile(
+        pdfBytes,
+        '${billType}_Bills_Selected_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+        'application/pdf');
   }
 
-  Future<void> _addBillToPdf(pw.Document pdf, Map<String, dynamic> bill, String billType, PdfBrandingContext branding) async {
+  Future<void> _addBillToPdf(pw.Document pdf, Map<String, dynamic> bill,
+      String billType, PdfBrandingContext branding) async {
     final isRevenue = billType == 'Revenue';
-    final schoolName = branding.schoolName.isNotEmpty ? branding.schoolName : 'School';
+    final schoolName =
+        branding.schoolName.isNotEmpty ? branding.schoolName : 'School';
     final schoolAddr = branding.schoolAddress;
     final schoolPhone = branding.schoolPhone;
-    
+
     double amount = 0;
     DateTime? date;
     String identifier = '';
     String name = '';
     String description = '';
-    
+
     if (isRevenue) {
       amount = (bill['amount'] as num?)?.toDouble() ?? 0;
-      date = (bill['paidAt'] is Timestamp) ? (bill['paidAt'] as Timestamp).toDate() : DateTime.now();
+      date = (bill['paidAt'] is Timestamp)
+          ? (bill['paidAt'] as Timestamp).toDate()
+          : DateTime.now();
       identifier = (bill['receiptNumber'] ?? bill['id'] ?? '').toString();
       name = (bill['studentName'] ?? '').toString();
       final isAdHoc = bill['isAdHoc'] == true;
@@ -975,7 +1217,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         if (components != null && components.isNotEmpty) {
           description = components.map((c) {
             final comp = c as Map<String, dynamic>;
-            final cName = (comp['termName'] as String?) ?? (comp['itemName'] as String?) ?? 'Fee';
+            final cName = (comp['termName'] as String?) ??
+                (comp['itemName'] as String?) ??
+                'Fee';
             return cName;
           }).join(', ');
         } else {
@@ -983,11 +1227,16 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         }
       }
     } else {
-      amount = (bill['expenseAmount'] as num?)?.toDouble() ?? (bill['amount'] as num?)?.toDouble() ?? 0;
-      date = (bill['billDate'] is Timestamp) ? (bill['billDate'] as Timestamp).toDate() : DateTime.now();
+      amount = (bill['expenseAmount'] as num?)?.toDouble() ??
+          (bill['amount'] as num?)?.toDouble() ??
+          0;
+      date = (bill['billDate'] is Timestamp)
+          ? (bill['billDate'] as Timestamp).toDate()
+          : DateTime.now();
       identifier = 'EXP-${bill['billId'] ?? ''}';
       name = (bill['expensePOC'] ?? bill['pointOfContact'] ?? '').toString();
-      description = (bill['expenseType'] ?? bill['categoryName'] ?? '').toString();
+      description =
+          (bill['expenseType'] ?? bill['categoryName'] ?? '').toString();
     }
 
     pw.Widget buildReceiptCopy(String copyLabel) {
@@ -1000,28 +1249,45 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-              pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                pw.Text(schoolName, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                if (schoolAddr.isNotEmpty) pw.Text(schoolAddr, style: small),
-                if (schoolPhone.isNotEmpty) pw.Text('Ph: $schoolPhone', style: small),
-              ])),
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
-                child: pw.Text(copyLabel, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
-              ),
-            ]),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Expanded(
+                      child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                        pw.Text(schoolName,
+                            style: pw.TextStyle(
+                                fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                        if (schoolAddr.isNotEmpty)
+                          pw.Text(schoolAddr, style: small),
+                        if (schoolPhone.isNotEmpty)
+                          pw.Text('Ph: $schoolPhone', style: small),
+                      ])),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration:
+                        pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
+                    child: pw.Text(copyLabel,
+                        style: pw.TextStyle(
+                            fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                  ),
+                ]),
             pw.Divider(thickness: 0.5, height: 8),
-            pw.Center(child: pw.Text(
+            pw.Center(
+                child: pw.Text(
               isRevenue ? 'FEE RECEIPT' : 'EXPENSE VOUCHER',
               style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
             )),
             pw.SizedBox(height: 4),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-              pw.Text('$billType #: $identifier', style: bold),
-              pw.Text('Date: ${DateFormat('dd/MM/yyyy').format(date!)}', style: bold),
-            ]),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('$billType #: $identifier', style: bold),
+                  pw.Text('Date: ${DateFormat('dd/MM/yyyy').format(date!)}',
+                      style: bold),
+                ]),
             pw.SizedBox(height: 4),
             pw.Row(children: [
               pw.Text(isRevenue ? 'Student: ' : 'POC: ', style: bold),
@@ -1033,22 +1299,33 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
             ]),
             pw.SizedBox(height: 6),
             pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding:
+                  const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
-              child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-                pw.Text('AMOUNT:', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Rs. ${amount.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-              ]),
+              child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('AMOUNT:',
+                        style: pw.TextStyle(
+                            fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('Rs. ${amount.toStringAsFixed(2)}',
+                        style: pw.TextStyle(
+                            fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                  ]),
             ),
             if ((bill['remarks'] ?? '').toString().isNotEmpty) ...[
               pw.SizedBox(height: 3),
               pw.Text('Remarks: ${bill['remarks']}', style: small),
             ],
             pw.SizedBox(height: 6),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-              pw.Text('Cashier: ${bill['billCashierName'] ?? bill['cashierName'] ?? ''}', style: small),
-              pw.Text('Signature: _______________', style: small),
-            ]),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                      'Cashier: ${bill['billCashierName'] ?? bill['cashierName'] ?? ''}',
+                      style: small),
+                  pw.Text('Signature: _______________', style: small),
+                ]),
           ],
         ),
       );
@@ -1061,7 +1338,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         children: [
           buildReceiptCopy('SCHOOL COPY'),
           pw.SizedBox(height: 6),
-          pw.Center(child: pw.Text(
+          pw.Center(
+              child: pw.Text(
             '- - - - - - - - - - - - - - - - - -  Cut Here  - - - - - - - - - - - - - - - - - -',
             style: const pw.TextStyle(fontSize: 7),
           )),
@@ -1076,22 +1354,25 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
   Future<void> _printAllBills(String billType) async {
     if (_schoolId == null) return;
     final branding = await PdfBranding.forSchool(_schoolId!);
-    final schoolName = branding.schoolName.isNotEmpty ? branding.schoolName : 'School';
+    final schoolName =
+        branding.schoolName.isNotEmpty ? branding.schoolName : 'School';
     final pdf = pw.Document();
 
     // Filter out deleted bills for the print report
     final billsList = billType == 'Revenue' ? _revenueBills : _expenseBills;
     final activeBills = billsList.where((b) => b['isDeleted'] != true).toList();
-    
+
     if (activeBills.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No active bills to print'), backgroundColor: Colors.orange),
+          const SnackBar(
+              content: Text('No active bills to print'),
+              backgroundColor: Colors.orange),
         );
       }
       return;
     }
-    
+
     final isRevenue = billType == 'Revenue';
 
     pdf.addPage(pw.MultiPage(
@@ -1100,30 +1381,41 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
       header: (ctx) => pw.Container(
         padding: const pw.EdgeInsets.only(bottom: 8),
         margin: const pw.EdgeInsets.only(bottom: 8),
-        decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(width: 0.5))),
-        child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-          pw.Text(schoolName, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-          pw.Text('$billType Bills Report: ${DateFormat('dd/MM/yyyy').format(_startDate)} - ${DateFormat('dd/MM/yyyy').format(_endDate)}',
-              style: const pw.TextStyle(fontSize: 9)),
-        ]),
+        decoration: const pw.BoxDecoration(
+            border: pw.Border(bottom: pw.BorderSide(width: 0.5))),
+        child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(schoolName,
+                  style: pw.TextStyle(
+                      fontSize: 12, fontWeight: pw.FontWeight.bold)),
+              pw.Text(
+                  '$billType Bills Report: ${DateFormat('dd/MM/yyyy').format(_startDate)} - ${DateFormat('dd/MM/yyyy').format(_endDate)}',
+                  style: const pw.TextStyle(fontSize: 9)),
+            ]),
       ),
       footer: (ctx) => pw.Container(
         alignment: pw.Alignment.centerRight,
-        child: pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}', style: const pw.TextStyle(fontSize: 8)),
+        child: pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+            style: const pw.TextStyle(fontSize: 8)),
       ),
       build: (ctx) => [
         pw.TableHelper.fromTextArray(
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+          headerStyle:
+              pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
           cellStyle: const pw.TextStyle(fontSize: 8),
           headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-          headers: isRevenue 
+          headers: isRevenue
               ? ['Receipt#', 'Date', 'Student Name', 'Description', 'Amount']
               : ['Bill#', 'Date', 'POC', 'Expense Type', 'Amount'],
           data: activeBills.map((b) {
             if (isRevenue) {
               final amt = (b['amount'] as num?)?.toDouble() ?? 0;
-              final date = (b['paidAt'] is Timestamp) ? (b['paidAt'] as Timestamp).toDate() : null;
-              final identifier = (b['receiptNumber'] ?? b['id'] ?? '').toString();
+              final date = (b['paidAt'] is Timestamp)
+                  ? (b['paidAt'] as Timestamp).toDate()
+                  : null;
+              final identifier =
+                  (b['receiptNumber'] ?? b['id'] ?? '').toString();
               final name = (b['studentName'] ?? '').toString();
               String desc = '';
               final isAdHoc = b['isAdHoc'] == true;
@@ -1134,7 +1426,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                 if (components != null && components.isNotEmpty) {
                   desc = components.map((c) {
                     final comp = c as Map<String, dynamic>;
-                    return (comp['termName'] as String?) ?? (comp['itemName'] as String?) ?? 'Fee';
+                    return (comp['termName'] as String?) ??
+                        (comp['itemName'] as String?) ??
+                        'Fee';
                   }).join(', ');
                 } else {
                   desc = (b['termName'] ?? 'Fee').toString();
@@ -1148,11 +1442,17 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
                 'Rs.${amt.toStringAsFixed(2)}',
               ];
             } else {
-              final amt = (b['expenseAmount'] as num?)?.toDouble() ?? (b['amount'] as num?)?.toDouble() ?? 0;
-              final date = (b['billDate'] is Timestamp) ? (b['billDate'] as Timestamp).toDate() : null;
+              final amt = (b['expenseAmount'] as num?)?.toDouble() ??
+                  (b['amount'] as num?)?.toDouble() ??
+                  0;
+              final date = (b['billDate'] is Timestamp)
+                  ? (b['billDate'] as Timestamp).toDate()
+                  : null;
               final identifier = 'EXP-${b['billId'] ?? ''}';
-              final poc = (b['expensePOC'] ?? b['pointOfContact'] ?? '').toString();
-              final expType = (b['expenseType'] ?? b['categoryName'] ?? '').toString();
+              final poc =
+                  (b['expensePOC'] ?? b['pointOfContact'] ?? '').toString();
+              final expType =
+                  (b['expenseType'] ?? b['categoryName'] ?? '').toString();
               return [
                 identifier,
                 date != null ? DateFormat('dd/MM/yyyy').format(date) : '',
@@ -1167,22 +1467,29 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     ));
 
     final pdfBytes = await pdf.save();
-    _downloadFile(pdfBytes, '${billType}_Bills_All_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf', 'application/pdf');
+    _downloadFile(
+        pdfBytes,
+        '${billType}_Bills_All_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+        'application/pdf');
   }
 
   // ============ DELETE SELECTED BILLS ============
-  Future<void> _deleteSelectedBills(String billType, Set<String> selectedIds) async {
+  Future<void> _deleteSelectedBills(
+      String billType, Set<String> selectedIds) async {
     if (selectedIds.isEmpty) return;
-    
+
     final reasonController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Selected Bills', style: TextStyle(color: _textPrimary)),
+        title: const Text('Delete Selected Bills',
+            style: TextStyle(color: _textPrimary)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Are you sure you want to delete ${selectedIds.length} selected bills?', style: const TextStyle(color: _textSecondary)),
+          Text(
+              'Are you sure you want to delete ${selectedIds.length} selected bills?',
+              style: const TextStyle(color: _textSecondary)),
           const SizedBox(height: 16),
           TextField(
             controller: reasonController,
@@ -1192,30 +1499,39 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
               hintStyle: const TextStyle(color: _textSecondary),
               filled: true,
               fillColor: _bgDark,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borderColor)),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: _borderColor)),
             ),
           ),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: _textSecondary))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel',
+                  style: TextStyle(color: _textSecondary))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
           ),
         ],
       ),
     );
-    
+
     if (confirmed != true) return;
-    
+
     final billsList = billType == 'Revenue' ? _revenueBills : _expenseBills;
-    final selectedBills = billsList.where((b) => selectedIds.contains(b['docId']?.toString() ?? '')).toList();
-    
+    final selectedBills = billsList
+        .where((b) => selectedIds.contains(b['docId']?.toString() ?? ''))
+        .toList();
+
     for (final bill in selectedBills) {
       await _deleteBill(bill, reasonController.text, billType);
     }
-    
+
     if (billType == 'Revenue') {
       _selectedRevenueBills.clear();
     } else {
@@ -1227,17 +1543,34 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
   void _exportCsv(String billType) {
     final billsList = billType == 'Revenue' ? _revenueBills : _expenseBills;
     final isRevenue = billType == 'Revenue';
-    
+
     final rows = <List<String>>[
       isRevenue
-          ? ['Receipt#', 'Date', 'Student Name', 'Description', 'Amount', 'Remarks']
-          : ['Bill#', 'Date', 'POC', 'Expense Type', 'Description', 'Amount', 'Remarks'],
+          ? [
+              'Receipt#',
+              'Date',
+              'Student Name',
+              'Description',
+              'Amount',
+              'Remarks'
+            ]
+          : [
+              'Bill#',
+              'Date',
+              'POC',
+              'Expense Type',
+              'Description',
+              'Amount',
+              'Remarks'
+            ],
     ];
 
     for (final b in billsList) {
       if (isRevenue) {
         final amt = (b['amount'] as num?)?.toDouble() ?? 0;
-        final date = (b['paidAt'] is Timestamp) ? (b['paidAt'] as Timestamp).toDate() : null;
+        final date = (b['paidAt'] is Timestamp)
+            ? (b['paidAt'] as Timestamp).toDate()
+            : null;
         final identifier = (b['receiptNumber'] ?? b['id'] ?? '').toString();
         final name = (b['studentName'] ?? '').toString();
         String desc = '';
@@ -1249,7 +1582,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           if (components != null && components.isNotEmpty) {
             desc = components.map((c) {
               final comp = c as Map<String, dynamic>;
-              return (comp['termName'] as String?) ?? (comp['itemName'] as String?) ?? 'Fee';
+              return (comp['termName'] as String?) ??
+                  (comp['itemName'] as String?) ??
+                  'Fee';
             }).join(', ');
           } else {
             desc = (b['termName'] ?? 'Fee').toString();
@@ -1264,11 +1599,16 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           (b['remarks'] ?? '').toString(),
         ]);
       } else {
-        final amt = (b['expenseAmount'] as num?)?.toDouble() ?? (b['amount'] as num?)?.toDouble() ?? 0;
-        final date = (b['billDate'] is Timestamp) ? (b['billDate'] as Timestamp).toDate() : null;
+        final amt = (b['expenseAmount'] as num?)?.toDouble() ??
+            (b['amount'] as num?)?.toDouble() ??
+            0;
+        final date = (b['billDate'] is Timestamp)
+            ? (b['billDate'] as Timestamp).toDate()
+            : null;
         final identifier = 'EXP-${b['billId'] ?? ''}';
         final poc = (b['expensePOC'] ?? b['pointOfContact'] ?? '').toString();
-        final expType = (b['expenseType'] ?? b['categoryName'] ?? '').toString();
+        final expType =
+            (b['expenseType'] ?? b['categoryName'] ?? '').toString();
         final desc = (b['description'] ?? b['expenseDesc'] ?? '').toString();
         rows.add([
           identifier,
@@ -1284,7 +1624,10 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
 
     final csvData = const ListToCsvConverter().convert(rows);
     final bytes = Uint8List.fromList(csvData.codeUnits);
-    _downloadFile(bytes, '${billType}_Bills_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv', 'text/csv');
+    _downloadFile(
+        bytes,
+        '${billType}_Bills_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+        'text/csv');
   }
 
   // ============ DELETE BILL ============
@@ -1297,7 +1640,8 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Delete Bill', style: TextStyle(color: _textPrimary)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Are you sure you want to delete this $billType bill?', style: const TextStyle(color: _textSecondary)),
+          Text('Are you sure you want to delete this $billType bill?',
+              style: const TextStyle(color: _textSecondary)),
           const SizedBox(height: 16),
           TextField(
             controller: reasonController,
@@ -1307,14 +1651,21 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
               hintStyle: const TextStyle(color: _textSecondary),
               filled: true,
               fillColor: _bgDark,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borderColor)),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: _borderColor)),
             ),
           ),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: _textSecondary))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel',
+                  style: TextStyle(color: _textSecondary))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                foregroundColor: Colors.white),
             onPressed: () async {
               Navigator.pop(ctx);
               await _deleteBill(bill, reasonController.text, billType);
@@ -1326,12 +1677,13 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     );
   }
 
-  Future<void> _deleteBill(Map<String, dynamic> bill, String reason, String billType) async {
+  Future<void> _deleteBill(
+      Map<String, dynamic> bill, String reason, String billType) async {
     if (_schoolId == null) return;
     try {
       final isRevenue = billType == 'Revenue';
       final docId = bill['docId']?.toString() ?? '';
-      
+
       if (docId.isEmpty) return;
 
       // Soft-delete the bill
@@ -1340,7 +1692,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         final isAdHoc = bill['isAdHoc'] == true;
         if (isAdHoc) {
           await FirebaseFirestore.instance
-              .collection('schools').doc(_schoolId).collection('studentFeeItems')
+              .collection('schools')
+              .doc(_schoolId)
+              .collection('studentFeeItems')
               .doc(docId)
               .update({
             'isActive': false,
@@ -1350,7 +1704,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
           });
         } else {
           await FirebaseFirestore.instance
-              .collection('schools').doc(_schoolId).collection('termFeePayments')
+              .collection('schools')
+              .doc(_schoolId)
+              .collection('termFeePayments')
               .doc(docId)
               .update({
             'isDeleted': true,
@@ -1362,7 +1718,9 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
       } else {
         // For expense bills
         await FirebaseFirestore.instance
-            .collection('schools').doc(_schoolId).collection('bills')
+            .collection('schools')
+            .doc(_schoolId)
+            .collection('bills')
             .doc(docId)
             .update({
           'isDeleted': true,
@@ -1383,15 +1741,19 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
             final ledgerId = (bill['ledgerId'] ?? '').toString();
             if (ledgerId.isNotEmpty) {
               final ledgerDoc = await FirebaseFirestore.instance
-                  .collection('schools').doc(_schoolId).collection('studentFeeLedgers')
+                  .collection('schools')
+                  .doc(_schoolId)
+                  .collection('studentFeeLedgers')
                   .doc(ledgerId)
                   .get();
-              
+
               if (ledgerDoc.exists) {
                 final ledgerData = ledgerDoc.data()!;
-                final currentPaid = (ledgerData['totalPaid'] as num?)?.toDouble() ?? 0;
-                final currentBalance = (ledgerData['totalBalance'] as num?)?.toDouble() ?? 0;
-                
+                final currentPaid =
+                    (ledgerData['totalPaid'] as num?)?.toDouble() ?? 0;
+                final currentBalance =
+                    (ledgerData['totalBalance'] as num?)?.toDouble() ?? 0;
+
                 await ledgerDoc.reference.update({
                   'totalPaid': currentPaid - amount,
                   'totalBalance': currentBalance + amount,
@@ -1407,7 +1769,11 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
 
       _fetchBills();
       if (mounted) {
-        final amount = isRevenue ? (bill['amount'] as num?)?.toDouble() ?? 0 : (bill['expenseAmount'] as num?)?.toDouble() ?? (bill['amount'] as num?)?.toDouble() ?? 0;
+        final amount = isRevenue
+            ? (bill['amount'] as num?)?.toDouble() ?? 0
+            : (bill['expenseAmount'] as num?)?.toDouble() ??
+                (bill['amount'] as num?)?.toDouble() ??
+                0;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(isRevenue
               ? 'Bill deleted & ₹${amount.toStringAsFixed(0)} reverted to student balance'
@@ -1416,14 +1782,18 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
         ));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     }
   }
 
   void _downloadFile(Uint8List bytes, String fileName, String mimeType) {
     final blob = html.Blob([bytes], mimeType);
     final url = html.Url.createObjectUrlFromBlob(blob);
-    html.AnchorElement(href: url)..setAttribute('download', fileName)..click();
+    html.AnchorElement(href: url)
+      ..setAttribute('download', fileName)
+      ..click();
     html.Url.revokeObjectUrl(url);
   }
 }

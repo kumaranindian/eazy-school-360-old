@@ -403,15 +403,11 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
                           fontSize: 12),
                     ),
                     const SizedBox(height: 4),
-                    ..._errors.take(3).map((e) => Text(
+                    ..._errors.map((e) => Text(
                           '• $e',
                           style: const TextStyle(
                               color: Color(0xFFEF4444), fontSize: 11),
                         )),
-                    if (_errors.length > 3)
-                      Text('...and ${_errors.length - 3} more',
-                          style: const TextStyle(
-                              color: Color(0xFFEF4444), fontSize: 11)),
                   ],
                 ),
               ),
@@ -715,7 +711,7 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
           const SizedBox(height: 12),
           const Text(
             'Download the template, fill in your data, then upload the same file. '
-            'The master sheet contains FEE_STRUCTURE and STUDENT_FEE_DETAILS tabs.',
+            'The sheet contains STUDENT_FEE_DETAILS tab with 100 sample students.',
             style: TextStyle(color: _textSecondary, fontSize: 12),
           ),
         ],
@@ -723,8 +719,7 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
     );
   }
 
-  /// Generates and downloads the master Excel template with two sheets:
-  /// FEE_STRUCTURE and STUDENT_FEE_DETAILS — matching the old app's format exactly.
+  /// Generates and downloads the Excel template with STUDENT_FEE_DETAILS sheet only.
   Future<void> _downloadTemplate() async {
     print('=== DOWNLOAD TEMPLATE FUNCTION CALLED ===');
 
@@ -754,65 +749,16 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
 
     print('[UploadSheet] Final AY to use: $ayToUse');
 
+    // Calculate previous academic year for arrears
+    final previousAy = _getPreviousAcademicYear(ayToUse);
+    print('[UploadSheet] Previous AY for arrears: $previousAy');
+
     try {
       final excel = Excel.createExcel();
 
-      // ── Sheet 1: FEE_STRUCTURE ──────────────────────────────────────────
-      final feeSheet = excel['FEE_STRUCTURE'];
-      excel.setDefaultSheet('FEE_STRUCTURE');
-
-      // Headers
-      final feeHeaders = [
-        'classInRoman',
-        'classTutionFees',
-        'classExamFees',
-        'academicYear'
-      ];
-      for (int i = 0; i < feeHeaders.length; i++) {
-        feeSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0))
-          ..value = TextCellValue(feeHeaders[i])
-          ..cellStyle = CellStyle(
-              bold: true,
-              backgroundColorHex: ExcelColor.fromHexString('#1F4E79'),
-              fontColorHex: ExcelColor.fromHexString('#FFFFFF'));
-      }
-
-      // Sample rows
-      final feeSampleRows = [
-        ['KG', '5000', '500', ayToUse],
-        ['I', '6000', '600', ayToUse],
-        ['II', '6000', '600', ayToUse],
-        ['III', '7000', '700', ayToUse],
-        ['IV', '7000', '700', ayToUse],
-        ['V', '8000', '800', ayToUse],
-        ['VI', '9000', '900', ayToUse],
-        ['VII', '9000', '900', ayToUse],
-        ['VIII', '10000', '1000', ayToUse],
-        ['IX', '11000', '1100', ayToUse],
-        ['X', '12000', '1200', ayToUse],
-        ['XI', '13000', '1300', ayToUse],
-        ['XII', '13000', '1300', ayToUse],
-      ];
-      print(
-          '[UploadSheet] FEE_STRUCTURE sample row AY values: ${feeSampleRows.map((r) => r[3]).toList()}');
-      for (int r = 0; r < feeSampleRows.length; r++) {
-        final row = feeSampleRows[r];
-        feeSheet
-            .cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: r + 1))
-            .value = TextCellValue(row[0]);
-        feeSheet
-            .cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: r + 1))
-            .value = DoubleCellValue(double.tryParse(row[1]) ?? 0);
-        feeSheet
-            .cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: r + 1))
-            .value = DoubleCellValue(double.tryParse(row[2]) ?? 0);
-        feeSheet
-            .cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: r + 1))
-            .value = TextCellValue(row[3]);
-      }
-
-      // ── Sheet 2: STUDENT_FEE_DETAILS ───────────────────────────────────
+      // ── Sheet: STUDENT_FEE_DETAILS ───────────────────────────────────
       final stuSheet = excel['STUDENT_FEE_DETAILS'];
+      excel.setDefaultSheet('STUDENT_FEE_DETAILS');
 
       // Headers
       final stuHeaders = [
@@ -845,68 +791,61 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
       }
 
       // Sample rows (18 cols: 0-3 text, 4 academicYear, 5 arrearsAcademicYear, 6-15 numbers, 16 phone, 17 text)
-      final stuSampleRows = [
-        [
-          '101',
-          'SAMPLE STUDENT 1',
-          'I',
-          'A',
-          ayToUse,
-          '', // arrearsAcademicYear - leave blank for no arrears
-          '0',
-          '0',
-          '0',
-          '0',
-          'n',
-          '0',
-          '0',
-          '0',
-          '0',
-          '0',
-          '9999999999',
-          'NA'
-        ],
-        [
-          '102',
-          'SAMPLE STUDENT 2',
-          'I',
-          'A',
-          ayToUse,
-          '', // arrearsAcademicYear - leave blank for no arrears
-          '0',
-          '0',
-          '0',
-          '0',
-          'y',
-          '1200',
-          '0',
-          '0',
-          '0',
-          '0',
-          '9999999998',
-          'NA'
-        ],
-        [
-          '103',
-          'SAMPLE STUDENT 3',
-          'II',
-          'B',
-          ayToUse,
-          '2024-25', // arrearsAcademicYear - specify AY for arrears
-          '500',
-          '100',
-          '0',
-          '0',
-          'n',
-          '0',
-          '0',
-          '0',
-          '0',
-          '0',
-          '9999999997',
-          'NA'
-        ],
+      final classes = [
+        'LKG',
+        'UKG',
+        'KG',
+        'I',
+        'II',
+        'III',
+        'IV',
+        'V',
+        'VI',
+        'VII',
+        'VIII',
+        'IX',
+        'X',
+        'XI',
+        'XII'
       ];
+      final sections = ['A', 'B', 'C'];
+      final stuSampleRows = <List<String>>[];
+
+      for (int i = 1; i <= 100; i++) {
+        final classIndex = (i - 1) % classes.length;
+        final sectionIndex = (i - 1) % sections.length;
+        final className = classes[classIndex];
+        final section = sections[sectionIndex];
+        final hasArrears = i % 3 == 0; // Every 3rd student has arrears
+        final hasVan = i % 4 == 0; // Every 4th student uses van
+
+        stuSampleRows.add([
+          (100 + i).toString(),
+          'SAMPLE STUDENT $i',
+          className,
+          section,
+          ayToUse,
+          hasArrears
+              ? previousAy
+              : '', // arrearsAcademicYear - previous AY for arrears
+          hasArrears
+              ? (500 + (i % 10) * 100).toString()
+              : '0', // arrearTuitionFees
+          hasArrears ? (100 + (i % 5) * 50).toString() : '0', // arrearExamFees
+          hasArrears
+              ? (i % 3 == 0 ? '200' : '0').toString()
+              : '0', // arrearVanFees
+          '0', // stuConcessionFees
+          hasVan ? 'y' : 'n', // isStuAvailVan
+          hasVan ? '1200' : '0', // stuTotalVanFees
+          '0', // stuPaidTutionFees
+          '0', // stuPaidExamFees
+          '0', // studPaidVanFees
+          '0', // stuPaidTotalFees
+          '9876543${(i % 10)}00', // phoneNumber
+          'NA', // stuBillDetails
+        ]);
+      }
       for (int r = 0; r < stuSampleRows.length; r++) {
         final row = stuSampleRows[r];
         stuSheet
@@ -1111,15 +1050,12 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
               style: const TextStyle(
                   color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          ..._errors.take(10).map((e) => Padding(
+          ..._errors.map((e) => Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text('• $e',
                     style: const TextStyle(
                         color: Color(0xFFEF4444), fontSize: 12)),
               )),
-          if (_errors.length > 10)
-            Text('...and ${_errors.length - 10} more errors',
-                style: const TextStyle(color: _textSecondary, fontSize: 12)),
         ],
       ),
     );
@@ -1284,25 +1220,46 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
       final headers = _previewData[0];
       final dataRows = _previewData.sublist(1);
 
-      for (int i = 0; i < dataRows.length; i++) {
-        try {
-          final row = dataRows[i];
-          final map = <String, dynamic>{};
-          for (int j = 0; j < headers.length && j < row.length; j++) {
-            map[headers[j]] = row[j];
-          }
+      // Process in batches of 20 students in parallel for better performance
+      const batchSize = 20;
+      for (int batchStart = 0;
+          batchStart < dataRows.length;
+          batchStart += batchSize) {
+        final batchEnd = (batchStart + batchSize).clamp(0, dataRows.length);
+        final batch = dataRows.sublist(batchStart, batchEnd);
 
-          await _uploadStudentFeeDetails(map);
+        // Process batch in parallel
+        final futures = <Future<void>>[];
+        for (int i = 0; i < batch.length; i++) {
+          futures.add(() async {
+            try {
+              final row = batch[i];
+              final map = <String, dynamic>{};
+              for (int j = 0; j < headers.length && j < row.length; j++) {
+                map[headers[j]] = row[j];
+              }
 
-          setState(() {
-            _processedCount = i + 1;
-            _statusMessage =
-                'Uploading $_selectedType... (${i + 1}/$_totalCount)';
-          });
-          _bumpProgress();
-        } catch (e) {
-          _errors.add('Row ${i + 2}: $e');
+              await _uploadStudentFeeDetails(map);
+
+              if (mounted) {
+                setState(() {
+                  _processedCount++;
+                  _statusMessage =
+                      'Uploading $_selectedType... ($_processedCount/$_totalCount)';
+                });
+                _bumpProgress();
+              }
+            } catch (e) {
+              if (mounted) {
+                setState(() {
+                  _errors.add('Row ${batchStart + i + 2}: $e');
+                });
+              }
+            }
+          }());
         }
+
+        await Future.wait(futures, eagerError: false);
       }
 
       setState(() {
@@ -1343,10 +1300,6 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
     final arrearExamFees = parseNum('arrearExamFees');
     final arrearVanFees = parseNum('arrearVanFees');
     final totalArrears = arrearTuitionFees + arrearExamFees + arrearVanFees;
-
-    // Read arrearsAcademicYear from the sheet (defaults to empty string)
-    final arrearsAcademicYear =
-        (data['arrearsAcademicYear'] ?? '').toString().trim();
 
     final stuConcessionFees = parseNum('stuConcessionFees');
     final isStuAvailVan =
@@ -1443,19 +1396,20 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
       'stuBalVanFees': stuBalVanFees,
       'stuBalAdmissionFees': 0.0,
       'stuBalTotalFees': stuBalTotalFees,
-      // Arrears are NOT stored in current year fee details
-      'arrearTuitionFees': 0.0,
-      'arrearExamFees': 0.0,
+      // Include arrears from upload in current year fee details
+      'arrearTuitionFees': arrearTuitionFees,
+      'arrearExamFees': arrearExamFees,
       'arrearAdmissionFees': 0.0,
-      'arrearVanFees': 0.0,
+      'arrearVanFees': arrearVanFees,
       'stuPaidArrearTutionFees': 0.0,
       'stuPaidArrearExamFees': 0.0,
       'stuPaidArrearAdmissionFees': 0.0,
       'stuPaidArrearVanFees': 0.0,
-      'balanceArrearTuitionFees': 0.0,
-      'balanceArrearExamFees': 0.0,
+      'balanceArrearTuitionFees': arrearTuitionFees,
+      'balanceArrearExamFees': arrearExamFees,
       'balanceArrearAdmissionFees': 0.0,
-      'balanceArrearVanFees': 0.0,
+      'balanceArrearVanFees': arrearVanFees,
+      'arrearsAcademicYear': _getPreviousAcademicYear(academicYear),
       'stuBillDetails': (data['stuBillDetails'] ?? 'NA').toString(),
       'academicYear': academicYear,
       'fiscalYear': FiscalYear.getCurrentYearCode(),
@@ -1483,6 +1437,7 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
         .doc(_schoolId)
         .collection('students')
         .where('studentId', isEqualTo: stuIdInt)
+        .where('academicYearCode', isEqualTo: academicYear)
         .limit(1)
         .get();
 
@@ -1518,66 +1473,8 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
           .add(feeData);
     }
 
-    // If there are arrears, create/update arrears record in specified AY
-    if (totalArrears > 0) {
-      // Use the provided arrearsAcademicYear if specified, otherwise calculate previous AY
-      final arrearsAy = arrearsAcademicYear.isNotEmpty
-          ? arrearsAcademicYear
-          : _getPreviousAcademicYear(academicYear);
-
-      final arrearsData = <String, dynamic>{
-        'stuId': int.tryParse(stuId) ?? 0,
-        'stuName': stuName,
-        'studentName': stuName,
-        'stuClass': stuClass,
-        'className': stuClass,
-        'stuSection': stuSection,
-        'section': stuSection,
-        'phoneNumber': phoneNumber,
-        'isStuAvailVan': isStuAvailVan,
-        'arrearTuitionFees': arrearTuitionFees,
-        'arrearExamFees': arrearExamFees,
-        'arrearAdmissionFees': 0.0,
-        'arrearVanFees': arrearVanFees,
-        'stuPaidArrearTutionFees': 0.0,
-        'stuPaidArrearExamFees': 0.0,
-        'stuPaidArrearAdmissionFees': 0.0,
-        'stuPaidArrearVanFees': 0.0,
-        'balanceArrearTuitionFees': arrearTuitionFees,
-        'balanceArrearExamFees': arrearExamFees,
-        'balanceArrearAdmissionFees': 0.0,
-        'balanceArrearVanFees': arrearVanFees,
-        'totalArrears': totalArrears,
-        'stuBillDetails': (data['stuBillDetails'] ?? 'NA').toString(),
-        'academicYear': arrearsAy,
-        'fiscalYear': FiscalYear.getCurrentYearCode(),
-        'isArrearsRecord': true,
-        'fromAcademicYear': arrearsAy,
-        'toAcademicYear': academicYear,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      final existingArrears = await FirebaseFirestore.instance
-          .collection('schools')
-          .doc(_schoolId)
-          .collection('student_fee_details')
-          .where('stuId', isEqualTo: stuIdInt)
-          .where('academicYear', isEqualTo: arrearsAy)
-          .where('isArrearsRecord', isEqualTo: true)
-          .limit(1)
-          .get();
-
-      if (existingArrears.docs.isNotEmpty) {
-        await existingArrears.docs.first.reference.update(arrearsData);
-      } else {
-        arrearsData['createdAt'] = FieldValue.serverTimestamp();
-        await FirebaseFirestore.instance
-            .collection('schools')
-            .doc(_schoolId)
-            .collection('student_fee_details')
-            .add(arrearsData);
-      }
-    }
+    // Arrears are now handled in the current AY's student_fee_details record
+    // No separate arrears record is created in student_fee_details collection
   }
 
   Future<void> _uploadFeeStructure(Map<String, dynamic> data) async {

@@ -51,6 +51,7 @@ class LedgerFeeManagementCard extends ConsumerStatefulWidget {
     this.parentName,
     this.parentPhone,
     this.onBillHistory,
+    this.onPayment,
   });
 
   final String schoolId;
@@ -62,6 +63,7 @@ class LedgerFeeManagementCard extends ConsumerStatefulWidget {
   final String? parentName;
   final String? parentPhone;
   final VoidCallback? onBillHistory;
+  final VoidCallback? onPayment;
 
   @override
   ConsumerState<LedgerFeeManagementCard> createState() =>
@@ -111,64 +113,75 @@ class _LedgerFeeManagementCardState
       final ledger = await repo.getByStudent(
           widget.schoolId, widget.studentId, widget.academicYear);
 
-      // Load arrears from student_fee_details collection
+      // Load arrears from current year's student_fee_details record
       List<TermLedgerEntry> arrearsEntries = [];
       try {
-        final arrearsSnap = await FirebaseFirestore.instance
+        final currentYearSnap = await FirebaseFirestore.instance
             .collection('schools')
             .doc(widget.schoolId)
             .collection('student_fee_details')
             .where('stuId', isEqualTo: int.tryParse(widget.studentId) ?? 0)
-            .where('isArrearsRecord', isEqualTo: true)
+            .where('academicYear', isEqualTo: widget.academicYear)
+            .limit(1)
             .get();
 
-        for (final doc in arrearsSnap.docs) {
-          final data = doc.data();
-          final arrearsAy = (data['academicYear'] ?? '').toString();
-          final balanceArrearTuition =
-              (data['balanceArrearTuitionFees'] as num?)?.toDouble() ?? 0;
-          final balanceArrearExam =
-              (data['balanceArrearExamFees'] as num?)?.toDouble() ?? 0;
-          final balanceArrearVan =
-              (data['balanceArrearVanFees'] as num?)?.toDouble() ?? 0;
+        if (currentYearSnap.docs.isNotEmpty) {
+          final data = currentYearSnap.docs.first.data();
+          // Check original arrears values to keep section visible even if paid
+          final originalArrearTuition =
+              (data['arrearTuitionFees'] as num?)?.toDouble() ?? 0;
+          final originalArrearExam =
+              (data['arrearExamFees'] as num?)?.toDouble() ?? 0;
+          final originalArrearVan =
+              (data['arrearVanFees'] as num?)?.toDouble() ?? 0;
+          final paidArrearTuition =
+              (data['stuPaidArrearTutionFees'] as num?)?.toDouble() ?? 0;
+          final paidArrearExam =
+              (data['stuPaidArrearExamFees'] as num?)?.toDouble() ?? 0;
+          final paidArrearVan =
+              (data['stuPaidArrearVanFees'] as num?)?.toDouble() ?? 0;
 
-          if (balanceArrearTuition > 0) {
+          // Use previous academic year as source for arrears display
+          final prevAy = _getPreviousAcademicYear(widget.academicYear);
+
+          // Keep showing arrears if original arrears existed at upload time
+          if (originalArrearTuition > 0) {
             arrearsEntries.add(TermLedgerEntry(
-              termId: 'ARREARS_TUITION_$arrearsAy',
+              termId: 'ARREARS_TUITION_$prevAy',
               termName: 'Tuition Arrears',
               sequence: 999,
-              amount: balanceArrearTuition,
+              amount: originalArrearTuition,
               dueDate: DateTime.now(),
-              paidAmount: 0,
+              paidAmount: paidArrearTuition,
               category: 'TUITION',
               isArrear: true,
-              sourceAcademicYear: arrearsAy,
+              sourceAcademicYear: prevAy,
             ));
           }
-          if (balanceArrearExam > 0) {
+          if (originalArrearExam > 0) {
             arrearsEntries.add(TermLedgerEntry(
-              termId: 'ARREARS_EXAM_$arrearsAy',
+              termId: 'ARREARS_EXAM_$prevAy',
               termName: 'Exam Arrears',
               sequence: 999,
-              amount: balanceArrearExam,
+              amount: originalArrearExam,
               dueDate: DateTime.now(),
-              paidAmount: 0,
+              paidAmount: paidArrearExam,
               category: 'EXAM',
               isArrear: true,
-              sourceAcademicYear: arrearsAy,
+              sourceAcademicYear: prevAy,
             ));
           }
-          if (balanceArrearVan > 0) {
+          if (originalArrearVan > 0) {
             arrearsEntries.add(TermLedgerEntry(
-              termId: 'ARREARS_VAN_$arrearsAy',
+              termId: 'ARREARS_VAN_$prevAy',
               termName: 'Van Arrears',
               sequence: 999,
-              amount: balanceArrearVan,
+              amount: originalArrearVan,
               dueDate: DateTime.now(),
-              paidAmount: 0,
+              paidAmount: paidArrearVan,
               category: 'VAN',
               isArrear: true,
-              sourceAcademicYear: arrearsAy,
+              sourceAcademicYear: prevAy,
             ));
           }
         }
@@ -550,7 +563,9 @@ class _LedgerFeeManagementCardState
       {required bool highlight,
       required bool padWithCatalog,
       List<StudentFeeItem> adHocItems = const []}) {
-    if (entries.isEmpty && !padWithCatalog) return const SizedBox.shrink();
+    // Keep arrears sections visible even when fully paid to show payment history
+    if (entries.isEmpty && !padWithCatalog && !highlight)
+      return const SizedBox.shrink();
 
     // Group entries by category and sum totals/paid/balance.
     final byCategory = <String, _CategoryAggregate>{};
@@ -820,7 +835,12 @@ class _LedgerFeeManagementCardState
         adHocFeeItems: _adhocFeeItems,
       ),
     );
-    if (result == true) await _refresh();
+    // Refresh parent screen student data after payment
+    if (result == true) {
+      widget.onPayment?.call();
+    }
+    // Always refresh the ledger card
+    await _refresh();
   }
 
   /// Stable rank so the screenshot's order (Tuition, Exam, Van, Admission,
@@ -858,6 +878,14 @@ class _LedgerFeeManagementCardState
       return '$pretty Fees';
     }
     return pretty;
+  }
+
+  /// Calculates previous academic year from current AY (e.g., 2026-27 → 2025-26)
+  String _getPreviousAcademicYear(String currentAy) {
+    final match = RegExp(r'^(\d{4})').firstMatch(currentAy);
+    if (match == null) return currentAy;
+    final startYear = int.tryParse(match.group(1)!) ?? DateTime.now().year;
+    return '${startYear - 1}-${startYear}';
   }
 }
 

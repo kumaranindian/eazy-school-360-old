@@ -117,15 +117,17 @@ class PdfBranding {
   /// Build the standard header widget for a PDF page.
   ///
   /// [title] is the document-specific title (e.g. "Fee Receipt", "Expense Report").
+  /// [showLogo] controls whether to display the school logo (default: true).
   static pw.Widget buildHeader(
     PdfBrandingContext ctx, {
     String? title,
     String? subtitle,
+    bool showLogo = true,
   }) {
-    final textStyle = _unicodeFont != null 
+    final textStyle = _unicodeFont != null
         ? pw.TextStyle(font: _unicodeFont!, fontFallback: [pw.Font.helvetica()])
         : null;
-    
+
     return pw.Container(
       padding: const pw.EdgeInsets.only(bottom: 10),
       margin: const pw.EdgeInsets.only(bottom: 12),
@@ -137,7 +139,7 @@ class PdfBranding {
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          if (ctx.logoImage != null)
+          if (ctx.logoImage != null && showLogo)
             pw.Container(
               width: 54,
               height: 54,
@@ -150,27 +152,30 @@ class PdfBranding {
               children: [
                 pw.Text(
                   ctx.productName,
-                  style: textStyle ?? pw.TextStyle(
-                    fontSize: 10,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _accentPdfColor,
-                    letterSpacing: 1.2,
-                  ),
+                  style: textStyle ??
+                      pw.TextStyle(
+                        fontSize: 10,
+                        fontWeight: pw.FontWeight.bold,
+                        color: _accentPdfColor,
+                        letterSpacing: 1.2,
+                      ),
                 ),
                 pw.SizedBox(height: 2),
                 pw.Text(
                   ctx.schoolName.isEmpty ? 'School' : ctx.schoolName,
-                  style: textStyle ?? pw.TextStyle(
-                    fontSize: 16,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _textPrimary,
-                  ),
+                  style: textStyle ??
+                      pw.TextStyle(
+                        fontSize: 16,
+                        fontWeight: pw.FontWeight.bold,
+                        color: _textPrimary,
+                      ),
                 ),
                 if (ctx.schoolAddress.isNotEmpty) ...[
                   pw.SizedBox(height: 2),
                   pw.Text(
                     ctx.schoolAddress,
-                    style: textStyle ?? const pw.TextStyle(fontSize: 9, color: _textSecondary),
+                    style: textStyle ??
+                        const pw.TextStyle(fontSize: 9, color: _textSecondary),
                   ),
                 ],
                 if (ctx.schoolPhone.isNotEmpty || ctx.schoolEmail.isNotEmpty)
@@ -178,13 +183,15 @@ class PdfBranding {
                     padding: const pw.EdgeInsets.only(top: 2),
                     child: pw.Text(
                       [
-                        if (ctx.schoolPhone.isNotEmpty) 'Ph: ${ctx.schoolPhone}',
+                        if (ctx.schoolPhone.isNotEmpty)
+                          'Ph: ${ctx.schoolPhone}',
                         if (ctx.schoolEmail.isNotEmpty) ctx.schoolEmail,
                       ].join('  •  '),
-                      style: textStyle ?? const pw.TextStyle(
-                        fontSize: 9,
-                        color: _textSecondary,
-                      ),
+                      style: textStyle ??
+                          const pw.TextStyle(
+                            fontSize: 9,
+                            color: _textSecondary,
+                          ),
                     ),
                   ),
               ],
@@ -197,21 +204,23 @@ class PdfBranding {
                 if (title != null)
                   pw.Text(
                     title,
-                    style: textStyle ?? pw.TextStyle(
-                      fontSize: 14,
-                      fontWeight: pw.FontWeight.bold,
-                      color: _textPrimary,
-                    ),
+                    style: textStyle ??
+                        pw.TextStyle(
+                          fontSize: 14,
+                          fontWeight: pw.FontWeight.bold,
+                          color: _textPrimary,
+                        ),
                   ),
                 if (subtitle != null)
                   pw.Padding(
                     padding: const pw.EdgeInsets.only(top: 2),
                     child: pw.Text(
                       subtitle,
-                      style: textStyle ?? const pw.TextStyle(
-                        fontSize: 10,
-                        color: _textSecondary,
-                      ),
+                      style: textStyle ??
+                          const pw.TextStyle(
+                            fontSize: 10,
+                            color: _textSecondary,
+                          ),
                     ),
                   ),
               ],
@@ -223,10 +232,14 @@ class PdfBranding {
 
   /// Convenience footer: "Generated by EazySchool 360 on <date>" + page number.
   static pw.Widget buildFooter(PdfBrandingContext ctx, pw.Context pdfCtx) {
-    final textStyle = _unicodeFont != null 
-        ? pw.TextStyle(fontSize: 8, color: _textSecondary, font: _unicodeFont!, fontFallback: [pw.Font.helvetica()])
+    final textStyle = _unicodeFont != null
+        ? pw.TextStyle(
+            fontSize: 8,
+            color: _textSecondary,
+            font: _unicodeFont!,
+            fontFallback: [pw.Font.helvetica()])
         : const pw.TextStyle(fontSize: 8, color: _textSecondary);
-    
+
     return pw.Container(
       padding: const pw.EdgeInsets.only(top: 6),
       decoration: const pw.BoxDecoration(

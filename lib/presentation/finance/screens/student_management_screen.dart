@@ -14,10 +14,12 @@ class StudentManagementScreen extends ConsumerStatefulWidget {
   const StudentManagementScreen({super.key});
 
   @override
-  ConsumerState<StudentManagementScreen> createState() => _StudentManagementScreenState();
+  ConsumerState<StudentManagementScreen> createState() =>
+      _StudentManagementScreenState();
 }
 
-class _StudentManagementScreenState extends ConsumerState<StudentManagementScreen> {
+class _StudentManagementScreenState
+    extends ConsumerState<StudentManagementScreen> {
   String _searchQuery = '';
   String? _filterClass;
   final _searchController = TextEditingController();
@@ -81,7 +83,9 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
   Future<String> _getCurrentAcademicYear(String schoolId) async {
     try {
       final snapshot = await FirebaseFirestore.instance
-          .collection('schools').doc(schoolId).collection('academicYears')
+          .collection('schools')
+          .doc(schoolId)
+          .collection('academicYears')
           .where('isCurrent', isEqualTo: true)
           .limit(1)
           .get();
@@ -102,7 +106,11 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
     final isTablet = screenWidth > 600 && screenWidth <= 1024;
 
     if (session == null || session.schoolId == null) {
-      return const Scaffold(backgroundColor: _bgDark, body: Center(child: Text('Access Denied', style: TextStyle(color: _textPrimary))));
+      return const Scaffold(
+          backgroundColor: _bgDark,
+          body: Center(
+              child: Text('Access Denied',
+                  style: TextStyle(color: _textPrimary))));
     }
 
     final studentsAsync = ref.watch(schoolStudentsProvider(session.schoolId!));
@@ -113,18 +121,21 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
         onPressed: () => _showAddStudentDialog(context, session.schoolId!),
         backgroundColor: _accentBlue,
         icon: const Icon(Icons.person_add_rounded, color: Colors.white),
-        label: const Text('Add Student', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+        label: const Text('Add Student',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       ),
       body: Column(
         children: [
           _buildHeader(context, isDesktop),
           Expanded(
             child: studentsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
+              loading: () => const Center(
+                  child: CircularProgressIndicator(color: _accentBlue)),
               error: (error, stack) => _buildErrorState(error),
               data: (students) {
                 final filteredStudents = _filterStudents(students);
-                return _buildContent(context, students, filteredStudents, isDesktop, isTablet);
+                return _buildContent(
+                    context, students, filteredStudents, isDesktop, isTablet);
               },
             ),
           ),
@@ -135,7 +146,8 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
 
   Widget _buildHeader(BuildContext context, bool isDesktop) {
     return Container(
-      padding: EdgeInsets.fromLTRB(isDesktop ? 24 : 16, isDesktop ? 20 : 16, isDesktop ? 24 : 16, 12),
+      padding: EdgeInsets.fromLTRB(
+          isDesktop ? 24 : 16, isDesktop ? 20 : 16, isDesktop ? 24 : 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -144,18 +156,23 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
               Expanded(
                 child: Container(
                   height: 44,
-                  decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(10), border: Border.all(color: _borderColor)),
+                  decoration: BoxDecoration(
+                      color: _cardDark,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: _borderColor)),
                   child: TextField(
                     controller: _searchController,
                     style: const TextStyle(color: _textPrimary, fontSize: 14),
                     decoration: const InputDecoration(
                       hintText: 'Search students by name, ID, or phone...',
                       hintStyle: TextStyle(color: _textSecondary, fontSize: 14),
-                      prefixIcon: Icon(Icons.search, color: _textSecondary, size: 20),
+                      prefixIcon:
+                          Icon(Icons.search, color: _textSecondary, size: 20),
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.symmetric(vertical: 12),
                     ),
-                    onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
+                    onChanged: (value) =>
+                        setState(() => _searchQuery = value.toLowerCase()),
                   ),
                 ),
               ),
@@ -165,7 +182,23 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
                 child: SearchableDropdown<String>(
                   value: _filterClass,
                   hint: 'All Classes',
-                  items: const ['Pre-KG', 'LKG', 'UKG', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'],
+                  items: const [
+                    'Pre-KG',
+                    'LKG',
+                    'UKG',
+                    'I',
+                    'II',
+                    'III',
+                    'IV',
+                    'V',
+                    'VI',
+                    'VII',
+                    'VIII',
+                    'IX',
+                    'X',
+                    'XI',
+                    'XII'
+                  ],
                   itemLabel: (c) => 'Class $c',
                   onChanged: (value) => setState(() => _filterClass = value),
                 ),
@@ -183,12 +216,14 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
           student.name.toLowerCase().contains(_searchQuery) ||
           student.studentId.toString().contains(_searchQuery) ||
           (student.phoneNumber?.contains(_searchQuery) ?? false);
-      final matchesClass = _filterClass == null || student.className == _filterClass;
+      final matchesClass =
+          _filterClass == null || student.className == _filterClass;
       return matchesSearch && matchesClass;
     }).toList();
   }
 
-  Widget _buildContent(BuildContext context, List<Student> allStudents, List<Student> filteredStudents, bool isDesktop, bool isTablet) {
+  Widget _buildContent(BuildContext context, List<Student> allStudents,
+      List<Student> filteredStudents, bool isDesktop, bool isTablet) {
     if (allStudents.isEmpty) {
       return _buildEmptyState();
     }
@@ -203,7 +238,9 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
           padding: EdgeInsets.symmetric(horizontal: isDesktop ? 24 : 16),
           child: Row(
             children: [
-              Text('${filteredStudents.length} student${filteredStudents.length != 1 ? 's' : ''}', style: const TextStyle(color: _textSecondary, fontSize: 13)),
+              Text(
+                  '${filteredStudents.length} student${filteredStudents.length != 1 ? 's' : ''}',
+                  style: const TextStyle(color: _textSecondary, fontSize: 13)),
               const Spacer(),
             ],
           ),
@@ -222,22 +259,66 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Container(
-        decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
+        decoration: BoxDecoration(
+            color: _cardDark,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _borderColor)),
         child: Column(
           children: [
             // Header
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _borderColor))),
+              decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: _borderColor))),
               child: const Row(
                 children: [
-                  SizedBox(width: 60, child: Text('ID', style: TextStyle(fontWeight: FontWeight.w600, color: _textSecondary, fontSize: 12))),
-                  Expanded(flex: 2, child: Text('NAME', style: TextStyle(fontWeight: FontWeight.w600, color: _textSecondary, fontSize: 12))),
-                  SizedBox(width: 80, child: Text('CLASS', style: TextStyle(fontWeight: FontWeight.w600, color: _textSecondary, fontSize: 12))),
-                  SizedBox(width: 80, child: Text('SECTION', style: TextStyle(fontWeight: FontWeight.w600, color: _textSecondary, fontSize: 12))),
-                  Expanded(child: Text('PHONE', style: TextStyle(fontWeight: FontWeight.w600, color: _textSecondary, fontSize: 12))),
-                  Expanded(child: Text('PARENT', style: TextStyle(fontWeight: FontWeight.w600, color: _textSecondary, fontSize: 12))),
-                  SizedBox(width: 100, child: Text('ACTIONS', style: TextStyle(fontWeight: FontWeight.w600, color: _textSecondary, fontSize: 12))),
+                  SizedBox(
+                      width: 60,
+                      child: Text('ID',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _textSecondary,
+                              fontSize: 12))),
+                  Expanded(
+                      flex: 2,
+                      child: Text('NAME',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _textSecondary,
+                              fontSize: 12))),
+                  SizedBox(
+                      width: 80,
+                      child: Text('CLASS',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _textSecondary,
+                              fontSize: 12))),
+                  SizedBox(
+                      width: 80,
+                      child: Text('SECTION',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _textSecondary,
+                              fontSize: 12))),
+                  Expanded(
+                      child: Text('PHONE',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _textSecondary,
+                              fontSize: 12))),
+                  Expanded(
+                      child: Text('PARENT',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _textSecondary,
+                              fontSize: 12))),
+                  SizedBox(
+                      width: 100,
+                      child: Text('ACTIONS',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _textSecondary,
+                              fontSize: 12))),
                 ],
               ),
             ),
@@ -252,10 +333,14 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
   Widget _buildTableRow(Student student) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _borderColor, width: 0.5))),
+      decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: _borderColor, width: 0.5))),
       child: Row(
         children: [
-          SizedBox(width: 60, child: Text('${student.studentId}', style: const TextStyle(color: _textPrimary, fontSize: 13))),
+          SizedBox(
+              width: 60,
+              child: Text('${student.studentId}',
+                  style: const TextStyle(color: _textPrimary, fontSize: 13))),
           Expanded(
             flex: 2,
             child: Row(
@@ -263,23 +348,47 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
                 CircleAvatar(
                   backgroundColor: _accentBlue.withOpacity(0.2),
                   radius: 16,
-                  child: Text(student.name.isNotEmpty ? student.name[0].toUpperCase() : 'S', style: const TextStyle(color: _accentBlue, fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: Text(
+                      student.name.isNotEmpty
+                          ? student.name[0].toUpperCase()
+                          : 'S',
+                      style: const TextStyle(
+                          color: _accentBlue,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12)),
                 ),
                 const SizedBox(width: 10),
-                Expanded(child: Text(student.name, style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w500, fontSize: 13), overflow: TextOverflow.ellipsis)),
+                Expanded(
+                    child: Text(student.name,
+                        style: const TextStyle(
+                            color: _textPrimary,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13),
+                        overflow: TextOverflow.ellipsis)),
               ],
             ),
           ),
-          SizedBox(width: 80, child: Text(student.className, style: const TextStyle(color: _textPrimary, fontSize: 13))),
-          SizedBox(width: 80, child: Text(student.section, style: const TextStyle(color: _textPrimary, fontSize: 13))),
-          Expanded(child: Text(student.phoneNumber ?? '-', style: const TextStyle(color: _textSecondary, fontSize: 13))),
-          Expanded(child: Text(student.parentName ?? '-', style: const TextStyle(color: _textSecondary, fontSize: 13))),
+          SizedBox(
+              width: 80,
+              child: Text(student.className,
+                  style: const TextStyle(color: _textPrimary, fontSize: 13))),
+          SizedBox(
+              width: 80,
+              child: Text(student.section,
+                  style: const TextStyle(color: _textPrimary, fontSize: 13))),
+          Expanded(
+              child: Text(student.phoneNumber ?? '-',
+                  style: const TextStyle(color: _textSecondary, fontSize: 13))),
+          Expanded(
+              child: Text(student.parentName ?? '-',
+                  style: const TextStyle(color: _textSecondary, fontSize: 13))),
           SizedBox(
             width: 100,
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 18, color: _textSecondary),
+                  icon: const Icon(Icons.edit_outlined,
+                      size: 18, color: _textSecondary),
                   onPressed: () => _showEditStudentDialog(context, student),
                   tooltip: 'Edit',
                   padding: EdgeInsets.zero,
@@ -287,7 +396,8 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.payment_outlined, size: 18, color: _accentBlue),
+                  icon: const Icon(Icons.payment_outlined,
+                      size: 18, color: _accentBlue),
                   onPressed: () {}, // Navigate to fee payment
                   tooltip: 'Collect Fee',
                   padding: EdgeInsets.zero,
@@ -305,7 +415,8 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: students.length,
-      itemBuilder: (context, index) => _buildStudentCard(students[index], isTablet),
+      itemBuilder: (context, index) =>
+          _buildStudentCard(students[index], isTablet),
     );
   }
 
@@ -313,25 +424,42 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: _borderColor)),
+      decoration: BoxDecoration(
+          color: _cardDark,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _borderColor)),
       child: Row(
         children: [
           CircleAvatar(
             backgroundColor: _accentBlue.withOpacity(0.2),
             radius: 22,
-            child: Text(student.name.isNotEmpty ? student.name[0].toUpperCase() : 'S', style: const TextStyle(color: _accentBlue, fontWeight: FontWeight.bold, fontSize: 16)),
+            child: Text(
+                student.name.isNotEmpty ? student.name[0].toUpperCase() : 'S',
+                style: const TextStyle(
+                    color: _accentBlue,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16)),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(student.name, style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(student.name,
+                    style: const TextStyle(
+                        color: _textPrimary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14)),
                 const SizedBox(height: 2),
-                Text('ID: ${student.studentId} • Class ${student.className} - ${student.section}', style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                Text(
+                    'ID: ${student.studentId} • Class ${student.className} - ${student.section}',
+                    style:
+                        const TextStyle(color: _textSecondary, fontSize: 12)),
                 if (student.phoneNumber != null) ...[
                   const SizedBox(height: 2),
-                  Text(student.phoneNumber!, style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                  Text(student.phoneNumber!,
+                      style:
+                          const TextStyle(color: _textSecondary, fontSize: 12)),
                 ],
               ],
             ),
@@ -344,8 +472,20 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
               if (value == 'fee') {} // Navigate to fee payment
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: _textSecondary), SizedBox(width: 8), Text('Edit', style: TextStyle(color: _textPrimary))])),
-              const PopupMenuItem(value: 'fee', child: Row(children: [Icon(Icons.payment_outlined, size: 18, color: _accentBlue), SizedBox(width: 8), Text('Collect Fee', style: TextStyle(color: _textPrimary))])),
+              const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(children: [
+                    Icon(Icons.edit_outlined, size: 18, color: _textSecondary),
+                    SizedBox(width: 8),
+                    Text('Edit', style: TextStyle(color: _textPrimary))
+                  ])),
+              const PopupMenuItem(
+                  value: 'fee',
+                  child: Row(children: [
+                    Icon(Icons.payment_outlined, size: 18, color: _accentBlue),
+                    SizedBox(width: 8),
+                    Text('Collect Fee', style: TextStyle(color: _textPrimary))
+                  ])),
             ],
           ),
         ],
@@ -360,13 +500,20 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
         children: [
           Container(
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: _accentBlue.withOpacity(0.1), shape: BoxShape.circle),
-            child: const Icon(Icons.people_outline, size: 48, color: _accentBlue),
+            decoration: BoxDecoration(
+                color: _accentBlue.withOpacity(0.1), shape: BoxShape.circle),
+            child:
+                const Icon(Icons.people_outline, size: 48, color: _accentBlue),
           ),
           const SizedBox(height: 20),
-          const Text('No Students Yet', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary)),
+          const Text('No Students Yet',
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: _textPrimary)),
           const SizedBox(height: 8),
-          const Text('Add your first student to get started', style: TextStyle(color: _textSecondary)),
+          const Text('Add your first student to get started',
+              style: TextStyle(color: _textSecondary)),
         ],
       ),
     );
@@ -379,9 +526,14 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
         children: [
           const Icon(Icons.search_off, size: 48, color: _textSecondary),
           const SizedBox(height: 16),
-          const Text('No students found', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _textPrimary)),
+          const Text('No students found',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: _textPrimary)),
           const SizedBox(height: 8),
-          const Text('Try adjusting your search or filters', style: TextStyle(color: _textSecondary)),
+          const Text('Try adjusting your search or filters',
+              style: TextStyle(color: _textSecondary)),
         ],
       ),
     );
@@ -394,7 +546,11 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
         children: [
           Icon(Icons.error_outline, size: 48, color: Colors.red.shade400),
           const SizedBox(height: 16),
-          const Text('Error Loading Students', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _textPrimary)),
+          const Text('Error Loading Students',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: _textPrimary)),
           const SizedBox(height: 8),
           Text(error.toString(), style: const TextStyle(color: _textSecondary)),
         ],
@@ -410,13 +566,19 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
     _showStudentFormDialog(context, student.schoolId, student);
   }
 
-  void _showStudentFormDialog(BuildContext context, String schoolId, Student? existingStudent) {
+  void _showStudentFormDialog(
+      BuildContext context, String schoolId, Student? existingStudent) {
     final isEditing = existingStudent != null;
-    final nameController = TextEditingController(text: existingStudent?.name ?? '');
-    final phoneController = TextEditingController(text: existingStudent?.phoneNumber ?? '');
-    final parentNameController = TextEditingController(text: existingStudent?.parentName ?? '');
-    final parentPhoneController = TextEditingController(text: existingStudent?.parentPhone ?? '');
-    final parentEmailController = TextEditingController(text: existingStudent?.parentEmail ?? '');
+    final nameController =
+        TextEditingController(text: existingStudent?.name ?? '');
+    final phoneController =
+        TextEditingController(text: existingStudent?.phoneNumber ?? '');
+    final parentNameController =
+        TextEditingController(text: existingStudent?.parentName ?? '');
+    final parentPhoneController =
+        TextEditingController(text: existingStudent?.parentPhone ?? '');
+    final parentEmailController =
+        TextEditingController(text: existingStudent?.parentEmail ?? '');
     String selectedClass = existingStudent?.className ?? 'I';
     String selectedSection = existingStudent?.section ?? 'A';
 
@@ -425,35 +587,67 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: _cardDark,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(isEditing ? 'Edit Student' : 'Add New Student', style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(isEditing ? 'Edit Student' : 'Add New Student',
+              style: const TextStyle(
+                  color: _textPrimary, fontWeight: FontWeight.bold)),
           content: SizedBox(
             width: 400,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildTextField('Student Name *', nameController, Icons.person_outline),
+                  _buildTextField(
+                      'Student Name *', nameController, Icons.person_outline),
                   const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
-                        child: _buildDropdownField('Class *', selectedClass, ['Pre-KG', 'LKG', 'UKG', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'], (v) => setDialogState(() => selectedClass = v!)),
+                        child: _buildDropdownField(
+                            'Class *',
+                            selectedClass,
+                            [
+                              'LKG',
+                              'UKG',
+                              'KG',
+                              'I',
+                              'II',
+                              'III',
+                              'IV',
+                              'V',
+                              'VI',
+                              'VII',
+                              'VIII',
+                              'IX',
+                              'X',
+                              'XI',
+                              'XII'
+                            ],
+                            (v) => setDialogState(() => selectedClass = v!)),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildDropdownField('Section *', selectedSection, ['A', 'B', 'C', 'D'], (v) => setDialogState(() => selectedSection = v!)),
+                        child: _buildDropdownField(
+                            'Section *',
+                            selectedSection,
+                            ['A', 'B', 'C', 'D'],
+                            (v) => setDialogState(() => selectedSection = v!)),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _buildTextField('Phone Number', phoneController, Icons.phone_outlined),
+                  _buildTextField(
+                      'Phone Number', phoneController, Icons.phone_outlined),
                   const SizedBox(height: 12),
-                  _buildTextField('Parent Name', parentNameController, Icons.family_restroom_outlined),
+                  _buildTextField('Parent Name', parentNameController,
+                      Icons.family_restroom_outlined),
                   const SizedBox(height: 12),
-                  _buildTextField('Parent Phone', parentPhoneController, Icons.phone_outlined),
+                  _buildTextField('Parent Phone', parentPhoneController,
+                      Icons.phone_outlined),
                   const SizedBox(height: 12),
-                  _buildTextField('Parent Email', parentEmailController, Icons.email_outlined),
+                  _buildTextField('Parent Email', parentEmailController,
+                      Icons.email_outlined),
                 ],
               ),
             ),
@@ -461,34 +655,47 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: _textSecondary)),
+              child:
+                  const Text('Cancel', style: TextStyle(color: _textSecondary)),
             ),
             ElevatedButton(
               onPressed: () async {
                 if (nameController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student name is required'), backgroundColor: Colors.red));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Student name is required'),
+                      backgroundColor: Colors.red));
                   return;
                 }
-                
+
                 try {
                   final repo = ref.read(studentRepositoryProvider);
                   final now = DateTime.now();
-                  
+
                   if (isEditing) {
                     final updated = existingStudent.copyWith(
                       name: nameController.text.trim(),
                       className: selectedClass,
                       section: selectedSection,
-                      phoneNumber: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
-                      parentName: parentNameController.text.trim().isEmpty ? null : parentNameController.text.trim(),
-                      parentPhone: parentPhoneController.text.trim().isEmpty ? null : parentPhoneController.text.trim(),
-                      parentEmail: parentEmailController.text.trim().isEmpty ? null : parentEmailController.text.trim(),
+                      phoneNumber: phoneController.text.trim().isEmpty
+                          ? null
+                          : phoneController.text.trim(),
+                      parentName: parentNameController.text.trim().isEmpty
+                          ? null
+                          : parentNameController.text.trim(),
+                      parentPhone: parentPhoneController.text.trim().isEmpty
+                          ? null
+                          : parentPhoneController.text.trim(),
+                      parentEmail: parentEmailController.text.trim().isEmpty
+                          ? null
+                          : parentEmailController.text.trim(),
                       updatedAt: now,
                     );
-                    await repo.updateStudent(schoolId, existingStudent.id, updated);
+                    await repo.updateStudent(
+                        schoolId, existingStudent.id, updated);
                   } else {
                     final nextId = await repo.getNextStudentId(schoolId);
-                    final currentYearCode = await _getCurrentAcademicYear(schoolId);
+                    final currentYearCode =
+                        await _getCurrentAcademicYear(schoolId);
                     final newStudent = Student(
                       id: '',
                       schoolId: schoolId,
@@ -496,10 +703,18 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
                       name: nameController.text.trim(),
                       className: selectedClass,
                       section: selectedSection,
-                      phoneNumber: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
-                      parentName: parentNameController.text.trim().isEmpty ? null : parentNameController.text.trim(),
-                      parentPhone: parentPhoneController.text.trim().isEmpty ? null : parentPhoneController.text.trim(),
-                      parentEmail: parentEmailController.text.trim().isEmpty ? null : parentEmailController.text.trim(),
+                      phoneNumber: phoneController.text.trim().isEmpty
+                          ? null
+                          : phoneController.text.trim(),
+                      parentName: parentNameController.text.trim().isEmpty
+                          ? null
+                          : parentNameController.text.trim(),
+                      parentPhone: parentPhoneController.text.trim().isEmpty
+                          ? null
+                          : parentPhoneController.text.trim(),
+                      parentEmail: parentEmailController.text.trim().isEmpty
+                          ? null
+                          : parentEmailController.text.trim(),
                       status: StudentStatus.ACTIVE,
                       academicYearCode: currentYearCode,
                       createdAt: now,
@@ -528,19 +743,25 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
                       ));
                     }
                   }
-                  
+
                   if (mounted) {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEditing ? 'Student updated' : 'Student added'), backgroundColor: _accentBlue));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(
+                            isEditing ? 'Student updated' : 'Student added'),
+                        backgroundColor: _accentBlue));
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red));
                   }
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: _accentBlue),
-              child: Text(isEditing ? 'Update' : 'Add Student', style: const TextStyle(color: Colors.white)),
+              child: Text(isEditing ? 'Update' : 'Add Student',
+                  style: const TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -548,7 +769,8 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, IconData icon) {
+  Widget _buildTextField(
+      String label, TextEditingController controller, IconData icon) {
     return TextField(
       controller: controller,
       style: const TextStyle(color: _textPrimary),
@@ -558,14 +780,21 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
         prefixIcon: Icon(icon, color: _textSecondary, size: 20),
         filled: true,
         fillColor: _bgDark,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _accentBlue)),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: _borderColor)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: _borderColor)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: _accentBlue)),
       ),
     );
   }
 
-  Widget _buildDropdownField(String label, String value, List<String> items, void Function(String?) onChanged) {
+  Widget _buildDropdownField(String label, String value, List<String> items,
+      void Function(String?) onChanged) {
     return SearchableDropdown<String>(
       value: items.contains(value) ? value : null,
       hint: label,
@@ -574,5 +803,4 @@ class _StudentManagementScreenState extends ConsumerState<StudentManagementScree
       onChanged: onChanged,
     );
   }
-
 }

@@ -1153,9 +1153,9 @@ class _StudentDirectoryScreenState
                       children: [
                         Expanded(
                             child: _formDropdown('Class *', selectedClass, [
-                          'Pre-KG',
                           'LKG',
                           'UKG',
+                          'KG',
                           'I',
                           'II',
                           'III',

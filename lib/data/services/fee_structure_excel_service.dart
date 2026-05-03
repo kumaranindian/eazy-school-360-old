@@ -50,11 +50,21 @@ class FeeStructureExcelService {
 
   /// Class roster used to seed the sample template (LKG → XII).
   static const List<String> _allClasses = [
-    'LKG', 'UKG',
-    'I', 'II', 'III', 'IV', 'V',
-    'VI', 'VII', 'VIII',
-    'IX', 'X',
-    'XI', 'XII',
+    'LKG',
+    'UKG',
+    'KG',
+    'I',
+    'II',
+    'III',
+    'IV',
+    'V',
+    'VI',
+    'VII',
+    'VIII',
+    'IX',
+    'X',
+    'XI',
+    'XII',
   ];
 
   static const List<String> headers = [
@@ -135,23 +145,24 @@ class FeeStructureExcelService {
     switch (klass) {
       case 'LKG':
       case 'UKG':
-        return 24000;   // monthly 2,000 / term 8,000 / installment 6,000
+      case 'KG':
+        return 24000; // monthly 2,000 / term 8,000 / installment 6,000
       case 'I':
       case 'II':
       case 'III':
       case 'IV':
       case 'V':
-        return 36000;   // monthly 3,000 / term 12,000 / installment 9,000
+        return 36000; // monthly 3,000 / term 12,000 / installment 9,000
       case 'VI':
       case 'VII':
       case 'VIII':
-        return 48000;   // monthly 4,000 / term 16,000 / installment 12,000
+        return 48000; // monthly 4,000 / term 16,000 / installment 12,000
       case 'IX':
       case 'X':
-        return 60000;   // monthly 5,000 / term 20,000 / installment 15,000
+        return 60000; // monthly 5,000 / term 20,000 / installment 15,000
       case 'XI':
       case 'XII':
-        return 72000;   // monthly 6,000 / term 24,000 / installment 18,000
+        return 72000; // monthly 6,000 / term 24,000 / installment 18,000
       default:
         return 36000;
     }
@@ -198,8 +209,18 @@ class FeeStructureExcelService {
     final startYear = int.parse(_yearStartFromAY(academicYear));
     // Indian AY (school): June start, May end of next year.
     const monthLabels = [
-      'June', 'July', 'August', 'September', 'October', 'November',
-      'December', 'January', 'February', 'March', 'April', 'May'
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May'
     ];
     final dueDates = List<String>.generate(12, (i) {
       // i=0 → June of startYear ; i=7 → January of startYear+1 ; i=11 → May of startYear+1
@@ -239,7 +260,11 @@ class FeeStructureExcelService {
       '$startYear-10-10',
       '${startYear + 1}-02-10',
     ];
-    final termNames = ['Term 1 (Jun-Sep)', 'Term 2 (Oct-Jan)', 'Term 3 (Feb-May)'];
+    final termNames = [
+      'Term 1 (Jun-Sep)',
+      'Term 2 (Oct-Jan)',
+      'Term 3 (Feb-May)'
+    ];
 
     var rowIdx = 1;
     for (final klass in _allClasses) {
@@ -381,8 +406,7 @@ class FeeStructureExcelService {
       Sheet? sheet = xl.tables[sheetName];
       sheet ??= xl.tables.values.isNotEmpty ? xl.tables.values.first : null;
       if (sheet == null) {
-        throw FeeStructureExcelParseException(
-            'No sheet found in Excel file.');
+        throw FeeStructureExcelParseException('No sheet found in Excel file.');
       }
       targets = [MapEntry(sheet.sheetName, sheet)];
     }
@@ -564,8 +588,7 @@ class FeeStructureExcelService {
   }
 
   // ───── helpers ─────
-  String _readString(
-      List<Data?> row, Map<String, int> idx, String header) {
+  String _readString(List<Data?> row, Map<String, int> idx, String header) {
     final i = idx[header]!;
     if (i >= row.length) return '';
     return (row[i]?.value?.toString() ?? '').trim();
@@ -578,15 +601,13 @@ class FeeStructureExcelService {
     return v;
   }
 
-  int? _readIntOptional(
-      List<Data?> row, Map<String, int> idx, String header) {
+  int? _readIntOptional(List<Data?> row, Map<String, int> idx, String header) {
     final s = _readString(row, idx, header);
     if (s.isEmpty) return null;
     return int.tryParse(s);
   }
 
-  double _readNumber(
-      List<Data?> row, Map<String, int> idx, String header) {
+  double _readNumber(List<Data?> row, Map<String, int> idx, String header) {
     final s = _readString(row, idx, header);
     final v = double.tryParse(s);
     if (v == null) throw '$header must be a number (got "$s")';
@@ -600,8 +621,7 @@ class FeeStructureExcelService {
     return double.tryParse(s);
   }
 
-  DateTime _readDate(
-      List<Data?> row, Map<String, int> idx, String header) {
+  DateTime _readDate(List<Data?> row, Map<String, int> idx, String header) {
     final i = idx[header]!;
     if (i >= row.length || row[i] == null) {
       throw '$header is required';

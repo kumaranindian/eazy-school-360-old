@@ -41,7 +41,8 @@ class StudentFeeLedgerRepository {
     return _col(schoolId)
         .orderBy('updatedAt', descending: true)
         .snapshots()
-        .map((s) => s.docs.map((d) => StudentFeeLedger.fromFirestore(d)).toList());
+        .map((s) =>
+            s.docs.map((d) => StudentFeeLedger.fromFirestore(d)).toList());
   }
 
   Future<List<StudentFeeLedger>> listByClass(
@@ -82,7 +83,8 @@ class StudentFeeLedgerRepository {
     String? parentPhone,
   }) {
     final now = DateTime.now();
-    final terms = [...structure.terms]..sort((a, b) => a.sequence.compareTo(b.sequence));
+    final terms = [...structure.terms]
+      ..sort((a, b) => a.sequence.compareTo(b.sequence));
     final entries = terms
         .map((t) => TermLedgerEntry(
               termId: t.id,
@@ -191,7 +193,7 @@ class StudentFeeLedgerRepository {
     final existing =
         await getByStudent(schoolId, studentId, structure.academicYear);
 
-    final fresh = buildLedger(
+    var fresh = buildLedger(
       schoolId: schoolId,
       studentId: studentId,
       studentName: studentName,
@@ -201,6 +203,22 @@ class StudentFeeLedgerRepository {
       parentName: parentName,
       parentPhone: parentPhone,
     );
+
+    // Load arrears from student_fee_details and add to ledger
+    final arrearsEntries = await _loadArrearsEntries(
+      schoolId: schoolId,
+      studentId: studentId,
+      academicYear: structure.academicYear,
+    );
+    if (arrearsEntries.isNotEmpty) {
+      fresh = fresh.copyWith(
+        termStatus: [...fresh.termStatus, ...arrearsEntries],
+        totalAssigned: fresh.totalAssigned +
+            arrearsEntries.fold<double>(0, (s, e) => s + e.amount),
+        totalPending: fresh.totalPending +
+            arrearsEntries.fold<double>(0, (s, e) => s + e.amount),
+      );
+    }
 
     // ── Case 1: brand new ────────────────────────────────────────────────
     if (existing == null) {
@@ -303,6 +321,93 @@ class StudentFeeLedgerRepository {
       updatedAt: DateTime.now(),
     );
     await _col(schoolId).doc(existing.id).set(updated.toFirestore());
+  }
+
+  /// Loads arrears from student_fee_details collection and converts to TermLedgerEntry objects
+  Future<List<TermLedgerEntry>> _loadArrearsEntries({
+    required String schoolId,
+    required String studentId,
+    required String academicYear,
+  }) async {
+    final entries = <TermLedgerEntry>[];
+    try {
+      final snap = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('student_fee_details')
+          .where('stuId', isEqualTo: int.tryParse(studentId) ?? 0)
+          .where('academicYear', isEqualTo: academicYear)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isEmpty) return entries;
+
+      final data = snap.docs.first.data();
+      final balanceArrearTuition =
+          (data['balanceArrearTuitionFees'] as num?)?.toDouble() ?? 0;
+      final balanceArrearExam =
+          (data['balanceArrearExamFees'] as num?)?.toDouble() ?? 0;
+      final balanceArrearVan =
+          (data['balanceArrearVanFees'] as num?)?.toDouble() ?? 0;
+      final arrearsAy = (data['arrearsAcademicYear'] ?? '').toString();
+
+      // Calculate previous AY if not stored
+      final prevAy = arrearsAy.isNotEmpty
+          ? arrearsAy
+          : _getPreviousAcademicYear(academicYear);
+
+      if (balanceArrearTuition > 0) {
+        entries.add(TermLedgerEntry(
+          termId: 'ARREARS_TUITION_$prevAy',
+          termName: 'Tuition Arrears',
+          sequence: 999,
+          amount: balanceArrearTuition,
+          dueDate: DateTime.now(),
+          paidAmount: 0,
+          category: 'TUITION',
+          isArrear: true,
+          sourceAcademicYear: prevAy,
+        ));
+      }
+      if (balanceArrearExam > 0) {
+        entries.add(TermLedgerEntry(
+          termId: 'ARREARS_EXAM_$prevAy',
+          termName: 'Exam Arrears',
+          sequence: 999,
+          amount: balanceArrearExam,
+          dueDate: DateTime.now(),
+          paidAmount: 0,
+          category: 'EXAM',
+          isArrear: true,
+          sourceAcademicYear: prevAy,
+        ));
+      }
+      if (balanceArrearVan > 0) {
+        entries.add(TermLedgerEntry(
+          termId: 'ARREARS_VAN_$prevAy',
+          termName: 'Van Arrears',
+          sequence: 999,
+          amount: balanceArrearVan,
+          dueDate: DateTime.now(),
+          paidAmount: 0,
+          category: 'VAN',
+          isArrear: true,
+          sourceAcademicYear: prevAy,
+        ));
+      }
+    } catch (e) {
+      // Log error but don't fail the assignment
+      print('[StudentFeeLedgerRepository] Failed to load arrears: $e');
+    }
+    return entries;
+  }
+
+  /// Calculates previous academic year from current AY (e.g., 2026-27 → 2025-26)
+  String _getPreviousAcademicYear(String currentAy) {
+    final match = RegExp(r'^(\d{4})').firstMatch(currentAy);
+    if (match == null) return currentAy;
+    final startYear = int.tryParse(match.group(1)!) ?? DateTime.now().year;
+    return '${startYear - 1}-${startYear}';
   }
 
   /// Bulk-assign with conflict policy + per-student outcome tracking.
@@ -440,12 +545,10 @@ class AssignmentPlan {
 
   int get newCount =>
       items.where((i) => i.status == AssignmentOutcome.NEW).length;
-  int get alreadyAssignedCount => items
-      .where((i) => i.status == AssignmentOutcome.ALREADY_ASSIGNED)
-      .length;
-  int get conflictNoPaidCount => items
-      .where((i) => i.status == AssignmentOutcome.CONFLICT_NO_PAID)
-      .length;
+  int get alreadyAssignedCount =>
+      items.where((i) => i.status == AssignmentOutcome.ALREADY_ASSIGNED).length;
+  int get conflictNoPaidCount =>
+      items.where((i) => i.status == AssignmentOutcome.CONFLICT_NO_PAID).length;
   int get conflictWithPaidCount => items
       .where((i) => i.status == AssignmentOutcome.CONFLICT_WITH_PAID)
       .length;

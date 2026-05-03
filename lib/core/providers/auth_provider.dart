@@ -58,7 +58,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   UserSession? get currentSession => _currentSession;
-  bool get isAuthenticated => _currentSession != null && _currentSession!.isValid();
+  bool get isAuthenticated =>
+      _currentSession != null && _currentSession!.isValid();
   bool get isSuperAdmin => _currentSession?.isSuperAdmin ?? false;
   bool get isAdmin => _currentSession?.isAdmin ?? false;
   bool get isStaff => _currentSession?.isStaff ?? false;
@@ -67,19 +68,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> _initializeAuth() async {
     try {
       state = AuthState.loading;
-      
-      // Check for persisted session
-      final persistedSession = await _loadPersistedSession();
-      if (persistedSession != null && persistedSession.isValid()) {
-        _currentSession = persistedSession;
-        state = AuthState.authenticated;
-        return;
-      }
 
-      // Check Firebase Auth state
+      // Check Firebase Auth state first
       final firebaseUser = _firebaseAuth.currentUser;
       if (firebaseUser != null) {
-        // Fetch fresh user data from Firestore
+        // Always fetch fresh user data from Firestore to get current activation status
+        // This prevents users from bypassing activation by hard refresh
         final authResult = await _fetchUserProfile(firebaseUser.uid);
         if (authResult.success && authResult.session != null) {
           _currentSession = authResult.session;
@@ -89,7 +83,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
           await _signOut();
         }
       } else {
-        state = AuthState.unauthenticated;
+        // No Firebase user - check for persisted session (for offline scenario)
+        final persistedSession = await _loadPersistedSession();
+        if (persistedSession != null && persistedSession.isValid()) {
+          _currentSession = persistedSession;
+          state = AuthState.authenticated;
+        } else {
+          state = AuthState.unauthenticated;
+        }
       }
     } catch (e) {
       debugPrint('Auth initialization error: $e');
@@ -134,7 +135,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       // Validate user status and permissions
       final session = authResult.session!;
-      
+
       // Allow inactive users to proceed to login screen - the UI will route them to waiting activation
       // Don't sign them out here, let the login screen handle routing based on session.isActive
 
@@ -152,7 +153,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return AuthResult.failure(_getFirebaseAuthErrorMessage(e));
     } catch (e) {
       state = AuthState.unauthenticated;
-      return AuthResult.failure('An unexpected error occurred: ${e.toString()}');
+      return AuthResult.failure(
+          'An unexpected error occurred: ${e.toString()}');
     }
   }
 
@@ -233,15 +235,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     try {
       final userDoc = await _firestore.collection('users').doc(uid).get();
-      
+
       if (!userDoc.exists) {
-        return AuthResult.failure('User profile not found. Please contact support.');
+        return AuthResult.failure(
+            'User profile not found. Please contact support.');
       }
 
       // Security validation: Ensure data integrity
       // The uid is stored as the document ID, not as a field in the document
       if (userDoc.id != uid) {
-        return AuthResult.failure('Profile data integrity error. Please contact support.');
+        return AuthResult.failure(
+            'Profile data integrity error. Please contact support.');
       }
 
       final appUser = AppUser.fromFirestore(userDoc);
@@ -287,7 +291,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return AuthResult.success(session);
     } catch (e) {
       debugPrint('Error fetching user profile: $e');
-      return AuthResult.failure('Failed to load user profile. Please try again.');
+      return AuthResult.failure(
+          'Failed to load user profile. Please try again.');
     }
   }
 
@@ -410,18 +415,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Validate school access for current user
   bool canAccessSchool(String schoolId) {
     if (_currentSession == null) return false;
-    
+
     // SUPER_ADMIN can access any school
     if (_currentSession!.isSuperAdmin) return true;
-    
+
     // ADMIN and STAFF can only access their own school
     return _currentSession!.schoolId == schoolId;
   }
 }
 
 /// Providers
-final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
-final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
+final firebaseAuthProvider =
+    Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
+final firestoreProvider =
+    Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final firebaseAuth = ref.watch(firebaseAuthProvider);

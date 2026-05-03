@@ -9,6 +9,7 @@ import '../../finance/screens/financial_reports_screen.dart';
 import '../../finance/screens/bill_management_screen.dart';
 import '../../finance/screens/student_fee_management_screen.dart';
 import '../../finance/screens/fee_structure_list_screen.dart';
+import '../../finance/screens/student_fee_ledger_list_screen.dart';
 import 'finance_dashboard_home.dart';
 import '../../widgets/theme_toggle_button.dart';
 
@@ -465,6 +466,8 @@ class _FinanceDashboardScreenState
         return 'Financial Reports';
       case 6:
         return 'Fee Structures';
+      case 7:
+        return 'Student Ledgers';
       default:
         return 'Dashboard';
     }
@@ -601,6 +604,8 @@ class _FinanceDashboardScreenState
         return const FinancialReportsScreen();
       case 6:
         return const FeeStructureListScreen();
+      case 7:
+        return const StudentFeeLedgerListScreen();
       default:
         return FinanceDashboardHome(
           onNavigateToStudents: () => setState(() => _selectedIndex = 1),

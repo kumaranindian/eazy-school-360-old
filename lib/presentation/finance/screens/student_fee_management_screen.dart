@@ -148,6 +148,27 @@ class _StudentFeeManagementScreenState
     _applyV2Override();
   }
 
+  Future<void> _reloadStudentData() async {
+    if (_selectedStudentDocId == null || _schoolId == null) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(_schoolId)
+          .collection('student_fee_details')
+          .doc(_selectedStudentDocId)
+          .get();
+      if (snap.exists && mounted) {
+        setState(() {
+          _studentData = Map<String, dynamic>.from(snap.data()!);
+          _tuitionSource = 'stored';
+        });
+        await _applyV2Override();
+      }
+    } catch (e) {
+      print('[StudentFeeManagementScreen] Failed to reload student data: $e');
+    }
+  }
+
   /// Looks up the active FeeStructureV2 for the selected student's class
   /// and, when found, overrides the tuition figure with the sum of all V2
   /// term amounts. Recomputes total/balance fields so the screen always
@@ -262,6 +283,7 @@ class _StudentFeeManagementScreenState
                       '')
                   .toString(),
               onBillHistory: _showBillHistory,
+              onPayment: _reloadStudentData,
             ),
           ],
         ],
@@ -417,6 +439,7 @@ class _StudentFeeManagementScreenState
     final arrearExam = (s?['arrearExamFees'] as num?)?.toDouble() ?? 0;
     final arrearVan = (s?['arrearVanFees'] as num?)?.toDouble() ?? 0;
     final totalArrears = arrearTuition + arrearExam + arrearVan;
+    final arrearsAy = (s?['arrearsAcademicYear'] ?? '').toString();
     final concession = (s?['stuConcessionFees'] as num?)?.toDouble() ?? 0;
 
     return Container(
@@ -455,7 +478,7 @@ class _StudentFeeManagementScreenState
         ]),
         SizedBox(height: isMobile ? 12 : 16),
         _summaryRow(
-            'Arrear Fees',
+            'Arrear Fees${arrearsAy.isNotEmpty ? ' (AY $arrearsAy)' : ''}',
             '₹${totalArrears.toStringAsFixed(0)}',
             totalArrears > 0 ? const Color(0xFFEF4444) : _accentGreen,
             isMobile),
@@ -706,12 +729,6 @@ class _StudentFeeManagementScreenState
                                                     color: _accentGreen,
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 12))),
-                                        Flexible(
-                                            child: Text('Descriptions',
-                                                style: TextStyle(
-                                                    color: _accentGreen,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12))),
                                         SizedBox(
                                             width: 100,
                                             child: Text('Amount',
@@ -722,6 +739,12 @@ class _StudentFeeManagementScreenState
                                         SizedBox(
                                             width: 120,
                                             child: Text('Actions',
+                                                style: TextStyle(
+                                                    color: _accentGreen,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12))),
+                                        Flexible(
+                                            child: Text('Descriptions',
                                                 style: TextStyle(
                                                     color: _accentGreen,
                                                     fontWeight: FontWeight.bold,
@@ -772,12 +795,6 @@ class _StudentFeeManagementScreenState
                                                       fontSize: 12),
                                                   overflow:
                                                       TextOverflow.ellipsis)),
-                                          Flexible(
-                                              child: Text(description,
-                                                  style: const TextStyle(
-                                                      color: _textPrimary,
-                                                      fontSize: 12),
-                                                  softWrap: true)),
                                           SizedBox(
                                               width: 100,
                                               child: Text(
@@ -820,7 +837,7 @@ class _StudentFeeManagementScreenState
                                                 IconButton(
                                                   icon: const Icon(
                                                       Icons.download_rounded,
-                                                      color: _textSecondary,
+                                                      color: _accentGreen,
                                                       size: 18),
                                                   onPressed: () =>
                                                       _downloadBill(d),
@@ -832,6 +849,12 @@ class _StudentFeeManagementScreenState
                                               ],
                                             ),
                                           ),
+                                          Flexible(
+                                              child: Text(description,
+                                                  style: const TextStyle(
+                                                      color: _textPrimary,
+                                                      fontSize: 12),
+                                                  softWrap: true)),
                                         ],
                                       ),
                                     );
@@ -936,324 +959,327 @@ class _StudentFeeManagementScreenState
               ),
               width: isMobile ? double.infinity : null,
               padding: EdgeInsets.all(isMobile ? 16 : 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  Row(
-                    children: [
-                      Icon(Icons.receipt_rounded,
-                          color: _accentGreen, size: isMobile ? 24 : 28),
-                      SizedBox(width: isMobile ? 8 : 12),
-                      Expanded(
-                        child: Text('Fee Receipt',
-                            style: TextStyle(
-                                fontSize: isMobile ? 18 : 20,
-                                fontWeight: FontWeight.bold,
-                                color: _textPrimary)),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.close_rounded,
-                            color: _textSecondary, size: isMobile ? 24 : 28),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: isMobile ? 16 : 20),
-
-                  // School Info
-                  Container(
-                    padding: EdgeInsets.all(isMobile ? 12 : 16),
-                    decoration: BoxDecoration(
-                      color: _bgDark,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Row(
                       children: [
-                        Text('School Name',
-                            style: TextStyle(
-                                color: _textSecondary,
-                                fontSize: isMobile ? 11 : 12)),
-                        SizedBox(height: isMobile ? 3 : 4),
-                        Text(
-                            (_studentData!['schoolName'] ?? 'School')
+                        Icon(Icons.receipt_rounded,
+                            color: _accentGreen, size: isMobile ? 24 : 28),
+                        SizedBox(width: isMobile ? 8 : 12),
+                        Expanded(
+                          child: Text('Fee Receipt',
+                              style: TextStyle(
+                                  fontSize: isMobile ? 18 : 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: _textPrimary)),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.close_rounded,
+                              color: _textSecondary, size: isMobile ? 24 : 28),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: isMobile ? 16 : 20),
+
+                    // School Info
+                    Container(
+                      padding: EdgeInsets.all(isMobile ? 12 : 16),
+                      decoration: BoxDecoration(
+                        color: _bgDark,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _borderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('School Name',
+                              style: TextStyle(
+                                  color: _textSecondary,
+                                  fontSize: isMobile ? 11 : 12)),
+                          SizedBox(height: isMobile ? 3 : 4),
+                          Text(
+                              (_studentData!['schoolName'] ?? 'School')
+                                  .toString(),
+                              style: TextStyle(
+                                  color: _textPrimary,
+                                  fontSize: isMobile ? 14 : 16,
+                                  fontWeight: FontWeight.bold)),
+                          SizedBox(height: isMobile ? 10 : 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Receipt #',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: isMobile ? 11 : 12)),
+                                    Text((billData['receipt'] ?? '').toString(),
+                                        style: TextStyle(
+                                            color: _textPrimary,
+                                            fontSize: isMobile ? 12 : 14,
+                                            fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Date',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: isMobile ? 11 : 12)),
+                                    Text(
+                                        billData['date'] != null
+                                            ? DateFormat('dd MMM yyyy').format(
+                                                billData['date'] as DateTime)
+                                            : 'N/A',
+                                        style: TextStyle(
+                                            color: _textPrimary,
+                                            fontSize: isMobile ? 12 : 14,
+                                            fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: isMobile ? 12 : 16),
+
+                    // Student Info
+                    Container(
+                      padding: EdgeInsets.all(isMobile ? 12 : 16),
+                      decoration: BoxDecoration(
+                        color: _bgDark,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _borderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Student Details',
+                              style: TextStyle(
+                                  color: _textSecondary,
+                                  fontSize: isMobile ? 11 : 12)),
+                          SizedBox(height: isMobile ? 6 : 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Name',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: isMobile ? 10 : 11)),
+                                    Text(
+                                        (_studentData!['stuName'] ?? 'Student')
+                                            .toString(),
+                                        style: TextStyle(
+                                            color: _textPrimary,
+                                            fontSize: isMobile ? 12 : 14)),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Class',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: isMobile ? 10 : 11)),
+                                    Text(
+                                        (_studentData!['className'] ?? '-')
+                                            .toString(),
+                                        style: TextStyle(
+                                            color: _textPrimary,
+                                            fontSize: isMobile ? 12 : 14)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: isMobile ? 8 : 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Section',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: isMobile ? 10 : 11)),
+                                    Text(
+                                        (_studentData!['section'] ?? '-')
+                                            .toString(),
+                                        style: TextStyle(
+                                            color: _textPrimary,
+                                            fontSize: isMobile ? 12 : 14)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: isMobile ? 12 : 16),
+
+                    // Bill Description
+                    Container(
+                      padding: EdgeInsets.all(isMobile ? 12 : 16),
+                      decoration: BoxDecoration(
+                        color: _bgDark,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _borderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Bill Description',
+                              style: TextStyle(
+                                  color: _textSecondary,
+                                  fontSize: isMobile ? 11 : 12)),
+                          SizedBox(height: isMobile ? 6 : 8),
+                          Text(
+                            (billData['description'] ?? 'Fee Payment')
                                 .toString(),
                             style: TextStyle(
                                 color: _textPrimary,
-                                fontSize: isMobile ? 14 : 16,
-                                fontWeight: FontWeight.bold)),
-                        SizedBox(height: isMobile ? 10 : 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Receipt #',
-                                      style: TextStyle(
-                                          color: _textSecondary,
-                                          fontSize: isMobile ? 11 : 12)),
-                                  Text((billData['receipt'] ?? '').toString(),
-                                      style: TextStyle(
-                                          color: _textPrimary,
-                                          fontSize: isMobile ? 12 : 14,
-                                          fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Date',
-                                      style: TextStyle(
-                                          color: _textSecondary,
-                                          fontSize: isMobile ? 11 : 12)),
-                                  Text(
-                                      billData['date'] != null
-                                          ? DateFormat('dd MMM yyyy').format(
-                                              billData['date'] as DateTime)
-                                          : 'N/A',
-                                      style: TextStyle(
-                                          color: _textPrimary,
-                                          fontSize: isMobile ? 12 : 14,
-                                          fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: isMobile ? 12 : 16),
-
-                  // Student Info
-                  Container(
-                    padding: EdgeInsets.all(isMobile ? 12 : 16),
-                    decoration: BoxDecoration(
-                      color: _bgDark,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Student Details',
-                            style: TextStyle(
-                                color: _textSecondary,
-                                fontSize: isMobile ? 11 : 12)),
-                        SizedBox(height: isMobile ? 6 : 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Name',
-                                      style: TextStyle(
-                                          color: _textSecondary,
-                                          fontSize: isMobile ? 10 : 11)),
-                                  Text(
-                                      (_studentData!['stuName'] ?? 'Student')
-                                          .toString(),
-                                      style: TextStyle(
-                                          color: _textPrimary,
-                                          fontSize: isMobile ? 12 : 14)),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Class',
-                                      style: TextStyle(
-                                          color: _textSecondary,
-                                          fontSize: isMobile ? 10 : 11)),
-                                  Text(
-                                      (_studentData!['className'] ?? '-')
-                                          .toString(),
-                                      style: TextStyle(
-                                          color: _textPrimary,
-                                          fontSize: isMobile ? 12 : 14)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: isMobile ? 8 : 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Section',
-                                      style: TextStyle(
-                                          color: _textSecondary,
-                                          fontSize: isMobile ? 10 : 11)),
-                                  Text(
-                                      (_studentData!['section'] ?? '-')
-                                          .toString(),
-                                      style: TextStyle(
-                                          color: _textPrimary,
-                                          fontSize: isMobile ? 12 : 14)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: isMobile ? 12 : 16),
-
-                  // Bill Description
-                  Container(
-                    padding: EdgeInsets.all(isMobile ? 12 : 16),
-                    decoration: BoxDecoration(
-                      color: _bgDark,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Bill Description',
-                            style: TextStyle(
-                                color: _textSecondary,
-                                fontSize: isMobile ? 11 : 12)),
-                        SizedBox(height: isMobile ? 6 : 8),
-                        Text(
-                          (billData['description'] ?? 'Fee Payment').toString(),
-                          style: TextStyle(
-                              color: _textPrimary,
-                              fontSize: isMobile ? 12 : 14),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: isMobile ? 12 : 16),
-
-                  // Fee Breakdown Table
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _bgDark,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Table Header
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                              horizontal: isMobile ? 12 : 16,
-                              vertical: isMobile ? 10 : 12),
-                          decoration: BoxDecoration(
-                            color: _accentGreen.withOpacity(0.1),
-                            borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(12),
-                                topRight: Radius.circular(12)),
+                                fontSize: isMobile ? 12 : 14),
                           ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                  flex: 3,
-                                  child: Text('Description',
-                                      style: TextStyle(
-                                          color: _accentGreen,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: isMobile ? 11 : 12))),
-                              Expanded(
-                                  flex: 1,
-                                  child: Text('Amount',
-                                      style: TextStyle(
-                                          color: _accentGreen,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: isMobile ? 11 : 12))),
-                            ],
-                          ),
-                        ),
-                        // Table Rows
-                        _buildFeeBreakdownRows(billData),
-                        // Total
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                              horizontal: isMobile ? 12 : 16,
-                              vertical: isMobile ? 10 : 12),
-                          decoration: BoxDecoration(
-                            color: _accentGreen.withOpacity(0.1),
-                            borderRadius: const BorderRadius.only(
-                                bottomLeft: Radius.circular(12),
-                                bottomRight: Radius.circular(12)),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                  flex: 3,
-                                  child: Text('Total',
-                                      style: TextStyle(
-                                          color: _textPrimary,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: isMobile ? 12 : 14))),
-                              Expanded(
-                                  flex: 1,
-                                  child: Text(
-                                      '₹${((billData['amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
-                                      style: TextStyle(
-                                          color: _accentGreen,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: isMobile ? 14 : 16))),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: isMobile ? 16 : 20),
-
-                  // Action Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => _printBill(billData),
-                          icon: Icon(Icons.print_rounded,
-                              size: isMobile ? 16 : 18),
-                          label: Text('Print',
-                              style: TextStyle(fontSize: isMobile ? 14 : 16)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _accentBlue,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(
-                                vertical: isMobile ? 10 : 12),
-                          ),
-                        ),
+                        ],
                       ),
-                      SizedBox(width: isMobile ? 8 : 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => _downloadBill(billData),
-                          icon: Icon(Icons.download_rounded,
-                              size: isMobile ? 16 : 18),
-                          label: Text('Download',
-                              style: TextStyle(fontSize: isMobile ? 14 : 16)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _accentGreen,
-                            foregroundColor: Colors.white,
+                    ),
+                    SizedBox(height: isMobile ? 12 : 16),
+
+                    // Fee Breakdown Table
+                    Container(
+                      decoration: BoxDecoration(
+                        color: _bgDark,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _borderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Table Header
+                          Container(
                             padding: EdgeInsets.symmetric(
+                                horizontal: isMobile ? 12 : 16,
                                 vertical: isMobile ? 10 : 12),
+                            decoration: BoxDecoration(
+                              color: _accentGreen.withOpacity(0.1),
+                              borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(12),
+                                  topRight: Radius.circular(12)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                    flex: 3,
+                                    child: Text('Description',
+                                        style: TextStyle(
+                                            color: _accentGreen,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: isMobile ? 11 : 12))),
+                                Expanded(
+                                    flex: 1,
+                                    child: Text('Amount',
+                                        style: TextStyle(
+                                            color: _accentGreen,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: isMobile ? 11 : 12))),
+                              ],
+                            ),
+                          ),
+                          // Table Rows
+                          _buildFeeBreakdownRows(billData),
+                          // Total
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: isMobile ? 12 : 16,
+                                vertical: isMobile ? 10 : 12),
+                            decoration: BoxDecoration(
+                              color: _accentGreen.withOpacity(0.1),
+                              borderRadius: const BorderRadius.only(
+                                  bottomLeft: Radius.circular(12),
+                                  bottomRight: Radius.circular(12)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                    flex: 3,
+                                    child: Text('Total',
+                                        style: TextStyle(
+                                            color: _textPrimary,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: isMobile ? 12 : 14))),
+                                Expanded(
+                                    flex: 1,
+                                    child: Text(
+                                        '₹${((billData['amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
+                                        style: TextStyle(
+                                            color: _accentGreen,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: isMobile ? 14 : 16))),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: isMobile ? 16 : 20),
+
+                    // Action Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => _printBill(billData),
+                            icon: Icon(Icons.print_rounded,
+                                size: isMobile ? 16 : 18),
+                            label: Text('Print',
+                                style: TextStyle(fontSize: isMobile ? 14 : 16)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _accentBlue,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                  vertical: isMobile ? 10 : 12),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        SizedBox(width: isMobile ? 8 : 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => _downloadBill(billData),
+                            icon: Icon(Icons.download_rounded,
+                                size: isMobile ? 16 : 18),
+                            label: Text('Download',
+                                style: TextStyle(fontSize: isMobile ? 14 : 16)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _accentGreen,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                  vertical: isMobile ? 10 : 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           );

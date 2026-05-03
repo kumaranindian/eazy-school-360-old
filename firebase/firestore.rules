@@ -550,7 +550,7 @@ service cloud.firestore {
       
       // FINANCE: FEE STRUCTURES
       match /fee_structures/{structureId} {
-        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isFinance());
         allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
         allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
       }
@@ -751,9 +751,23 @@ service cloud.firestore {
       
       // FEE STRUCTURES SUBCOLLECTION (alternative path)
       match /feeStructures/{structureId} {
-        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isFinance());
         allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
-        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+      }
+      
+      // FEE STRUCTURES V2 SUBCOLLECTION (new system)
+      match /feeStructuresV2/{structureId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isFinance());
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+      }
+      
+      // FEE STRUCTURES V2 TERMS SUBCOLLECTION
+      match /feeStructuresV2/{structureId}/terms/{termId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isFinance());
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isFinance()) && belongsToSchool(schoolId)));
       }
       
       // FEE COLLECTIONS SUBCOLLECTION
