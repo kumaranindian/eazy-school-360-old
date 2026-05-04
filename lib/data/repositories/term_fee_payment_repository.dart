@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/student_fee_ledger.dart';
 import '../../domain/entities/term_fee_payment.dart';
+import '../../core/services/whatsapp_service.dart';
 
 final termFeePaymentRepositoryProvider =
     Provider<TermFeePaymentRepository>((ref) {
@@ -282,6 +283,11 @@ class TermFeePaymentRepository {
       );
 
       return payment;
+    });
+
+    // Send WhatsApp payment confirmation asynchronously (don't block on failure)
+    _sendPaymentNotification(result).catchError((e) {
+      print('[Payment] Failed to send WhatsApp notification: $e');
     });
 
     return result;
@@ -814,5 +820,57 @@ class TermFeePaymentRepository {
     }
     if (DateTime.now().isAfter(dueDate)) return TermPaymentStatus.OVERDUE;
     return TermPaymentStatus.UNPAID;
+  }
+
+  /// Send WhatsApp payment confirmation notification
+  Future<void> _sendPaymentNotification(TermFeePayment payment) async {
+    try {
+      // Get parent phone number from student_fee_details
+      final studentDetails = await _firestore
+          .collection('schools')
+          .doc(payment.schoolId)
+          .collection('student_fee_details')
+          .where('stuId', isEqualTo: int.tryParse(payment.studentId) ?? 0)
+          .where('academicYear', isEqualTo: payment.academicYear)
+          .limit(1)
+          .get();
+
+      if (studentDetails.docs.isEmpty) {
+        print('[Payment] No student details found for ${payment.studentId}');
+        return;
+      }
+
+      final phoneNumber = studentDetails.docs.first.data()['phoneNumber'];
+      if (phoneNumber == null || phoneNumber == 'NA' || phoneNumber == '') {
+        print('[Payment] No valid phone number for ${payment.studentName}');
+        return;
+      }
+
+      // Get ledger to calculate balance
+      final ledger = await _firestore
+          .collection('schools')
+          .doc(payment.schoolId)
+          .collection('studentFeeLedgers')
+          .doc(payment.ledgerId)
+          .get();
+
+      final balanceAmount = ledger.exists
+          ? (ledger.data()?['totalPending'] as num?)?.toDouble() ?? 0
+          : 0;
+
+      // Send WhatsApp notification
+      final whatsappService = WhatsAppService();
+      await whatsappService.sendPaymentConfirmation(
+        schoolId: payment.schoolId,
+        phoneNumber: phoneNumber.toString(),
+        studentName: payment.studentName,
+        paidAmount: payment.amount.toDouble(),
+        receiptNumber: payment.receiptNumber,
+        paymentDate: payment.paidAt,
+        balanceAmount: balanceAmount.toDouble(),
+      );
+    } catch (e) {
+      print('[Payment] Error sending WhatsApp notification: $e');
+    }
   }
 }

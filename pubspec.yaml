@@ -52,6 +52,7 @@ dependencies:
   syncfusion_flutter_calendar: ^31.1.19
   syncfusion_flutter_charts: ^31.1.19
   syncfusion_flutter_pdfviewer: ^31.1.19
+  http: ^1.1.0
   
   # Responsive
   responsive_framework: ^1.1.0

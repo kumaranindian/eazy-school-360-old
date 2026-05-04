@@ -21,6 +21,7 @@ import '../../admin/screens/class_teacher_assignment_screen.dart';
 import '../../admin/screens/student_leave_approval_screen.dart';
 import '../../admin/screens/student_promotion_screen.dart';
 import '../../admin/screens/academic_year_management_screen.dart';
+import '../../admin/screens/whatsapp_settings_screen.dart';
 import '../../finance/screens/expense_entry_screen.dart';
 import '../../finance/screens/financial_reports_screen.dart';
 import '../../finance/screens/bill_management_screen.dart';
@@ -196,6 +197,11 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         id: 'academic-year-mgmt',
         icon: Icons.calendar_month_rounded,
         label: 'Academic Year Management',
+        isNew: true),
+    MenuItem(
+        id: 'whatsapp_settings',
+        icon: Icons.chat_rounded,
+        label: 'WhatsApp Settings',
         isNew: true),
     MenuItem(id: 'settings', icon: Icons.settings_rounded, label: 'Settings'),
   ];
@@ -654,6 +660,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return 'Financial Reports';
       case 'upload_sheet':
         return 'Upload Sheet';
+      case 'whatsapp_settings':
+        return 'WhatsApp Settings';
       case 'settings':
         return 'Settings';
       default:
@@ -854,6 +862,12 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return const FinancialReportsScreen();
       case 'upload_sheet':
         return const UploadSheetScreen();
+      case 'whatsapp_settings':
+        final schoolId = session?.schoolId as String?;
+        if (schoolId == null) {
+          return const Center(child: Text('School ID not found'));
+        }
+        return WhatsAppSettingsScreen(schoolId: schoolId);
       case 'settings':
         return const SchoolSettingsScreen();
       default:
