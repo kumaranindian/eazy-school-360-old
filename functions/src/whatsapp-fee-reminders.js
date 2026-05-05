@@ -108,14 +108,134 @@ exports.testWhatsAppConfiguration = functions.https.onCall(async (data, context)
 });
 
 /**
- * Scheduled function to send fee due reminders
- * Runs daily at 9:00 AM IST
- * 
- * Sends reminders for:
+ * Callable Cloud Function: Send Payment Notification via WhatsApp
+ * Called from Flutter app to avoid CORS issues when running on web
+ */
+exports.sendPaymentNotification = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { schoolId, phoneNumber, studentName, paidAmount, receiptNumber, paymentDate, balanceAmount } = data;
+
+  if (!schoolId || !phoneNumber) {
+    throw new functions.https.HttpsError('invalid-argument', 'schoolId and phoneNumber are required');
+  }
+
+  try {
+    console.log(`[WhatsApp Payment] Sending notification to ${phoneNumber} for ${studentName}`);
+
+    // Get WhatsApp config
+    const whatsappConfig = await db
+      .collection('schools')
+      .doc(schoolId)
+      .collection('settings')
+      .doc('whatsapp')
+      .get();
+
+    if (!whatsappConfig.exists || !whatsappConfig.data().enabled) {
+      return { success: false, error: 'WhatsApp not configured or disabled' };
+    }
+
+    const { accessToken, phoneNumberId, paymentConfirmationTemplate } = whatsappConfig.data();
+    const templateName = paymentConfirmationTemplate || 'payment_confirmation';
+
+    if (!accessToken || !phoneNumberId) {
+      return { success: false, error: 'Missing access token or phone number ID' };
+    }
+
+    // Format phone number
+    let formattedPhone = phoneNumber.replace(/[^0-9+]/g, '');
+    if (formattedPhone.startsWith('+')) {
+      formattedPhone = formattedPhone.substring(1);
+    }
+    if (formattedPhone.length === 10 && !formattedPhone.startsWith('0')) {
+      formattedPhone = '91' + formattedPhone;
+    }
+
+    console.log(`[WhatsApp Payment] Phone: ${formattedPhone}, Template: ${templateName}, PhoneNumberId: ${phoneNumberId}`);
+
+    const response = await axios.post(
+      `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        to: formattedPhone,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: 'en' },
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: studentName || '' },
+                { type: 'text', text: `₹${parseFloat(paidAmount || 0).toFixed(2)}` },
+                { type: 'text', text: receiptNumber || '' },
+                { type: 'text', text: paymentDate || '' },
+                { type: 'text', text: `₹${parseFloat(balanceAmount || 0).toFixed(2)}` },
+              ]
+            }
+          ]
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000,
+      }
+    );
+
+    console.log(`[WhatsApp Payment] Response: ${response.status}`, response.data);
+
+    // Log notification
+    await db
+      .collection('schools')
+      .doc(schoolId)
+      .collection('whatsappNotifications')
+      .add({
+        type: 'payment_confirmation',
+        recipient: formattedPhone,
+        studentName: studentName,
+        metadata: { paidAmount, receiptNumber, balanceAmount },
+        status: 'sent',
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    return { success: true, message: 'Notification sent successfully' };
+  } catch (error) {
+    console.error('[WhatsApp Payment] Error:', error.message);
+    console.error('[WhatsApp Payment] Response:', error.response?.data);
+
+    // Log failed notification
+    await db
+      .collection('schools')
+      .doc(schoolId)
+      .collection('whatsappNotifications')
+      .add({
+        type: 'payment_confirmation',
+        recipient: phoneNumber,
+        studentName: studentName,
+        metadata: { error: error.message, responseData: JSON.stringify(error.response?.data) },
+        status: 'failed',
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    return { success: false, error: error.message, details: error.response?.data };
+  }
+});
+
+/**
+ * Cloud Function: Send Fee Due Reminders
+ * Scheduled to run daily at 9:00 AM IST
+ * Sends WhatsApp reminders for:
  * - Fees due today
  * - Fees due in 3 days (advance reminder)
  * - Overdue fees (sent every 7 days)
+ * DISABLED - Now handled by combined-daily-jobs.js to reduce costs
  */
+/*
 exports.sendFeeDueReminders = functions
   .region('asia-south1')
   .pubsub.schedule('0 9 * * *')
@@ -264,11 +384,14 @@ exports.sendFeeDueReminders = functions
       throw error;
     }
   });
+*/
 
 /**
  * Scheduled function to send daily collection summary to admins
  * Runs daily at 6:00 PM IST
+ * DISABLED - Now handled by combined-daily-jobs.js to reduce costs
  */
+/*
 exports.sendDailyCollectionSummary = functions
   .region('asia-south1')
   .pubsub.schedule('0 18 * * *')
@@ -343,6 +466,7 @@ exports.sendDailyCollectionSummary = functions
       throw error;
     }
   });
+*/
 
 /**
  * Helper function to send WhatsApp reminder via Meta API

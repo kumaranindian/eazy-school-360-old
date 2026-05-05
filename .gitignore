@@ -44,9 +44,10 @@ app.*.map.json
 /android/app/release
 
 # Firebase configuration files
+# Note: Firebase web/Flutter API keys are public (security is in Firestore rules)
+# Only native config files are ignored
 google-services.json
 GoogleService-Info.plist
-firebase_options_dev.dart
 .firebase/
 
 # Environment files
@@ -68,6 +69,9 @@ firebase_options_dev.dart
 *.tmp
 *.temp
 *.bak
+
+# Deployment logs
+logs/
 
 # Local configuration
 local.properties

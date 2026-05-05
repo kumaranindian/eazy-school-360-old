@@ -1,11 +1,51 @@
-const functions = require('firebase-functions/v1');
+const functions = require('firebase-functions/v1').region('asia-south1');
 const admin = require('firebase-admin');
 
 admin.initializeApp();
 
-// NOTE: All leave/permission management logic is now handled directly in Dart
-// using Firestore transactions for atomic updates. No Cloud Functions required.
-// This keeps the project on Firebase free tier (Spark plan).
+// Import modular functions
+const leaveManagement = require('./src/leave-management');
+const authManagement = require('./src/auth-management');
+const rfidAttendance = require('./src/rfid-attendance/index');
+
+// Export leave management functions
+exports.handleLeaveApplicationCreate = leaveManagement.handleLeaveApplicationCreate;
+exports.onLeaveStatusChange = leaveManagement.onLeaveStatusChange;
+
+// Export permission management functions
+exports.handlePermissionRequestCreate = leaveManagement.handlePermissionRequestCreate;
+exports.onPermissionStatusChange = leaveManagement.onPermissionStatusChange;
+
+// Export auth management functions
+exports.handleUserCreate = authManagement.handleUserCreate;
+exports.handlePasswordReset = authManagement.handlePasswordReset;
+exports.activateUser = authManagement.activateUser;
+
+// Export RFID attendance functions
+exports.rfidApi = rfidAttendance.api;
+exports.onAttendanceCreate = rfidAttendance.onAttendanceCreate;
+
+// Export WhatsApp notification functions
+const whatsappReminders = require('./src/whatsapp-fee-reminders');
+exports.testWhatsAppConfiguration = whatsappReminders.testWhatsAppConfiguration;
+exports.sendPaymentNotification = whatsappReminders.sendPaymentNotification;
+
+// Export new TypeScript RFID Attendance & Leave functions
+const {
+  processRfidSwipe,
+  dailyAttendanceFinalizer,
+  validateLeaveApplication,
+  updateLeaveBalanceOnApproval,
+  validatePermissionRequest,
+  updatePermissionUsageOnApproval,
+} = require('./lib/index');
+
+exports.processRfidSwipe = processRfidSwipe;
+exports.dailyAttendanceFinalizer = dailyAttendanceFinalizer;
+exports.validateLeaveApplication = validateLeaveApplication;
+exports.updateLeaveBalanceOnApproval = updateLeaveBalanceOnApproval;
+exports.validatePermissionRequest = validatePermissionRequest;
+exports.updatePermissionUsageOnApproval = updatePermissionUsageOnApproval;
 
 // Helper function to convert role string to claim flags
 function roleToClaimFlags(role) {

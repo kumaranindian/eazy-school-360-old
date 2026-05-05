@@ -746,6 +746,11 @@ class TermFeePaymentRepository {
       return payment;
     });
 
+    // Send WhatsApp payment confirmation asynchronously (don't block on failure)
+    _sendPaymentNotification(result).catchError((e) {
+      print('[Payment] Failed to send WhatsApp notification: $e');
+    });
+
     return result;
   }
 
@@ -822,29 +827,32 @@ class TermFeePaymentRepository {
     return TermPaymentStatus.UNPAID;
   }
 
-  /// Send WhatsApp payment confirmation notification
+  /// Send WhatsApp payment confirmation notification to both student and parent
   Future<void> _sendPaymentNotification(TermFeePayment payment) async {
     try {
-      // Get parent phone number from student_fee_details
-      final studentDetails = await _firestore
+      print('[Payment Notification] Starting notification for student: ${payment.studentName} (${payment.studentId})');
+      
+      // Get student document to get both student and parent phone numbers
+      final studentDoc = await _firestore
           .collection('schools')
           .doc(payment.schoolId)
-          .collection('student_fee_details')
-          .where('stuId', isEqualTo: int.tryParse(payment.studentId) ?? 0)
-          .where('academicYear', isEqualTo: payment.academicYear)
+          .collection('students')
+          .where('studentId', isEqualTo: int.tryParse(payment.studentId) ?? 0)
+          .where('academicYearCode', isEqualTo: payment.academicYear)
           .limit(1)
           .get();
 
-      if (studentDetails.docs.isEmpty) {
-        print('[Payment] No student details found for ${payment.studentId}');
+      if (studentDoc.docs.isEmpty) {
+        print('[Payment Notification] ❌ No student found for studentId: ${payment.studentId}, academicYear: ${payment.academicYear}');
         return;
       }
 
-      final phoneNumber = studentDetails.docs.first.data()['phoneNumber'];
-      if (phoneNumber == null || phoneNumber == 'NA' || phoneNumber == '') {
-        print('[Payment] No valid phone number for ${payment.studentName}');
-        return;
-      }
+      final studentData = studentDoc.docs.first.data();
+      final studentPhone = studentData['phoneNumber'] as String?;
+      final parentPhone = studentData['parentPhone'] as String?;
+      
+      print('[Payment Notification] Student phone: ${studentPhone ?? "NOT SET"}');
+      print('[Payment Notification] Parent phone: ${parentPhone ?? "NOT SET"}');
 
       // Get ledger to calculate balance
       final ledger = await _firestore
@@ -858,19 +866,76 @@ class TermFeePaymentRepository {
           ? (ledger.data()?['totalPending'] as num?)?.toDouble() ?? 0
           : 0;
 
-      // Send WhatsApp notification
+      print('[Payment Notification] Payment details - Amount: ₹${payment.amount}, Receipt: ${payment.receiptNumber}, Balance: ₹$balanceAmount');
+
       final whatsappService = WhatsAppService();
-      await whatsappService.sendPaymentConfirmation(
-        schoolId: payment.schoolId,
-        phoneNumber: phoneNumber.toString(),
-        studentName: payment.studentName,
-        paidAmount: payment.amount.toDouble(),
-        receiptNumber: payment.receiptNumber,
-        paymentDate: payment.paidAt,
-        balanceAmount: balanceAmount.toDouble(),
-      );
+      bool studentNotificationSent = false;
+      bool parentNotificationSent = false;
+      
+      // Send to student phone if available
+      if (studentPhone != null && studentPhone.isNotEmpty && studentPhone != 'NA') {
+        print('[Payment Notification] Attempting to send to student phone: $studentPhone');
+        try {
+          final success = await whatsappService.sendPaymentConfirmation(
+            schoolId: payment.schoolId,
+            phoneNumber: studentPhone,
+            studentName: payment.studentName,
+            paidAmount: payment.amount.toDouble(),
+            receiptNumber: payment.receiptNumber,
+            paymentDate: payment.paidAt,
+            balanceAmount: balanceAmount.toDouble(),
+          );
+          if (success) {
+            print('[Payment Notification] ✅ Notification sent to student phone: $studentPhone');
+            studentNotificationSent = true;
+          } else {
+            print('[Payment Notification] ⚠️ Failed to send to student phone (WhatsApp service returned false)');
+          }
+        } catch (e) {
+          print('[Payment Notification] ❌ Exception sending to student phone: $e');
+        }
+      } else {
+        print('[Payment Notification] ⚠️ Skipping student phone - invalid or not set');
+      }
+
+      // Send to parent phone if available
+      if (parentPhone != null && parentPhone.isNotEmpty && parentPhone != 'NA') {
+        print('[Payment Notification] Attempting to send to parent phone: $parentPhone');
+        try {
+          final success = await whatsappService.sendPaymentConfirmation(
+            schoolId: payment.schoolId,
+            phoneNumber: parentPhone,
+            studentName: payment.studentName,
+            paidAmount: payment.amount.toDouble(),
+            receiptNumber: payment.receiptNumber,
+            paymentDate: payment.paidAt,
+            balanceAmount: balanceAmount.toDouble(),
+          );
+          if (success) {
+            print('[Payment Notification] ✅ Notification sent to parent phone: $parentPhone');
+            parentNotificationSent = true;
+          } else {
+            print('[Payment Notification] ⚠️ Failed to send to parent phone (WhatsApp service returned false)');
+          }
+        } catch (e) {
+          print('[Payment Notification] ❌ Exception sending to parent phone: $e');
+        }
+      } else {
+        print('[Payment Notification] ⚠️ Skipping parent phone - invalid or not set');
+      }
+
+      // Summary
+      if (studentNotificationSent || parentNotificationSent) {
+        print('[Payment Notification] ✅ Summary: Student=${studentNotificationSent ? "SENT" : "FAILED"}, Parent=${parentNotificationSent ? "SENT" : "FAILED"}');
+      } else {
+        print('[Payment Notification] ❌ No notifications sent for ${payment.studentName}');
+      }
+      
+      // Check WhatsApp logs in Firestore
+      print('[Payment Notification] 💡 Check Firestore: schools/${payment.schoolId}/whatsappNotifications for delivery status');
     } catch (e) {
-      print('[Payment] Error sending WhatsApp notification: $e');
+      print('[Payment Notification] ❌ Error sending WhatsApp notification: $e');
+      print('[Payment Notification] Stack trace: ${StackTrace.current}');
     }
   }
 }

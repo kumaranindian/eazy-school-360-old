@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 /// Production-ready WhatsApp Business API service using Meta's Cloud API
 /// Handles fee reminders, payment confirmations, and admin notifications
@@ -8,7 +9,7 @@ class WhatsAppService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Meta WhatsApp Business API endpoints
-  static const String _baseUrl = 'https://graph.facebook.com/v18.0';
+  static const String _baseUrl = 'https://graph.facebook.com/v19.0';
 
   /// Send fee due reminder to parent
   ///
@@ -124,73 +125,36 @@ class WhatsAppService {
     required double balanceAmount,
   }) async {
     try {
-      final config = await _getWhatsAppConfig(schoolId);
-      if (config == null || config['enabled'] != true) {
-        return false;
-      }
-
-      final accessToken = config['accessToken'] as String;
-      final phoneNumberId = config['phoneNumberId'] as String;
-      final templateName = config['paymentConfirmationTemplate'] as String? ??
-          'payment_confirmation';
-
       final formattedPhone = _formatPhoneNumber(phoneNumber);
       final paymentDateStr =
           '${paymentDate.day}/${paymentDate.month}/${paymentDate.year}';
 
-      final response = await http.post(
-        Uri.parse('$_baseUrl/$phoneNumberId/messages'),
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'messaging_product': 'whatsapp',
-          'to': formattedPhone,
-          'type': 'template',
-          'template': {
-            'name': templateName,
-            'language': {'code': 'en'},
-            'components': [
-              {
-                'type': 'body',
-                'parameters': [
-                  {'type': 'text', 'text': studentName},
-                  {'type': 'text', 'text': '₹${paidAmount.toStringAsFixed(2)}'},
-                  {'type': 'text', 'text': receiptNumber},
-                  {'type': 'text', 'text': paymentDateStr},
-                  {
-                    'type': 'text',
-                    'text': '₹${balanceAmount.toStringAsFixed(2)}'
-                  },
-                ]
-              }
-            ]
-          }
-        }),
-      );
+      print('[WhatsApp] Sending payment notification via Cloud Function to: $formattedPhone');
 
-      if (response.statusCode == 200) {
-        await _logNotification(
-          schoolId: schoolId,
-          type: 'payment_confirmation',
-          recipient: formattedPhone,
-          studentName: studentName,
-          metadata: {
-            'paidAmount': paidAmount,
-            'receiptNumber': receiptNumber,
-            'balanceAmount': balanceAmount,
-          },
-          status: 'sent',
-        );
+      // Call Cloud Function to avoid CORS issues on web
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('sendPaymentNotification');
+
+      final result = await callable.call({
+        'schoolId': schoolId,
+        'phoneNumber': formattedPhone,
+        'studentName': studentName,
+        'paidAmount': paidAmount,
+        'receiptNumber': receiptNumber,
+        'paymentDate': paymentDateStr,
+        'balanceAmount': balanceAmount,
+      });
+
+      final data = result.data as Map<String, dynamic>;
+      if (data['success'] == true) {
+        print('[WhatsApp] ✅ Payment notification sent successfully to $formattedPhone');
         return true;
       } else {
-        print(
-            '[WhatsApp] Failed to send payment confirmation: ${response.statusCode}');
+        print('[WhatsApp] ⚠️ Cloud Function returned error: ${data['error']}');
         return false;
       }
     } catch (e) {
-      print('[WhatsApp] Error sending payment confirmation: $e');
+      print('[WhatsApp] Error sending payment confirmation via Cloud Function: $e');
       return false;
     }
   }
