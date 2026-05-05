@@ -255,24 +255,66 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
   }
 
   Widget _buildContent(BuildContext context, List<StaffProfile> allStaff, List<StaffProfile> filteredStaff, bool isDesktop, bool isTablet) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.symmetric(horizontal: isDesktop ? 24 : 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Stats Cards
-          _buildStatsRow(allStaff, isDesktop, isTablet),
-          const SizedBox(height: 16),
-          _buildSearchAndFilters(isDesktop),
-          const SizedBox(height: 16),
-          // Staff Count
-          Text('Showing ${filteredStaff.length} of ${allStaff.length} staff', style: const TextStyle(color: _textSecondary, fontSize: 13)),
-          const SizedBox(height: 16),
-          // Staff Grid
-          _buildStaffGrid(filteredStaff, isDesktop, isTablet),
-          const SizedBox(height: 24),
+    if (filteredStaff.isEmpty) {
+      return CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: EdgeInsets.symmetric(horizontal: isDesktop ? 24 : 16),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildStatsRow(allStaff, isDesktop, isTablet),
+                  const SizedBox(height: 16),
+                  _buildSearchAndFilters(isDesktop),
+                  const SizedBox(height: 16),
+                  Text('Showing ${filteredStaff.length} of ${allStaff.length} staff', style: const TextStyle(color: _textSecondary, fontSize: 13)),
+                  const SizedBox(height: 32),
+                  _buildEmptyState(),
+                ],
+              ),
+            ),
+          ),
         ],
-      ),
+      );
+    }
+
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: isDesktop ? 24 : 16),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Stats Cards
+                _buildStatsRow(allStaff, isDesktop, isTablet),
+                const SizedBox(height: 16),
+                _buildSearchAndFilters(isDesktop),
+                const SizedBox(height: 16),
+                // Staff Count
+                Text('Showing ${filteredStaff.length} of ${allStaff.length} staff', style: const TextStyle(color: _textSecondary, fontSize: 13)),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: isDesktop ? 24 : 16),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildStaffCard(filteredStaff[index]),
+              ),
+              childCount: filteredStaff.length,
+            ),
+          ),
+        ),
+        const SliverPadding(
+          padding: EdgeInsets.only(bottom: 24),
+        ),
+      ],
     );
   }
 
@@ -354,39 +396,6 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
     );
   }
 
-  Widget _buildStaffGrid(List<StaffProfile> staffList, bool isDesktop, bool isTablet) {
-    if (staffList.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    // Use ListView for mobile to avoid fixed aspect ratio overflow issues
-    if (!isDesktop && !isTablet) {
-      return ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: staffList.length,
-        itemBuilder: (context, index) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _buildStaffCard(staffList[index]),
-        ),
-      );
-    }
-
-    final crossAxisCount = isDesktop ? 3 : 2;
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: isDesktop ? 1.8 : 1.6,
-      ),
-      itemCount: staffList.length,
-      itemBuilder: (context, index) => _buildStaffCard(staffList[index]),
-    );
-  }
-
   Widget _buildStaffCard(StaffProfile staff) {
     final statusColor = staff.status == UserStatus.ACTIVE ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
     final statusLabel = staff.status == UserStatus.ACTIVE ? 'Active' : 'Inactive';
@@ -440,7 +449,6 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
             Wrap(spacing: 6, runSpacing: 4, children: [
               _buildTag(statusLabel, statusColor),
               _buildTag(typeLabel, typeColor),
-              if (staff.department.isNotEmpty) _buildTag(staff.department, const Color(0xFF6B7280)),
             ]),
             const SizedBox(height: 10),
             // Row 4: Leave/Permission counts with icons

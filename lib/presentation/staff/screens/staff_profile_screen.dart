@@ -16,14 +16,6 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
   final _addressController = TextEditingController();
   final _emergencyContactController = TextEditingController();
 
-  // Dark theme colors (match dashboard)
-  static const Color _bgDark = Color(0xFF0D1117);
-  static const Color _cardDark = Color(0xFF161B22);
-  static const Color _accentBlue = Color(0xFF4CAF50);
-  static const Color _textPrimary = Color(0xFFE6EDF3);
-  static const Color _textSecondary = Color(0xFF8B949E);
-  static const Color _borderColor = Color(0xFF30363D);
-
   @override
   void dispose() {
     _phoneController.dispose();
@@ -47,12 +39,12 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
     )));
 
     return Scaffold(
-      backgroundColor: _bgDark,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Column(
         children: [
           Expanded(
             child: staffAsyncValue.when(
-              loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
+              loading: () => Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary)),
               error: (error, stack) => _buildErrorState(error, session.schoolId!, session.uid),
               data: (staff) {
                 if (staff == null) return _buildNotFoundState();
@@ -76,24 +68,18 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
           // Profile Card
           Container(
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(16), border: Border.all(color: _borderColor)),
+            decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(16), border: Border.all(color: Theme.of(context).colorScheme.outline)),
             child: Column(
               children: [
                 CircleAvatar(
                   radius: 48,
-                  backgroundColor: _accentBlue,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
                   child: Text(staff.name[0].toUpperCase(), style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white)),
                 ),
                 const SizedBox(height: 16),
-                Text(staff.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: _textPrimary)),
+                Text(staff.name, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                 const SizedBox(height: 4),
-                Text(staff.designation ?? 'Staff Member', style: const TextStyle(fontSize: 14, color: _textSecondary)),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: _accentBlue.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                  child: Text(staff.department, style: const TextStyle(color: _accentBlue, fontWeight: FontWeight.w600, fontSize: 12)),
-                ),
+                Text(staff.designation ?? 'Staff Member', style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ],
             ),
           ),
@@ -102,11 +88,11 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
           // Details Card
           Container(
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(16), border: Border.all(color: _borderColor)),
+            decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(16), border: Border.all(color: Theme.of(context).colorScheme.outline)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Contact Information', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary)),
+                Text('Contact Information', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                 const SizedBox(height: 16),
                 _buildInfoRow(Icons.email_outlined, 'Email', staff.email),
                 _buildInfoRow(Icons.badge_outlined, 'Employee ID', staff.employeeId),
@@ -121,11 +107,11 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
           // Stats Card
           Container(
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(16), border: Border.all(color: _borderColor)),
+            decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(16), border: Border.all(color: Theme.of(context).colorScheme.outline)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Employment Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary)),
+                Text('Employment Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                 const SizedBox(height: 16),
                 _buildInfoRow(Icons.work_outline, 'Staff Type', staff.staffType.name),
                 _buildInfoRow(Icons.calendar_today_outlined, 'Joining Date', _formatDate(staff.joiningDate)),
@@ -143,15 +129,15 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: _textSecondary),
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 12, color: _textSecondary)),
+                Text(label, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: _textPrimary)),
+                Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface)),
               ],
             ),
           ),
@@ -165,17 +151,17 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: _textSecondary),
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 12, color: _textSecondary)),
+                Text(label, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 2),
                 Text(
                   value.trim().isEmpty ? 'Not provided' : value,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: value.trim().isEmpty ? _textSecondary : _textPrimary),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: value.trim().isEmpty ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurface),
                 ),
               ],
             ),
@@ -190,11 +176,11 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline, size: 48, color: Colors.red.shade400),
+          Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
           const SizedBox(height: 16),
-          const Text('Error loading profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text('Error loading profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: 8),
-          Text(error.toString(), style: const TextStyle(color: _textSecondary)),
+          Text(error.toString(), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () => ref.refresh(staffByUserIdProvider((schoolId: schoolId, userId: userId))),
@@ -206,13 +192,13 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
   }
 
   Widget _buildNotFoundState() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.person_off_outlined, size: 48, color: _textSecondary),
-          SizedBox(height: 16),
-          Text('Profile not found', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _textPrimary)),
+          Icon(Icons.person_off_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          const SizedBox(height: 16),
+          Text('Profile not found', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
         ],
       ),
     );

@@ -29,6 +29,10 @@ class _BulkStaffUploadScreenState extends ConsumerState<BulkStaffUploadScreen> {
   bool _isUploading = false;
   String? _errorMessage;
   BulkUploadResult? _uploadResult;
+  int _uploadProgress = 0;
+  int _uploadTotal = 0;
+  String? _currentUploadingStaff;
+  int _selectedSampleCount = 50;
 
   late BulkStaffUploadService _uploadService;
 
@@ -40,7 +44,7 @@ class _BulkStaffUploadScreenState extends ConsumerState<BulkStaffUploadScreen> {
   }
 
   Future<void> _downloadTemplate() async {
-    final excelBytes = _uploadService.generateExcelTemplate();
+    final excelBytes = _uploadService.generateExcelTemplate(sampleCount: _selectedSampleCount);
     
     if (kIsWeb) {
       // Web: trigger download
@@ -61,9 +65,33 @@ class _BulkStaffUploadScreenState extends ConsumerState<BulkStaffUploadScreen> {
     }
   }
 
+  Future<void> _downloadCredentials() async {
+    if (_uploadResult == null) return;
+    
+    final excelBytes = _uploadService.generateCredentialsExcel(_uploadResult!);
+    
+    if (kIsWeb) {
+      // Web: trigger download
+      final blob = html.Blob([excelBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: url)
+        ..setAttribute('download', 'staff_credentials.xlsx')
+        ..click();
+      html.Url.revokeObjectUrl(url);
+    } else {
+      // Mobile/Desktop: show snackbar with instructions
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Credentials download is only available on web. Please use web version.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
   Future<void> _pickFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls', 'csv'],
         withData: true,
@@ -120,6 +148,9 @@ class _BulkStaffUploadScreenState extends ConsumerState<BulkStaffUploadScreen> {
 
     setState(() {
       _isUploading = true;
+      _uploadProgress = 0;
+      _uploadTotal = _parsedData!.length;
+      _currentUploadingStaff = null;
       _errorMessage = null;
     });
 
@@ -128,11 +159,19 @@ class _BulkStaffUploadScreenState extends ConsumerState<BulkStaffUploadScreen> {
         schoolId: session!.schoolId!,
         adminUserId: session.uid,
         staffDataList: _parsedData!,
+        onProgress: (current, total, staffName) {
+          setState(() {
+            _uploadProgress = current;
+            _uploadTotal = total;
+            _currentUploadingStaff = staffName;
+          });
+        },
       );
 
       setState(() {
         _uploadResult = result;
         _isUploading = false;
+        _currentUploadingStaff = null;
       });
 
       if (result.allSuccessful) {
@@ -147,6 +186,7 @@ class _BulkStaffUploadScreenState extends ConsumerState<BulkStaffUploadScreen> {
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
         _isUploading = false;
+        _currentUploadingStaff = null;
       });
     }
   }
@@ -185,6 +225,12 @@ class _BulkStaffUploadScreenState extends ConsumerState<BulkStaffUploadScreen> {
               const SizedBox(height: 24),
             ],
 
+            // Upload Progress
+            if (_isUploading) ...[
+              _buildProgressCard(),
+              const SizedBox(height: 24),
+            ],
+
             // Error Message
             if (_errorMessage != null) ...[
               _buildErrorCard(),
@@ -197,6 +243,63 @@ class _BulkStaffUploadScreenState extends ConsumerState<BulkStaffUploadScreen> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildProgressCard() {
+    final progress = _uploadTotal > 0 ? (_uploadProgress / _uploadTotal) : 0.0;
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _cardDark,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _accentBlue),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: _accentBlue.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.cloud_upload_rounded, color: _accentBlue, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text('Uploading Staff', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          LinearProgressIndicator(
+            value: progress,
+            backgroundColor: _borderColor,
+            valueColor: const AlwaysStoppedAnimation<Color>(_accentBlue),
+            minHeight: 8,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '$_uploadProgress of $_uploadTotal staff members',
+                style: const TextStyle(color: _textSecondary, fontSize: 13),
+              ),
+              Text(
+                '${(progress * 100).toStringAsFixed(0)}%',
+                style: const TextStyle(color: _accentBlue, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          if (_currentUploadingStaff != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Currently uploading: $_currentUploadingStaff',
+              style: const TextStyle(color: _textSecondary, fontSize: 12),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -257,6 +360,35 @@ class _BulkStaffUploadScreenState extends ConsumerState<BulkStaffUploadScreen> {
           const Text('Step 1: Download Template', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary)),
           const SizedBox(height: 8),
           const Text('Get the Excel template with dropdowns and instructions', style: TextStyle(color: _textSecondary, fontSize: 13), textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          // Sample count selector
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: _borderColor),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _selectedSampleCount,
+                dropdownColor: _cardDark,
+                style: const TextStyle(color: _textPrimary),
+                items: const [1, 5, 10, 20, 30, 40, 50].map((count) {
+                  return DropdownMenuItem<int>(
+                    value: count,
+                    child: Text('$count sample records', style: const TextStyle(color: _textPrimary)),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _selectedSampleCount = value;
+                    });
+                  }
+                },
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _downloadTemplate,
@@ -444,11 +576,89 @@ class _BulkStaffUploadScreenState extends ConsumerState<BulkStaffUploadScreen> {
             children: [
               _buildResultStat('Total', result.totalProcessed, _accentBlue),
               const SizedBox(width: 24),
-              _buildResultStat('Success', result.successCount, Colors.green),
+              _buildResultStat('Created', result.successCount, Colors.green),
+              const SizedBox(width: 24),
+              _buildResultStat('Updated', result.updatedStaff.length, Colors.blue),
               const SizedBox(width: 24),
               _buildResultStat('Failed', result.failedCount, Colors.red),
             ],
           ),
+          if (result.successfulUploads.isNotEmpty || result.updatedStaff.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Staff Credentials:', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
+                ElevatedButton.icon(
+                  onPressed: () => _downloadCredentials(),
+                  icon: const Icon(Icons.download),
+                  label: const Text('Download Credentials'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 150),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ...result.successfulUploads.map((success) {
+                      final parts = success.split('|');
+                      final displayText = parts.length == 4 
+                          ? '${parts[1]} (${parts[2]}) - Password: ${parts[3]}'
+                          : success;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          displayText,
+                          style: const TextStyle(color: Colors.green, fontSize: 12),
+                        ),
+                      );
+                    }).toList(),
+                    ...result.updatedStaff.map((updated) {
+                      final parts = updated.split('|');
+                      final displayText = parts.length == 4 
+                          ? '${parts[1]} (${parts[2]}) - Password: ${parts[3]} (Updated)'
+                          : updated;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          displayText,
+                          style: const TextStyle(color: Colors.blue, fontSize: 12),
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          if (result.updatedStaff.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('Updated Staff:', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 150),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: result.updatedStaff.map((updated) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      updated,
+                      style: const TextStyle(color: Colors.blue, fontSize: 12),
+                    ),
+                  )).toList(),
+                ),
+              ),
+            ),
+          ],
           if (result.hasFailures) ...[
             const SizedBox(height: 16),
             const Text('Failed Uploads:', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),

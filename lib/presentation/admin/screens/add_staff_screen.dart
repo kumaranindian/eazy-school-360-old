@@ -19,7 +19,6 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
   final _nameController = TextEditingController();
   final _employeeIdController = TextEditingController();
   final _emailController = TextEditingController();
-  final _departmentController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _emergencyContactController = TextEditingController();
@@ -28,15 +27,9 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
   StaffType _selectedStaffType = StaffType.TEACHING;
   UserRole _selectedRole = UserRole.STAFF;
   DateTime _joiningDate = DateTime.now();
+  DateTime? _birthDate;
   bool _isLoading = false;
   int _currentStep = 0;
-  String _selectedDepartment = 'Pre-KG';
-
-  static const List<String> _departmentOptions = [
-    'Pre-KG', 'LKG', 'UKG',
-    'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII',
-    'Administration', 'Accounts', 'Library', 'Sports', 'Lab', 'Transport', 'Other',
-  ];
 
   @override
   void initState() {
@@ -52,14 +45,13 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
     _nameController.text = staff.name;
     _employeeIdController.text = staff.employeeId;
     _emailController.text = staff.email;
-    _departmentController.text = staff.department;
-    _selectedDepartment = _departmentOptions.contains(staff.department) ? staff.department : 'Other';
     _phoneController.text = staff.phoneNumber ?? '';
     _addressController.text = staff.address ?? '';
     _emergencyContactController.text = staff.emergencyContact ?? '';
     _designationController.text = staff.designation ?? '';
     _selectedStaffType = staff.staffType;
     _joiningDate = staff.joiningDate;
+    _birthDate = staff.birthDate;
   }
 
   @override
@@ -67,7 +59,6 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
     _nameController.dispose();
     _employeeIdController.dispose();
     _emailController.dispose();
-    _departmentController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
     _emergencyContactController.dispose();
@@ -228,14 +219,7 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
                               (t) => t.name.replaceAll('_', ' '),
                             ),
                             const SizedBox(height: 16),
-                            _buildDropdownField<String>(
-                              'Department / Class',
-                              Icons.business_rounded,
-                              _selectedDepartment,
-                              _departmentOptions,
-                              (v) => setState(() { _selectedDepartment = v!; _departmentController.text = v; }),
-                              (d) => d,
-                            ),
+                            _buildDateField('Birth Date', _birthDate, _selectBirthDate),
                             const SizedBox(height: 16),
                             _buildTextField(_designationController, 'Designation', Icons.work_outline_rounded),
                           ],
@@ -313,14 +297,7 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
                         (t) => t.name.replaceAll('_', ' '),
                       ),
                       const SizedBox(height: 16),
-                      _buildDropdownField<String>(
-                              'Department / Class',
-                              Icons.business_rounded,
-                              _selectedDepartment,
-                              _departmentOptions,
-                              (v) => setState(() { _selectedDepartment = v!; _departmentController.text = v; }),
-                              (d) => d,
-                            ),
+                      _buildDateField('Birth Date', _birthDate, _selectBirthDate),
                       const SizedBox(height: 16),
                       _buildTextField(_designationController, 'Designation', Icons.work_outline_rounded),
                     ],
@@ -474,14 +451,7 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
               (t) => t.name.replaceAll('_', ' '),
             ),
             const SizedBox(height: 16),
-            _buildDropdownField<String>(
-                              'Department / Class',
-                              Icons.business_rounded,
-                              _selectedDepartment,
-                              _departmentOptions,
-                              (v) => setState(() { _selectedDepartment = v!; _departmentController.text = v; }),
-                              (d) => d,
-                            ),
+            _buildDateField('Birth Date', _birthDate, _selectBirthDate),
             const SizedBox(height: 16),
             _buildTextField(_designationController, 'Designation', Icons.work_outline_rounded),
             const SizedBox(height: 16),
@@ -699,13 +669,13 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
     );
   }
 
-  Widget _buildDateField(String label, DateTime date, VoidCallback onTap) {
+  Widget _buildDateField(String label, DateTime? date, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: InputDecorator(
         decoration: InputDecoration(
-          labelText: '$label *',
+          labelText: label,
           labelStyle: const TextStyle(color: _textSecondary),
           prefixIcon: const Icon(Icons.calendar_today_rounded, color: _textSecondary, size: 20),
           suffixIcon: const Icon(Icons.arrow_drop_down_rounded, color: _textSecondary),
@@ -718,7 +688,7 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
           fillColor: _bgDark,
         ),
         child: Text(
-          '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}',
+          date != null ? '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}' : 'Select date',
           style: const TextStyle(fontSize: 16, color: _textPrimary),
         ),
       ),
@@ -735,6 +705,20 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
     if (date != null) {
       setState(() {
         _joiningDate = date;
+      });
+    }
+  }
+
+  Future<void> _selectBirthDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _birthDate ?? DateTime.now(),
+      firstDate: DateTime(1950),
+      lastDate: DateTime.now(),
+    );
+    if (date != null) {
+      setState(() {
+        _birthDate = date;
       });
     }
   }
@@ -761,8 +745,8 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
         // Update existing staff
         final updateRequest = UpdateStaffRequest(
           name: _nameController.text.trim(),
-          department: _selectedDepartment,
           staffType: _selectedStaffType,
+          birthDate: _birthDate,
           phoneNumber: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
           address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
           emergencyContact: _emergencyContactController.text.trim().isEmpty ? null : _emergencyContactController.text.trim(),
@@ -792,16 +776,16 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
           name: _nameController.text.trim(),
           employeeId: '', // Auto-generated by repository
           email: _emailController.text.trim(),
-          department: _selectedDepartment,
           staffType: _selectedStaffType,
           joiningDate: _joiningDate,
+          birthDate: _birthDate,
           phoneNumber: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
           address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
           emergencyContact: _emergencyContactController.text.trim().isEmpty ? null : _emergencyContactController.text.trim(),
           designation: _designationController.text.trim().isEmpty ? null : _designationController.text.trim(),
         );
 
-        Map<String, String> result;
+        Map<String, dynamic> result;
         if (_selectedRole == UserRole.ADMIN) {
           result = await repository.createAdmin(session.schoolId!, session.uid, createRequest);
         } else {
@@ -816,8 +800,10 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
           }
         }
       }
-    } catch (e) {
-      _showError(e.toString());
+    } catch (e, stackTrace) {
+      print('❌ [ADD_STAFF] Error creating staff: $e');
+      print('❌ [ADD_STAFF] Stack trace: $stackTrace');
+      _showError('Failed to create staff member: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -838,7 +824,7 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
     }
   }
 
-  Future<void> _showSuccessDialog(Map<String, String> staffData) async {
+  Future<void> _showSuccessDialog(Map<String, dynamic> staffData) async {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -866,11 +852,11 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
             children: [
               const Divider(color: _borderColor),
               const SizedBox(height: 12),
-              _buildInfoRow('Employee ID', staffData['employeeId'] ?? '', isHighlighted: true),
+              _buildInfoRow('Employee ID', staffData['employeeId']?.toString() ?? '', isHighlighted: true),
               const SizedBox(height: 12),
-              _buildInfoRow('Name', staffData['name'] ?? ''),
+              _buildInfoRow('Name', staffData['name']?.toString() ?? ''),
               const SizedBox(height: 8),
-              _buildInfoRow('Email', staffData['email'] ?? ''),
+              _buildInfoRow('Email', staffData['email']?.toString() ?? ''),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -881,11 +867,11 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, color: _accentBlue, size: 20),
+                    Icon(Icons.email_outlined, color: _accentBlue, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Login credentials have been sent to the staff email.',
+                        'Password reset email has been sent. Staff member must set their password to activate their account.',
                         style: TextStyle(color: _textSecondary, fontSize: 12),
                       ),
                     ),

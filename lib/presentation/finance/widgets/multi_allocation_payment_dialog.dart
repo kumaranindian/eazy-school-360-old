@@ -8,6 +8,7 @@ import '../../../data/repositories/term_fee_payment_repository.dart';
 import '../../../domain/entities/student_fee_item.dart';
 import '../../../domain/entities/student_fee_ledger.dart';
 import '../../../domain/entities/term_fee_payment.dart';
+import 'uqi_qr_payment_widget.dart';
 
 const Color _bgDark = Color(0xFF0D1117);
 const Color _cardDark = Color(0xFF161B22);
@@ -194,6 +195,15 @@ class _MultiAllocationPaymentDialogState
       return;
     }
 
+    // Validate that allocated total doesn't exceed tendered amount
+    final allocatedTotal = _allocatedTotal();
+    final tenderedAmount = double.tryParse(_totalTenderedCtrl.text.trim()) ?? 0;
+    if (allocatedTotal > tenderedAmount + 0.01) {
+      setState(() => _error =
+          'Allocated amount ₹${allocatedTotal.toStringAsFixed(0)} exceeds tendered amount ₹${tenderedAmount.toStringAsFixed(0)}');
+      return;
+    }
+
     setState(() {
       _saving = true;
       _error = null;
@@ -287,6 +297,131 @@ class _MultiAllocationPaymentDialogState
           errorMsg += e.toString();
         }
         _error = errorMsg;
+      });
+    }
+  }
+
+  void _showUPIQR() {
+    final allocations = <(TermLedgerEntry entry, double amount)>[];
+    for (final e in _openEntries) {
+      final amt = double.tryParse(_amountCtrls[e.termId]!.text.trim()) ?? 0;
+      if (amt <= 0) continue;
+      if (amt > e.balanceAmount + 0.01) {
+        setState(() => _error =
+            'Row "${e.termName}": ₹$amt exceeds balance ₹${e.balanceAmount.toStringAsFixed(0)}');
+        return;
+      }
+      allocations.add((e, amt));
+    }
+
+    final adhocAllocations = <(StudentFeeItem item, double amount)>[];
+    for (final e in _openAdHocItems) {
+      final amt = double.tryParse(_adhocAmountCtrls[e.id]!.text.trim()) ?? 0;
+      if (amt <= 0) continue;
+      if (amt > e.balanceAmount + 0.01) {
+        setState(() => _error =
+            'Ad-hoc fee "${e.itemName}": ₹$amt exceeds balance ₹${e.balanceAmount.toStringAsFixed(0)}');
+        return;
+      }
+      adhocAllocations.add((e, amt));
+    }
+
+    if (allocations.isEmpty && adhocAllocations.isEmpty) {
+      setState(() => _error = 'Enter an amount on at least one row');
+      return;
+    }
+
+    // Validate that allocated total doesn't exceed tendered amount
+    final allocatedTotal = _allocatedTotal();
+    final tenderedAmount = double.tryParse(_totalTenderedCtrl.text.trim()) ?? 0;
+    if (allocatedTotal > tenderedAmount + 0.01) {
+      setState(() => _error =
+          'Allocated amount ₹${allocatedTotal.toStringAsFixed(0)} exceeds tendered amount ₹${tenderedAmount.toStringAsFixed(0)}');
+      return;
+    }
+
+    final totalAmount = allocations.fold<double>(0, (s, a) => s + a.$2) +
+        adhocAllocations.fold<double>(0, (s, a) => s + a.$2);
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: _cardDark,
+        child: UPIQRPaymentWidget(
+          schoolId: widget.schoolId,
+          ledger: widget.ledger,
+          amount: totalAmount,
+          onPaymentConfirmed: () async {
+            await _savePaymentAfterUPI(allocations, adhocAllocations);
+          },
+          onCancel: () => Navigator.of(context).pop(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _savePaymentAfterUPI(
+    List<(TermLedgerEntry, double)> allocations,
+    List<(StudentFeeItem, double)> adhocAllocations,
+  ) async {
+    try {
+      setState(() {
+        _saving = true;
+      });
+
+      final repo = ref.read(termFeePaymentRepositoryProvider);
+      final session = ref.read(currentSessionProvider);
+
+      if (session == null) {
+        setState(() {
+          _saving = false;
+          _error = 'Session expired or invalid. Please log in again.';
+        });
+        return;
+      }
+
+      final termAllocations = allocations
+          .map((a) => TermAllocation(
+                termId: a.$1.termId,
+                termName: a.$1.termName,
+                amount: a.$2,
+              ))
+          .toList();
+
+      final adHocAllocations = adhocAllocations
+          .map((a) => AdHocAllocation(
+                feeItemId: a.$1.id,
+                itemName: a.$1.itemName,
+                categoryCode: a.$1.categoryCode,
+                amount: a.$2,
+              ))
+          .toList();
+
+      await repo.recordMultiTermPayment(RecordMultiTermPaymentRequest(
+        schoolId: widget.schoolId,
+        ledgerId: widget.ledger.id,
+        termAllocations: termAllocations,
+        adHocAllocations: adHocAllocations,
+        paymentMode: TermPaymentMode.UPI,
+        transactionRef: _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim(),
+        paidAt: DateTime.now(),
+        notes: 'UPI QR Code Payment',
+        collectedBy: session.uid,
+        collectedByName: session.displayName,
+      ));
+
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(true);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        backgroundColor: _accentGreen,
+        content: Text('Payment saved successfully via UPI QR'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'Payment saved failed: $e';
       });
     }
   }
@@ -580,28 +715,47 @@ class _MultiAllocationPaymentDialogState
                 ],
 
                 const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _saving || allocated <= 0 ? null : _submit,
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2))
-                        : const Icon(Icons.save_rounded),
-                    label: Text(_saving
-                        ? 'Saving…'
-                        : 'Save Payment (${money.format(allocated)})'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _accentGreen,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: _borderColor,
-                      disabledForegroundColor: _textSecondary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _saving || allocated <= 0 ? null : _submit,
+                        icon: _saving
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2))
+                            : const Icon(Icons.save_rounded),
+                        label: Text(_saving
+                            ? 'Saving…'
+                            : 'Save Payment (${money.format(allocated)})'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _accentGreen,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: _borderColor,
+                          disabledForegroundColor: _textSecondary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    // UPI QR code - admin shows QR to payee on all platforms
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _saving || allocated <= 0 ? null : _showUPIQR,
+                        icon: const Icon(Icons.qr_code_2_rounded),
+                        label: Text('Show UPI QR (${money.format(allocated)})'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _accentAmber,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: _borderColor,
+                          disabledForegroundColor: _textSecondary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/providers/fee_refresh_provider.dart';
 import '../../../data/repositories/fee_structure_v2_repository.dart';
 import '../../../data/repositories/student_fee_item_repository.dart';
 import '../../../data/repositories/student_fee_ledger_repository.dart';
@@ -281,6 +282,11 @@ class _LedgerFeeManagementCardState
 
   @override
   Widget build(BuildContext context) {
+    // Listen for fee refresh signals and reload data when triggered
+    ref.listen<int>(feeRefreshProvider, (previous, next) {
+      _refresh();
+    });
+    
     if (_loading) {
       return _shell(
           child: const Padding(

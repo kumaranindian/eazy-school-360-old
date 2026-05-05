@@ -291,7 +291,6 @@ class _ManageFinanceUsersScreenState extends ConsumerState<ManageFinanceUsersScr
           name: result['name']!,
           employeeId: '',
           email: result['email']!,
-          department: result['department'] ?? 'Finance',
           staffType: StaffType.NON_TEACHING,
           joiningDate: DateTime.now(),
           phoneNumber: result['phone']?.isEmpty == true ? null : result['phone'],

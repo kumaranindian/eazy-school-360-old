@@ -19,14 +19,6 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
   final _reasonController = TextEditingController();
   final _remarksController = TextEditingController();
 
-  // Dark theme tokens (match dashboard)
-  static const Color _bgDark = Color(0xFF0D1117);
-  static const Color _cardDark = Color(0xFF161B22);
-  static const Color _accentBlue = Color(0xFF4CAF50);
-  static const Color _textPrimary = Color(0xFFE6EDF3);
-  static const Color _textSecondary = Color(0xFF8B949E);
-  static const Color _borderColor = Color(0xFF30363D);
-
   String? _selectedPermissionTypeId;
   DateTime? _requestDate;
   TimeOfDay? _startTime;
@@ -34,7 +26,6 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
   bool _isLoading = false;
   String? _errorMessage;
   int _calculatedDurationMinutes = 0;
-  int _remainingPermissions = 0; // Track remaining for validation
 
   @override
   void initState() {
@@ -67,9 +58,9 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
     final configAsyncValue = ref.watch(permissionConfigProvider(session.schoolId!));
 
     return Scaffold(
-      backgroundColor: _bgDark,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: configAsyncValue.when(
-        loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
+        loading: () => Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary)),
         error: (error, stack) => _buildErrorState(context, session.schoolId!, error),
         data: (config) {
           if (config == null) {
@@ -93,20 +84,20 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: const Color(0xFFB91C1C).withOpacity(0.15), shape: BoxShape.circle),
-              child: const Icon(Icons.error_outline_rounded, size: 48, color: Color(0xFFEF4444)),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.error.withOpacity(0.15), shape: BoxShape.circle),
+              child: Icon(Icons.error_outline_rounded, size: 48, color: Theme.of(context).colorScheme.error),
             ),
             const SizedBox(height: 24),
-            const Text('Error Loading Configuration', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary)),
+            Text('Error Loading Configuration', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
             const SizedBox(height: 8),
-            Text(error.toString(), style: const TextStyle(color: _textSecondary), textAlign: TextAlign.center),
+            Text(error.toString(), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant), textAlign: TextAlign.center),
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: () => ref.refresh(permissionConfigProvider(schoolId)),
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _accentBlue,
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -127,13 +118,13 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
           children: [
             Container(
               padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(color: _accentBlue.withOpacity(0.15), shape: BoxShape.circle),
-              child: const Icon(Icons.settings_rounded, size: 64, color: _accentBlue),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withOpacity(0.15), shape: BoxShape.circle),
+              child: Icon(Icons.settings_rounded, size: 64, color: Theme.of(context).colorScheme.primary),
             ),
             const SizedBox(height: 24),
-            const Text('Not Configured', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _textPrimary)),
+            Text('Not Configured', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
             const SizedBox(height: 8),
-            Text('Permission requests are not configured for your school', style: const TextStyle(color: _textSecondary, fontSize: 16), textAlign: TextAlign.center),
+            Text('Permission requests are not configured for your school', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 16), textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -153,9 +144,9 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
               child: const Icon(Icons.block_rounded, size: 64, color: Colors.orange),
             ),
             const SizedBox(height: 24),
-            const Text('Currently Disabled', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _textPrimary)),
+            Text('Currently Disabled', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
             const SizedBox(height: 8),
-            Text('Permission requests are currently disabled by your administrator', style: const TextStyle(color: _textSecondary, fontSize: 16), textAlign: TextAlign.center),
+            Text('Permission requests are currently disabled by your administrator', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 16), textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -167,7 +158,7 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
     final permissionTypesAsync = ref.watch(activePermissionTypesProvider(schoolId));
     
     return permissionTypesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
+      loading: () => Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary)),
       error: (error, stack) => _buildErrorState(context, schoolId, error),
       data: (permissionTypes) {
         if (permissionTypes.isEmpty) {
@@ -191,10 +182,10 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
               child: const Icon(Icons.category_rounded, size: 64, color: Colors.orange),
             ),
             const SizedBox(height: 24),
-            const Text('No Permission Types', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _textPrimary)),
+            Text('No Permission Types', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
             const SizedBox(height: 8),
-            const Text('No permission types have been configured for your school.\nPlease contact your administrator.', 
-              style: TextStyle(color: _textSecondary, fontSize: 16), textAlign: TextAlign.center),
+            Text('No permission types have been configured for your school.\nPlease contact your administrator.', 
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 16), textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -254,18 +245,18 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: isComplete ? _accentBlue : _cardDark,
+            color: isComplete ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
             shape: BoxShape.circle,
-            border: Border.all(color: isComplete ? _accentBlue : _borderColor, width: 2),
+            border: Border.all(color: isComplete ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outline, width: 2),
           ),
           child: Center(
             child: isComplete
                 ? const Icon(Icons.check, color: Colors.white, size: 18)
-                : Text('$step', style: const TextStyle(color: _textSecondary, fontWeight: FontWeight.bold)),
+                : Text('$step', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold)),
           ),
         ),
         const SizedBox(width: 12),
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _textPrimary)),
+        Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
       ],
     );
   }
@@ -274,9 +265,9 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _cardDark,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,7 +288,7 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
           ),
           if (_selectedPermissionTypeId != null) ...[
             const SizedBox(height: 16),
-            const Divider(color: _borderColor, height: 1),
+            Divider(color: Theme.of(context).colorScheme.outline, height: 1),
             const SizedBox(height: 16),
             _buildSelectedPermissionInfo(
               permissionTypes.firstWhere((pt) => pt.id == _selectedPermissionTypeId),
@@ -321,10 +312,10 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
         width: 140,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? _accentBlue.withOpacity(0.15) : _bgDark,
+          color: isSelected ? Theme.of(context).colorScheme.primary.withOpacity(0.15) : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? _accentBlue : _borderColor,
+            color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outline,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -337,11 +328,11 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
               children: [
                 Icon(
                   Icons.access_time_rounded,
-                  color: isSelected ? _accentBlue : _textSecondary,
+                  color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
                   size: 18,
                 ),
                 if (isSelected)
-                  const Icon(Icons.check_circle, color: _accentBlue, size: 18),
+                  Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary, size: 18),
               ],
             ),
             Column(
@@ -351,7 +342,7 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
                   permissionType.name,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: isSelected ? _accentBlue : _textPrimary,
+                    color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
                     fontSize: 13,
                   ),
                   maxLines: 1,
@@ -360,7 +351,7 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
                 const SizedBox(height: 2),
                 Text(
                   '${permissionType.defaultLimit}/month',
-                  style: const TextStyle(fontSize: 11, color: _textSecondary),
+                  style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -442,10 +433,10 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
   Widget _buildInfoItem(IconData icon, String label, String value, {Color? valueColor}) {
     return Column(
       children: [
-        Icon(icon, color: _accentBlue, size: 20),
+        Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: _textSecondary)),
-        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: valueColor ?? _textPrimary)),
+        Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: valueColor ?? Theme.of(context).colorScheme.onSurface)),
       ],
     );
   }
@@ -469,15 +460,15 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [_accentBlue.withOpacity(0.12), _accentBlue.withOpacity(0.04)]),
+              gradient: LinearGradient(colors: [Theme.of(context).colorScheme.primary.withOpacity(0.12), Theme.of(context).colorScheme.primary.withOpacity(0.04)]),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _borderColor),
+              border: Border.all(color: Theme.of(context).colorScheme.outline),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: _accentBlue, borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(10)),
                   child: const Icon(Icons.timer_rounded, color: Colors.white, size: 20),
                 ),
                 const SizedBox(width: 16),
@@ -487,9 +478,9 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
                     children: [
                       Text(
                         _getDurationDisplayText(_calculatedDurationMinutes),
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary),
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                       ),
-                      const Text('Total Duration', style: TextStyle(fontSize: 13, color: _textSecondary)),
+                      Text('Total Duration', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -508,18 +499,18 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: '$label *',
-          labelStyle: const TextStyle(color: _textSecondary),
-          floatingLabelStyle: const TextStyle(color: _textPrimary),
-          prefixIcon: const Icon(Icons.calendar_today_rounded, color: _textSecondary, size: 20),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _accentBlue, width: 2)),
+          labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          floatingLabelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+          prefixIcon: Icon(Icons.calendar_today_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 20),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2)),
           filled: true,
-          fillColor: _cardDark,
+          fillColor: Theme.of(context).colorScheme.surface,
         ),
         child: Text(
           date != null ? '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}' : 'Select date',
-          style: TextStyle(color: date != null ? _textPrimary : _textSecondary),
+          style: TextStyle(color: date != null ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ),
     );
@@ -532,18 +523,18 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: '$label *',
-          labelStyle: const TextStyle(color: _textSecondary),
-          floatingLabelStyle: const TextStyle(color: _textPrimary),
-          prefixIcon: const Icon(Icons.access_time_rounded, color: _textSecondary, size: 20),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _accentBlue, width: 2)),
+          labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          floatingLabelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+          prefixIcon: Icon(Icons.access_time_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 20),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2)),
           filled: true,
-          fillColor: _cardDark,
+          fillColor: Theme.of(context).colorScheme.surface,
         ),
         child: Text(
           time != null ? time.format(context) : 'Select time',
-          style: TextStyle(color: time != null ? _textPrimary : _textSecondary),
+          style: TextStyle(color: time != null ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ),
     );
@@ -556,21 +547,21 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
       [
         TextFormField(
           controller: _reasonController,
-          style: const TextStyle(color: _textPrimary),
-          cursorColor: _accentBlue,
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+          cursorColor: Theme.of(context).colorScheme.primary,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             labelText: 'Reason for Permission *',
             hintText: 'Please provide a reason',
-            labelStyle: const TextStyle(color: _textSecondary),
-            floatingLabelStyle: const TextStyle(color: _textPrimary),
-            hintStyle: const TextStyle(color: _textSecondary),
-            prefixIcon: const Icon(Icons.edit_note_rounded, color: _textSecondary),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _accentBlue, width: 2)),
+            labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            floatingLabelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+            hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            prefixIcon: Icon(Icons.edit_note_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2)),
             filled: true,
-            fillColor: _cardDark,
+            fillColor: Theme.of(context).colorScheme.surface,
           ),
           maxLines: 3,
           validator: (value) {
@@ -582,21 +573,21 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
         const SizedBox(height: 16),
         TextFormField(
           controller: _remarksController,
-          style: const TextStyle(color: _textPrimary),
-          cursorColor: _accentBlue,
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+          cursorColor: Theme.of(context).colorScheme.primary,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             labelText: 'Additional Remarks (Optional)',
             hintText: 'Any additional information',
-            labelStyle: const TextStyle(color: _textSecondary),
-            floatingLabelStyle: const TextStyle(color: _textPrimary),
-            hintStyle: const TextStyle(color: _textSecondary),
-            prefixIcon: const Icon(Icons.comment_rounded, color: _textSecondary),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _borderColor)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _accentBlue, width: 2)),
+            labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            floatingLabelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+            hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            prefixIcon: Icon(Icons.comment_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2)),
             filled: true,
-            fillColor: _cardDark,
+            fillColor: Theme.of(context).colorScheme.surface,
           ),
           maxLines: 2,
         ),
@@ -609,15 +600,15 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFB91C1C).withOpacity(0.15),
+        color: Theme.of(context).colorScheme.error.withOpacity(0.15),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFB91C1C).withOpacity(0.4)),
+        border: Border.all(color: Theme.of(context).colorScheme.error.withOpacity(0.4)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 24),
+          Icon(Icons.error_outline_rounded, color: Theme.of(context).colorScheme.error, size: 24),
           const SizedBox(width: 12),
-          Expanded(child: Text(_errorMessage!, style: const TextStyle(color: _textSecondary, fontSize: 14))),
+          Expanded(child: Text(_errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14))),
         ],
       ),
     );
@@ -630,9 +621,9 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
       child: ElevatedButton(
         onPressed: _isLoading || !_canSubmit() ? null : () => _submitPermissionRequest(config),
         style: ElevatedButton.styleFrom(
-          backgroundColor: _accentBlue,
+          backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Colors.white,
-          disabledBackgroundColor: _borderColor,
+          disabledBackgroundColor: Theme.of(context).colorScheme.outline,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 0,
         ),
@@ -655,9 +646,9 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _cardDark,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -666,11 +657,11 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: _accentBlue.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                child: Icon(icon, color: _accentBlue, size: 22),
+                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22),
               ),
               const SizedBox(width: 12),
-              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _textPrimary)),
+              Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
             ],
           ),
           const SizedBox(height: 20),
@@ -686,15 +677,6 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
       initialDate: _requestDate ?? DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 90)),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(primary: _accentBlue, surface: _cardDark, onSurface: _textPrimary),
-            dialogBackgroundColor: _cardDark,
-          ),
-          child: child!,
-        );
-      },
     );
     if (date != null) {
       setState(() {
@@ -709,15 +691,6 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
     final time = await showTimePicker(
       context: context,
       initialTime: _startTime ?? TimeOfDay.now(),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(primary: _accentBlue, surface: _cardDark, onSurface: _textPrimary),
-            dialogBackgroundColor: _cardDark,
-          ),
-          child: child!,
-        );
-      },
     );
     if (time != null) {
       setState(() {
@@ -738,15 +711,6 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
     final time = await showTimePicker(
       context: context,
       initialTime: _endTime ?? TimeOfDay.fromDateTime(DateTime.now().add(const Duration(hours: 1))),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(primary: _accentBlue, surface: _cardDark, onSurface: _textPrimary),
-            dialogBackgroundColor: _cardDark,
-          ),
-          child: child!,
-        );
-      },
     );
     if (time != null) {
       setState(() {
@@ -804,8 +768,6 @@ class _RequestPermissionScreenState extends ConsumerState<RequestPermissionScree
               );
               
               final remaining = (permissionType.defaultLimit - availed).clamp(0, permissionType.defaultLimit);
-              _remainingPermissions = remaining;
-              
               if (remaining <= 0) {
                 validationError = 'No remaining permission quota for this month. You have used all $availed permissions.';
               }

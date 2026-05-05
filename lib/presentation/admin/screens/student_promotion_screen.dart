@@ -55,6 +55,27 @@ class _StudentPromotionScreenState extends ConsumerState<StudentPromotionScreen>
       backgroundColor: _bgDark,
       body: Column(
         children: [
+          // Coming Soon Banner
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            color: const Color(0xFFF59E0B).withOpacity(0.1),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.upcoming, color: const Color(0xFFF59E0B), size: 20),
+                const SizedBox(width: 8),
+                const Text(
+                  'Coming Soon',
+                  style: TextStyle(
+                    color: Color(0xFFF59E0B),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
           _buildHeader(isDesktop),
           Expanded(
             child: SingleChildScrollView(

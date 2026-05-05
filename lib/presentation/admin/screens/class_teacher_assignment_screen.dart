@@ -82,15 +82,9 @@ class _ClassTeacherAssignmentScreenState extends ConsumerState<ClassTeacherAssig
         return a.section.compareTo(b.section);
       });
 
-      // Populate current assignments
+      // Populate current assignments - disabled as class assignment fields removed
       for (final entry in entries) {
-        final assigned = staff.where((s) =>
-            s.isClassTeacher &&
-            s.assignedClass == entry.className &&
-            s.assignedSection == entry.section).toList();
-        if (assigned.isNotEmpty) {
-          entry.assignedStaffId = assigned.first.id;
-        }
+        entry.assignedStaffId = null;
       }
 
       if (mounted) {
@@ -107,66 +101,18 @@ class _ClassTeacherAssignmentScreenState extends ConsumerState<ClassTeacherAssig
   }
 
   Future<void> _saveAssignment(_ClassSectionEntry entry, String? newStaffId) async {
-    final schoolId = _schoolId;
-    if (schoolId == null) return;
-
-    setState(() => _isSaving = true);
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final staffCol = firestore.collection('schools').doc(schoolId).collection('staff');
-      final batch = firestore.batch();
-
-      // Unassign the previous teacher for this class/section
-      if (entry.assignedStaffId != null && entry.assignedStaffId != newStaffId) {
-        batch.update(staffCol.doc(entry.assignedStaffId!), {
-          'isClassTeacher': false,
-          'assignedClass': null,
-          'assignedSection': null,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      // If a new staff is being unassigned from a different class/section, clear it
-      if (newStaffId != null) {
-        // Check if this teacher is already assigned elsewhere
-        final prevEntry = _classSections.where((e) =>
-            e != entry && e.assignedStaffId == newStaffId).toList();
-        for (final pe in prevEntry) {
-          pe.assignedStaffId = null;
-        }
-
-        batch.update(staffCol.doc(newStaffId), {
-          'isClassTeacher': true,
-          'assignedClass': entry.className,
-          'assignedSection': entry.section,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      await batch.commit();
-
-      setState(() {
-        entry.assignedStaffId = newStaffId;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(newStaffId != null
-                ? 'Class teacher assigned for ${entry.className}-${entry.section}'
-                : 'Class teacher removed for ${entry.className}-${entry.section}'),
-            backgroundColor: newStaffId != null ? _accentBlue : Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
+    // Class teacher assignment disabled - fields removed from StaffProfile
+    // This functionality is no longer available
+    setState(() => _isSaving = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Class teacher assignment is no longer available'),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
-    if (mounted) setState(() => _isSaving = false);
+    return;
   }
 
   @override

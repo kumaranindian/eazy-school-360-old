@@ -201,6 +201,7 @@ class _FeePaymentScreenState extends ConsumerState<FeePaymentScreen> {
               schoolAddress: '',
               schoolPhone: '',
               schoolEmail: '',
+              schoolWebsite: '',
               logoImage: null,
             )
           : await PdfBranding.forSchool(_schoolId!);

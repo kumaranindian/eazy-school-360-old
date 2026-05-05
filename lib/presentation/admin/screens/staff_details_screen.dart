@@ -88,7 +88,7 @@ class _StaffDetailsScreenState extends ConsumerState<StaffDetailsScreen> {
                           children: [
                             Text(_staff.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _textPrimary)),
                             const SizedBox(height: 4),
-                            Text(_staff.designation ?? _staff.department, style: const TextStyle(fontSize: 14, color: _textSecondary)),
+                            Text(_staff.designation ?? '', style: const TextStyle(fontSize: 14, color: _textSecondary)),
                             const SizedBox(height: 8),
                             _buildStatusChip(_staff.status),
                           ],
@@ -108,9 +108,9 @@ class _StaffDetailsScreenState extends ConsumerState<StaffDetailsScreen> {
               [
                 _buildInfoRow('Employee ID', _staff.employeeId),
                 _buildInfoRow('Email', _staff.email),
-                _buildInfoRow('Department', _staff.department),
                 _buildInfoRow('Staff Type', _staff.staffType.name.replaceAll('_', ' ')),
                 _buildInfoRow('Joining Date', _formatDate(_staff.joiningDate)),
+                if (_staff.birthDate != null) _buildInfoRow('Birth Date', _formatDate(_staff.birthDate!)),
                 if (_staff.designation != null) _buildInfoRow('Designation', _staff.designation!),
               ],
             ),

@@ -10,17 +10,11 @@ import '../../../data/services/payslip_pdf_service.dart';
 class MyPayslipsScreen extends ConsumerWidget {
   const MyPayslipsScreen({super.key});
 
-  static const Color _cardDark = Color(0xFF161B22);
-  static const Color _accentBlue = Color(0xFF4CAF50);
-  static const Color _textPrimary = Color(0xFFE6EDF3);
-  static const Color _textSecondary = Color(0xFF8B949E);
-  static const Color _borderColor = Color(0xFF30363D);
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(currentSessionProvider);
     if (session == null || session.schoolId == null) {
-      return const Center(child: Text('Access Denied', style: TextStyle(color: _textPrimary)));
+      return Center(child: Text('Access Denied', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)));
     }
 
     final payrollAsync = ref.watch(staffPayrollRecordsProvider((
@@ -33,14 +27,14 @@ class MyPayslipsScreen extends ConsumerWidget {
     final isDesktop = screenWidth > 1024;
 
     return payrollAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
+      loading: () => Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary)),
       error: (e, _) => Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, color: Colors.red.shade300, size: 48),
+            Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error, size: 48),
             const SizedBox(height: 12),
-            Text('Failed to load payslips: $e', style: const TextStyle(color: _textSecondary, fontSize: 13), textAlign: TextAlign.center),
+            Text('Failed to load payslips: $e', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13), textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -50,11 +44,11 @@ class MyPayslipsScreen extends ConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.receipt_long_rounded, size: 56, color: _textSecondary.withOpacity(0.4)),
+                Icon(Icons.receipt_long_rounded, size: 56, color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4)),
                 const SizedBox(height: 16),
-                const Text('No Payslips Yet', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
+                Text('No Payslips Yet', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 18)),
                 const SizedBox(height: 6),
-                const Text('Your approved payslips will appear here.', style: TextStyle(color: _textSecondary, fontSize: 13)),
+                Text('Your approved payslips will appear here.', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
               ],
             ),
           );
@@ -66,9 +60,9 @@ class MyPayslipsScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Summary card
-              _buildSummaryCard(records, currencyFormat),
+              _buildSummaryCard(context, records, currencyFormat),
               const SizedBox(height: 20),
-              const Text('Payslip History', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+              Text('Payslip History', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 12),
               Expanded(
                 child: ListView.builder(
@@ -86,7 +80,7 @@ class MyPayslipsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSummaryCard(List<PayrollRecord> records, NumberFormat fmt) {
+  Widget _buildSummaryCard(BuildContext context, List<PayrollRecord> records, NumberFormat fmt) {
     final latest = records.first;
     final ytdGross = records
         .where((r) => r.year == DateTime.now().year)
@@ -99,12 +93,12 @@ class MyPayslipsScreen extends ConsumerWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [_accentBlue.withOpacity(0.15), const Color(0xFF161B22)],
+          colors: [Theme.of(context).colorScheme.primary.withOpacity(0.15), Theme.of(context).colorScheme.surfaceContainerHighest],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _accentBlue.withOpacity(0.3)),
+        border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,30 +107,30 @@ class MyPayslipsScreen extends ConsumerWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: _accentBlue.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.account_balance_wallet_rounded, color: _accentBlue, size: 24),
+                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                child: Icon(Icons.account_balance_wallet_rounded, color: Theme.of(context).colorScheme.primary, size: 24),
               ),
               const SizedBox(width: 14),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Latest Salary', style: TextStyle(color: _textSecondary, fontSize: 12)),
+                  Text('Latest Salary', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
                   Text(fmt.format(latest.netSalary),
-                      style: const TextStyle(color: _accentBlue, fontWeight: FontWeight.bold, fontSize: 24)),
-                  Text(latest.periodLabel, style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                      style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 24)),
+                  Text(latest.periodLabel, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
                 ],
               ),
               const Spacer(),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text('YTD Gross', style: TextStyle(color: _textSecondary, fontSize: 11)),
+                  Text('YTD Gross', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11)),
                   Text(fmt.format(ytdGross),
-                      style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 4),
-                  const Text('YTD Net', style: TextStyle(color: _textSecondary, fontSize: 11)),
+                  Text('YTD Net', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11)),
                   Text(fmt.format(ytdNet),
-                      style: const TextStyle(color: _accentBlue, fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600, fontSize: 14)),
                 ],
               ),
             ],
@@ -150,25 +144,25 @@ class MyPayslipsScreen extends ConsumerWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: _cardDark,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
       ),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        iconColor: _textSecondary,
-        collapsedIconColor: _textSecondary,
+        iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+        collapsedIconColor: Theme.of(context).colorScheme.onSurfaceVariant,
         shape: const RoundedRectangleBorder(side: BorderSide.none),
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: _accentBlue.withOpacity(0.12),
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.receipt_long_rounded, color: _accentBlue, size: 20),
+              child: Icon(Icons.receipt_long_rounded, color: Theme.of(context).colorScheme.primary, size: 20),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -176,7 +170,7 @@ class MyPayslipsScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(record.periodLabel,
-                      style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 4),
                   Wrap(spacing: 6, runSpacing: 4, children: [
                     _tagChip('Present: ${record.presentDays}/${record.workingDays}', const Color(0xFF10B981)),
@@ -192,7 +186,7 @@ class MyPayslipsScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(fmt.format(record.netSalary),
-                    style: const TextStyle(color: _accentBlue, fontWeight: FontWeight.bold, fontSize: 16)),
+                    style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 16)),
                 Container(
                   margin: const EdgeInsets.only(top: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -216,48 +210,48 @@ class MyPayslipsScreen extends ConsumerWidget {
           ],
         ),
         children: [
-          const Divider(color: _borderColor, height: 1),
+          Divider(color: Theme.of(context).colorScheme.outline, height: 1),
           const SizedBox(height: 12),
 
           // ── Attendance Summary ──
-          _sectionHeader('Attendance Summary', Icons.calendar_today_rounded, const Color(0xFF10B981)),
+          _sectionHeader(context, 'Attendance Summary', Icons.calendar_today_rounded, const Color(0xFF10B981)),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFF0D1117), borderRadius: BorderRadius.circular(8), border: Border.all(color: _borderColor)),
+            decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: Theme.of(context).colorScheme.outline)),
             child: Column(children: [
-              _detailRow('Total Working Days', '${record.workingDays}'),
-              _detailRow('Days Present', '${record.presentDays}', color: const Color(0xFF10B981)),
-              _detailRow('Total Leave Days', '${record.leaveDaysTaken}'),
-              _detailRow('Paid Leave', '${record.paidLeaveDays} days', color: const Color(0xFF3B82F6)),
+              _detailRow(context, 'Total Working Days', '${record.workingDays}'),
+              _detailRow(context, 'Days Present', '${record.presentDays}', color: const Color(0xFF10B981)),
+              _detailRow(context, 'Total Leave Days', '${record.leaveDaysTaken}'),
+              _detailRow(context, 'Paid Leave', '${record.paidLeaveDays} days', color: const Color(0xFF3B82F6)),
               if (record.unpaidLeaveDays > 0)
-                _detailRow('Unpaid Leave (LOP)', '${record.unpaidLeaveDays} days', color: const Color(0xFFF59E0B)),
+                _detailRow(context, 'Unpaid Leave (LOP)', '${record.unpaidLeaveDays} days', color: const Color(0xFFF59E0B)),
             ]),
           ),
           const SizedBox(height: 12),
 
           // ── Leave Breakdown ──
           if (record.leaveBreakdown.isNotEmpty) ...[
-            _sectionHeader('Leave Breakdown', Icons.event_note_rounded, const Color(0xFF8B5CF6)),
+            _sectionHeader(context, 'Leave Breakdown', Icons.event_note_rounded, const Color(0xFF8B5CF6)),
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFF0D1117), borderRadius: BorderRadius.circular(8), border: Border.all(color: _borderColor)),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: Theme.of(context).colorScheme.outline)),
               child: Column(children: [
                 // Header row
                 Padding(
                   padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(children: const [
-                    Expanded(flex: 3, child: Text('Type', style: TextStyle(color: _textSecondary, fontSize: 10, fontWeight: FontWeight.w600))),
-                    Expanded(child: Text('Quota', style: TextStyle(color: _textSecondary, fontSize: 10, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
-                    Expanded(child: Text('Used', style: TextStyle(color: _textSecondary, fontSize: 10, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
-                    Expanded(child: Text('This Mo', style: TextStyle(color: _textSecondary, fontSize: 10, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
-                    Expanded(child: Text('Bal', style: TextStyle(color: _textSecondary, fontSize: 10, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
+                  child: Row(children: [
+                    Expanded(flex: 3, child: Text('Type', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w600))),
+                    Expanded(child: Text('Quota', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
+                    Expanded(child: Text('Used', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
+                    Expanded(child: Text('This Mo', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
+                    Expanded(child: Text('Bal', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
                   ]),
                 ),
                 ...record.leaveBreakdown.map((lb) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(children: [
                     Expanded(flex: 3, child: Row(children: [
-                      Text(lb.leaveTypeName, style: const TextStyle(color: _textPrimary, fontSize: 11)),
+                      Text(lb.leaveTypeName, style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 11)),
                       const SizedBox(width: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
@@ -269,10 +263,10 @@ class MyPayslipsScreen extends ConsumerWidget {
                             style: TextStyle(color: lb.isPaid ? const Color(0xFF10B981) : const Color(0xFFF59E0B), fontSize: 8, fontWeight: FontWeight.bold)),
                       ),
                     ])),
-                    Expanded(child: Text('${lb.allowed}', style: const TextStyle(color: _textSecondary, fontSize: 11), textAlign: TextAlign.center)),
-                    Expanded(child: Text('${lb.used}', style: const TextStyle(color: _textSecondary, fontSize: 11), textAlign: TextAlign.center)),
+                    Expanded(child: Text('${lb.allowed}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11), textAlign: TextAlign.center)),
+                    Expanded(child: Text('${lb.used}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11), textAlign: TextAlign.center)),
                     Expanded(child: Text('${lb.takenThisMonth}',
-                        style: TextStyle(color: lb.takenThisMonth > 0 ? const Color(0xFFF59E0B) : _textSecondary, fontSize: 11, fontWeight: lb.takenThisMonth > 0 ? FontWeight.bold : FontWeight.normal),
+                        style: TextStyle(color: lb.takenThisMonth > 0 ? const Color(0xFFF59E0B) : Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11, fontWeight: lb.takenThisMonth > 0 ? FontWeight.bold : FontWeight.normal),
                         textAlign: TextAlign.center)),
                     Expanded(child: Text('${lb.balance}',
                         style: TextStyle(color: lb.balance <= 0 ? Colors.redAccent : const Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w600),
@@ -285,50 +279,51 @@ class MyPayslipsScreen extends ConsumerWidget {
           ],
 
           // ── Earnings ──
-          _sectionHeader('Earnings', Icons.trending_up_rounded, _accentBlue),
-          _detailRow('Basic Pay', fmt.format(record.basicPay)),
-          ...record.earnings.map((e) => _detailRow(e.name, fmt.format(e.amount))),
-          _detailRow('Gross Salary', fmt.format(record.grossSalary), isBold: true),
+          _sectionHeader(context, 'Earnings', Icons.trending_up_rounded, Theme.of(context).colorScheme.primary),
+          _detailRow(context, 'Basic Pay', fmt.format(record.basicPay)),
+          ...record.earnings.map((e) => _detailRow(context, e.name, fmt.format(e.amount))),
+          _detailRow(context, 'Gross Salary', fmt.format(record.grossSalary), isBold: true),
           const SizedBox(height: 12),
 
           // ── Deductions ──
-          _sectionHeader('Deductions', Icons.trending_down_rounded, Colors.redAccent),
-          ...record.deductions.map((d) => _detailRow(d.name, '- ${fmt.format(d.amount)}', color: Colors.redAccent)),
+          _sectionHeader(context, 'Deductions', Icons.trending_down_rounded, Colors.redAccent),
+          ...record.deductions.map((d) => _detailRow(context, d.name, '- ${fmt.format(d.amount)}', color: Colors.redAccent)),
           if (record.lopDeduction > 0)
             _detailRow(
+              context,
               'LOP (${record.unpaidLeaveDays}d × ${fmt.format(record.perDaySalary)}/day)',
               '- ${fmt.format(record.lopDeduction)}',
               color: const Color(0xFFF59E0B),
             ),
-          _detailRow('Total Deductions', '- ${fmt.format(record.totalDeductions)}', isBold: true, color: Colors.redAccent),
-          const Divider(color: _borderColor, height: 24),
+          _detailRow(context, 'Total Deductions', '- ${fmt.format(record.totalDeductions)}', isBold: true, color: Colors.redAccent),
+          Divider(color: Theme.of(context).colorScheme.outline, height: 24),
 
           // ── Net Pay ──
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [_accentBlue.withOpacity(0.1), _cardDark]),
+              gradient: LinearGradient(colors: [Theme.of(context).colorScheme.primary.withOpacity(0.1), Theme.of(context).colorScheme.surfaceContainerHighest]),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: _accentBlue.withOpacity(0.3)),
+              border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('NET PAY', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
+                Text('NET PAY', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 15)),
                 Text(fmt.format(record.netSalary),
-                    style: const TextStyle(color: _accentBlue, fontWeight: FontWeight.bold, fontSize: 20)),
+                    style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 20)),
               ],
             ),
           ),
           if (record.perDaySalary > 0) ...[
             const SizedBox(height: 6),
             Text('Per day salary: ${fmt.format(record.perDaySalary)}',
-                style: const TextStyle(color: _textSecondary, fontSize: 10)),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10)),
           ],
           if (record.approvedAt != null) ...[
             const SizedBox(height: 4),
             Text('Approved on ${DateFormat('dd MMM yyyy, hh:mm a').format(record.approvedAt!)}',
-                style: const TextStyle(color: _textSecondary, fontSize: 10)),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10)),
           ],
           const SizedBox(height: 12),
           SizedBox(
@@ -349,11 +344,11 @@ class MyPayslipsScreen extends ConsumerWidget {
               icon: const Icon(Icons.download_rounded, size: 16),
               label: const Text('Download Payslip PDF'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _accentBlue.withOpacity(0.15),
-                foregroundColor: _accentBlue,
+                backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                foregroundColor: Theme.of(context).colorScheme.primary,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: _accentBlue.withOpacity(0.3))),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Theme.of(context).colorScheme.primary.withOpacity(0.3))),
               ),
             ),
           ),
@@ -370,7 +365,7 @@ class MyPayslipsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _sectionHeader(String title, IconData icon, Color color) {
+  Widget _sectionHeader(BuildContext context, String title, IconData icon, Color color) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -383,19 +378,19 @@ class MyPayslipsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _detailRow(String label, String value, {bool isBold = false, Color? color}) {
+  Widget _detailRow(BuildContext context, String label, String value, {bool isBold = false, Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(
-            color: _textSecondary,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontSize: 13,
             fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
           )),
           Text(value, style: TextStyle(
-            color: color ?? _textPrimary,
+            color: color ?? Theme.of(context).colorScheme.onSurface,
             fontSize: 13,
             fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
           )),

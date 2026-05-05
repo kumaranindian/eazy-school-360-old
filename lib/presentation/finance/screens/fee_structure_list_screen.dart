@@ -309,7 +309,7 @@ class _FeeStructureListScreenState
     setState(() => _busy = true);
     Uint8List? bytes;
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
         withData: true,

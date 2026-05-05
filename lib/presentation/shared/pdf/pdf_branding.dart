@@ -12,12 +12,9 @@ pw.Font? _unicodeFont;
 
 /// Load Unicode font for PDF rendering (call once during app startup)
 Future<void> loadPdfUnicodeFont() async {
-  try {
-    final fontData = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
-    _unicodeFont = pw.Font.ttf(fontData);
-  } catch (e) {
-    // Font loading is optional; fallback to default fonts
-  }
+  // Font loading disabled - no Roboto-Regular.ttf file exists
+  // PDFs will use default fonts (Helvetica) which don't support Unicode
+  // This is acceptable for the current use case
 }
 
 /// Lightweight container for everything the PDF header needs to render.
@@ -27,6 +24,7 @@ class PdfBrandingContext {
   final String schoolAddress;
   final String schoolPhone;
   final String schoolEmail;
+  final String schoolWebsite;
   final pw.ImageProvider? logoImage;
   final String productName;
 
@@ -35,6 +33,7 @@ class PdfBrandingContext {
     required this.schoolAddress,
     required this.schoolPhone,
     required this.schoolEmail,
+    required this.schoolWebsite,
     required this.logoImage,
     this.productName = 'EazySchool 360',
   });
@@ -78,6 +77,7 @@ class PdfBranding {
     String address = '';
     String phone = '';
     String email = '';
+    String website = '';
 
     try {
       final doc = await FirebaseFirestore.instance
@@ -90,6 +90,7 @@ class PdfBranding {
         address = school.address;
         phone = school.phone;
         email = school.email;
+        website = school.website;
       }
     } catch (_) {
       // Swallow — header should never block the export.
@@ -108,6 +109,7 @@ class PdfBranding {
       schoolAddress: address,
       schoolPhone: phone,
       schoolEmail: email,
+      schoolWebsite: website,
       logoImage: logo,
     );
     _cache[schoolId] = ctx;

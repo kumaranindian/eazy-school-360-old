@@ -16,12 +16,14 @@ import '../../admin/screens/permission_policy_config_screen.dart';
 import '../../admin/screens/leave_approval_screen.dart';
 import '../../admin/screens/permission_approval_screen.dart';
 import '../../admin/screens/holiday_management_screen.dart';
+import '../../admin/screens/rfid_card_management_screen.dart';
 import '../../admin/screens/student_directory_screen.dart';
 import '../../admin/screens/class_teacher_assignment_screen.dart';
 import '../../admin/screens/student_leave_approval_screen.dart';
 import '../../admin/screens/student_promotion_screen.dart';
 import '../../admin/screens/academic_year_management_screen.dart';
 import '../../admin/screens/whatsapp_settings_screen.dart';
+import '../../admin/screens/uqi_settings_screen.dart';
 import '../../finance/screens/expense_entry_screen.dart';
 import '../../finance/screens/financial_reports_screen.dart';
 import '../../finance/screens/bill_management_screen.dart';
@@ -43,12 +45,14 @@ class MenuItem {
   final String label;
   final List<MenuItem>? children;
   final bool isNew;
+  final bool isComingSoon;
   const MenuItem(
       {required this.id,
       required this.icon,
       required this.label,
       this.children,
-      this.isNew = false});
+      this.isNew = false,
+      this.isComingSoon = false});
 }
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
@@ -119,8 +123,11 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     MenuItem(
         id: 'payroll_management',
         icon: Icons.payments_rounded,
-        label: 'Payroll',
-        isNew: true),
+        label: 'Payroll'),
+    MenuItem(
+        id: 'rfid_card_management',
+        icon: Icons.nfc_rounded,
+        label: 'RFID Card Management'),
     MenuItem(id: 'divider1', icon: Icons.remove, label: ''),
     MenuItem(id: 'students', icon: Icons.people, label: 'Students', children: [
       MenuItem(
@@ -134,12 +141,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       MenuItem(
           id: 'student_leave_approval',
           icon: Icons.event_available,
-          label: 'Student Leave Approval'),
+          label: 'Student Leave Approval',
+          isComingSoon: true),
       MenuItem(
           id: 'student-promotion',
           icon: Icons.school,
           label: 'Student Promotion',
-          isNew: true),
+          isComingSoon: true),
     ]),
     MenuItem(
         id: 'finance_management',
@@ -149,23 +157,19 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           MenuItem(
               id: 'student_fee_mgmt',
               icon: Icons.account_balance_wallet_rounded,
-              label: 'Fee Management',
-              isNew: true),
+              label: 'Fee Management'),
           MenuItem(
               id: 'fee_structures_v2',
               icon: Icons.receipt_long_outlined,
-              label: 'Fee Structures',
-              isNew: true),
+              label: 'Fee Structures'),
           MenuItem(
               id: 'fee_categories',
               icon: Icons.category_outlined,
-              label: 'Fee Categories',
-              isNew: true),
+              label: 'Fee Categories'),
           MenuItem(
               id: 'ad_hoc_fee_assignment',
               icon: Icons.event_note_rounded,
-              label: 'Ad-Hoc Fee Assignment',
-              isNew: true),
+              label: 'Ad-Hoc Fee Assignment'),
           MenuItem(
               id: 'expenses',
               icon: Icons.money_off_rounded,
@@ -173,8 +177,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           MenuItem(
               id: 'bill_management',
               icon: Icons.receipt_long_rounded,
-              label: 'Bill Management',
-              isNew: true),
+              label: 'Bill Management'),
         ]),
     MenuItem(
         id: 'reports_section',
@@ -184,25 +187,25 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           MenuItem(
               id: 'financial_reports',
               icon: Icons.insights_rounded,
-              label: 'Financial Reports',
-              isNew: true),
+              label: 'Financial Reports'),
         ]),
     MenuItem(id: 'divider2', icon: Icons.remove, label: ''),
     MenuItem(
         id: 'upload_sheet',
         icon: Icons.upload_file_rounded,
-        label: 'Upload Sheet',
-        isNew: true),
+        label: 'Upload Sheet'),
     MenuItem(
         id: 'academic-year-mgmt',
         icon: Icons.calendar_month_rounded,
-        label: 'Academic Year Management',
-        isNew: true),
+        label: 'Academic Year Management'),
     MenuItem(
         id: 'whatsapp_settings',
         icon: Icons.chat_rounded,
-        label: 'WhatsApp Settings',
-        isNew: true),
+        label: 'WhatsApp Settings'),
+    MenuItem(
+        id: 'upi_settings',
+        icon: Icons.qr_code_2_rounded,
+        label: 'UPI Settings'),
     MenuItem(id: 'settings', icon: Icons.settings_rounded, label: 'Settings'),
   ];
 
@@ -361,11 +364,23 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                       decoration: BoxDecoration(
                           color: _accentBlue.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(4)),
-                      child: const Text('New',
+                      child: Text('New',
                           style: TextStyle(
                               color: _accentBlue,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold))),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600))),
+                if (item.isComingSoon)
+                  Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4)),
+                      child: Text('Coming Soon',
+                          style: TextStyle(
+                              color: const Color(0xFFF59E0B),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600))),
                 if (hasChildren)
                   Icon(isExpanded ? Icons.expand_less : Icons.expand_more,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -402,14 +417,39 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                         : Theme.of(context).colorScheme.onSurfaceVariant,
                     size: 18),
                 const SizedBox(width: 10),
-                Text(item.label,
-                    style: TextStyle(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.onSurface
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.w400,
-                        fontSize: 12)),
+                Expanded(
+                    child: Text(item.label,
+                        style: TextStyle(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.onSurface
+                                : Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w400,
+                            fontSize: 12))),
+                if (item.isNew)
+                  Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: _accentBlue.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4)),
+                      child: const Text('New',
+                          style: TextStyle(
+                              color: _accentBlue,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold))),
+                if (item.isComingSoon)
+                  Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4)),
+                      child: const Text('Coming Soon',
+                          style: TextStyle(
+                              color: Color(0xFFF59E0B),
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold))),
               ])),
         ),
       ),
@@ -513,6 +553,18 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                                   color: _accentBlue,
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold))),
+                    if (item.isComingSoon)
+                      Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(4)),
+                          child: const Text('Coming Soon',
+                              style: TextStyle(
+                                  color: Color(0xFFF59E0B),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold))),
                     if (hasChildren)
                       Icon(isExpanded ? Icons.expand_less : Icons.expand_more,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -546,14 +598,39 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                         : Theme.of(context).colorScheme.onSurfaceVariant,
                     size: 18),
                 const SizedBox(width: 10),
-                Text(item.label,
-                    style: TextStyle(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.onSurface
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.w400,
-                        fontSize: 12)),
+                Expanded(
+                    child: Text(item.label,
+                        style: TextStyle(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.onSurface
+                                : Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w400,
+                            fontSize: 12))),
+                if (item.isNew)
+                  Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: _accentBlue.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4)),
+                      child: const Text('New',
+                          style: TextStyle(
+                              color: _accentBlue,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold))),
+                if (item.isComingSoon)
+                  Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4)),
+                      child: const Text('Coming Soon',
+                          style: TextStyle(
+                              color: Color(0xFFF59E0B),
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold))),
               ])),
         ),
       ),
@@ -634,6 +711,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return 'Holiday Management';
       case 'payroll_management':
         return 'Payroll Management';
+      case 'rfid_card_management':
+        return 'RFID Card Management';
       case 'student_management':
         return 'Student Directory';
       case 'class_teacher_assign':
@@ -662,6 +741,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return 'Upload Sheet';
       case 'whatsapp_settings':
         return 'WhatsApp Settings';
+      case 'upi_settings':
+        return 'UPI Settings';
       case 'settings':
         return 'Settings';
       default:
@@ -819,6 +900,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return const HolidayManagementScreen();
       case 'payroll_management':
         return const PayrollManagementScreen();
+      case 'rfid_card_management':
+        return const RfidCardManagementScreen();
       case 'student_management':
         return const StudentDirectoryScreen();
       case 'class_teacher_assign':
@@ -868,6 +951,12 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           return const Center(child: Text('School ID not found'));
         }
         return WhatsAppSettingsScreen(schoolId: schoolId);
+      case 'upi_settings':
+        final upiSchoolId = session?.schoolId as String?;
+        if (upiSchoolId == null) {
+          return const Center(child: Text('School ID not found'));
+        }
+        return UPISettingsScreen(schoolId: upiSchoolId);
       case 'settings':
         return const SchoolSettingsScreen();
       default:

@@ -243,7 +243,7 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
                     children: [
                       Text(staff.name, style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
                       const SizedBox(height: 2),
-                      Text('${staff.employeeId} • ${staff.department}',
+                      Text(staff.employeeId,
                           style: const TextStyle(color: _textSecondary, fontSize: 12)),
                     ],
                   ),
@@ -431,7 +431,7 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
                     children: [
                       Text(record.staffName, style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
                       const SizedBox(height: 2),
-                      Text('${record.employeeId} • ${record.department}',
+                      Text(record.employeeId,
                           style: const TextStyle(color: _textSecondary, fontSize: 12)),
                       const SizedBox(height: 4),
                       Row(children: [
@@ -570,7 +570,6 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
                     _payslipSection('Employee Details', Icons.person_rounded, const Color(0xFF3B82F6), [
                       _payslipRow('Name', record.staffName),
                       _payslipRow('Employee ID', record.employeeId),
-                      _payslipRow('Department', record.department.isNotEmpty ? record.department : '-'),
                       _payslipRow('Designation', record.designation.isNotEmpty ? record.designation : '-'),
                       _payslipRow('Pay Period', record.periodLabel),
                     ]),

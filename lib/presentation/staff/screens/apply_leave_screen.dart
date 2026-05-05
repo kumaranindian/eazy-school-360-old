@@ -20,14 +20,6 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
   final _reasonController = TextEditingController();
   final _remarksController = TextEditingController();
 
-  // Dark theme tokens (match dashboard)
-  static const Color _bgDark = Color(0xFF0D1117);
-  static const Color _cardDark = Color(0xFF161B22);
-  static const Color _accentBlue = Color(0xFF4CAF50);
-  static const Color _textPrimary = Color(0xFFE6EDF3);
-  static const Color _textSecondary = Color(0xFF8B949E);
-  static const Color _borderColor = Color(0xFF30363D);
-
   String? _selectedLeaveTypeId;
   DateTime? _startDate;
   DateTime? _endDate;
@@ -70,10 +62,10 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
     final leaveTypesAsyncValue = ref.watch(activeSchoolLeaveTypesProvider(session.schoolId!));
 
     return Scaffold(
-      backgroundColor: _bgDark,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: leaveTypesAsyncValue.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: _accentBlue),
+        loading: () => Center(
+          child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
         ),
         error: (error, stack) => _buildErrorState(context, session.schoolId!, error),
         data: (leaveTypes) {
@@ -96,25 +88,25 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFFB91C1C).withOpacity(0.15),
+                color: Theme.of(context).colorScheme.error.withOpacity(0.15),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.error_outline_rounded, size: 48, color: Color(0xFFEF4444)),
+              child: Icon(Icons.error_outline_rounded, size: 48, color: Theme.of(context).colorScheme.error),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'Error Loading Leave Types',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
             ),
             const SizedBox(height: 8),
-            Text(error.toString(), style: const TextStyle(color: _textSecondary), textAlign: TextAlign.center),
+            Text(error.toString(), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant), textAlign: TextAlign.center),
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: () => ref.refresh(activeSchoolLeaveTypesProvider(schoolId)),
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _accentBlue,
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -136,20 +128,20 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: _accentBlue.withOpacity(0.15),
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.event_busy_rounded, size: 64, color: _accentBlue),
+              child: Icon(Icons.event_busy_rounded, size: 64, color: Theme.of(context).colorScheme.primary),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'No Leave Types Available',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _textPrimary),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
             ),
             const SizedBox(height: 8),
             Text(
               'Please contact your administrator to set up leave types',
-              style: const TextStyle(color: _textSecondary, fontSize: 16),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 16),
               textAlign: TextAlign.center,
             ),
           ],
@@ -211,7 +203,7 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: isComplete ? const Color(0xFF10B981) : _accentBlue,
+            color: isComplete ? const Color(0xFF10B981) : Theme.of(context).colorScheme.primary,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Center(
@@ -226,10 +218,10 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
         const SizedBox(width: 12),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: _textPrimary,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
       ],
@@ -240,9 +232,9 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _cardDark,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,7 +255,7 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
           ),
           if (_selectedLeaveTypeId != null) ...[
             const SizedBox(height: 16),
-            const Divider(color: _borderColor, height: 1),
+            Divider(color: Theme.of(context).colorScheme.outline, height: 1),
             const SizedBox(height: 16),
             _buildSelectedLeaveInfo(leaveTypes.firstWhere((lt) => lt.id == _selectedLeaveTypeId)),
           ],
@@ -285,10 +277,10 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
         width: 140,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? _accentBlue.withOpacity(0.15) : _bgDark,
+          color: isSelected ? Theme.of(context).colorScheme.primary.withOpacity(0.15) : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? _accentBlue : _borderColor,
+            color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outline,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -301,11 +293,11 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
               children: [
                 Icon(
                   leaveType.isPaid ? Icons.paid_rounded : Icons.money_off_rounded,
-                  color: isSelected ? _accentBlue : _textSecondary,
+                  color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
                   size: 18,
                 ),
                 if (isSelected)
-                  const Icon(Icons.check_circle, color: _accentBlue, size: 18),
+                  Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary, size: 18),
               ],
             ),
             Column(
@@ -315,7 +307,7 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
                   leaveType.name,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: isSelected ? _accentBlue : _textPrimary,
+                    color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
                     fontSize: 13,
                   ),
                   maxLines: 1,
@@ -324,7 +316,7 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
                 const SizedBox(height: 2),
                 Text(
                   '${leaveType.annualQuota} days/yr',
-                  style: const TextStyle(fontSize: 11, color: _textSecondary),
+                  style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -349,9 +341,9 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
     )));
     
     return availedAsync.when(
-      loading: () => const Center(child: Padding(
+      loading: () => Center(child: Padding(
         padding: EdgeInsets.all(16),
-        child: CircularProgressIndicator(color: _accentBlue, strokeWidth: 2),
+        child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary, strokeWidth: 2),
       )),
       error: (_, __) => _buildLeaveInfoRow(leaveType, 0, leaveType.annualQuota),
       data: (availed) {
@@ -397,10 +389,10 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
   Widget _buildInfoItem(IconData icon, String label, String value, {Color? valueColor}) {
     return Column(
       children: [
-        Icon(icon, color: _accentBlue, size: 20),
+        Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: _textSecondary)),
-        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: valueColor ?? _textPrimary)),
+        Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: valueColor ?? Theme.of(context).colorScheme.onSurface)),
       ],
     );
   }
@@ -409,9 +401,9 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _cardDark,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
       ),
       child: Column(
         children: [
@@ -433,25 +425,25 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [_accentBlue.withOpacity(0.15), _accentBlue.withOpacity(0.05)],
+                  colors: [Theme.of(context).colorScheme.primary.withOpacity(0.15), Theme.of(context).colorScheme.primary.withOpacity(0.05)],
                 ),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.event_available, color: _accentBlue, size: 24),
+                  Icon(Icons.event_available, color: Theme.of(context).colorScheme.primary, size: 24),
                   const SizedBox(width: 12),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         '$_totalWorkingDays Working Day${_totalWorkingDays > 1 ? 's' : ''}',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _textPrimary),
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                       ),
-                      const Text(
+                      Text(
                         'Weekends & holidays excluded',
-                        style: TextStyle(fontSize: 12, color: _textSecondary),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -471,18 +463,18 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         decoration: BoxDecoration(
-          color: _bgDark,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: date != null ? _accentBlue : _borderColor),
+          border: Border.all(color: date != null ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outline),
         ),
         child: Row(
           children: [
-            Icon(Icons.calendar_today, color: date != null ? _accentBlue : _textSecondary, size: 20),
+            Icon(Icons.calendar_today, color: date != null ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant, size: 20),
             const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 11, color: _textSecondary)),
+                Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 2),
                 Text(
                   date != null
@@ -491,7 +483,7 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: date != null ? _textPrimary : _textSecondary,
+                    color: date != null ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -506,28 +498,28 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _cardDark,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
       ),
       child: Column(
         children: [
           TextFormField(
             controller: _reasonController,
-            style: const TextStyle(color: _textPrimary),
-            cursorColor: _accentBlue,
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+            cursorColor: Theme.of(context).colorScheme.primary,
             decoration: InputDecoration(
               labelText: 'Reason for Leave *',
               hintText: 'Please provide a detailed reason',
-              labelStyle: const TextStyle(color: _textSecondary),
-              floatingLabelStyle: const TextStyle(color: _textPrimary),
-              hintStyle: const TextStyle(color: _textSecondary),
-              prefixIcon: const Icon(Icons.edit_note_rounded, color: _textSecondary),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _accentBlue, width: 2)),
+              labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              floatingLabelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+              hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              prefixIcon: Icon(Icons.edit_note_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2)),
               filled: true,
-              fillColor: _bgDark,
+              fillColor: Theme.of(context).colorScheme.surface,
             ),
             maxLines: 3,
             onChanged: (_) => setState(() {}),
@@ -544,20 +536,20 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
           const SizedBox(height: 16),
           TextFormField(
             controller: _remarksController,
-            style: const TextStyle(color: _textPrimary),
-            cursorColor: _accentBlue,
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+            cursorColor: Theme.of(context).colorScheme.primary,
             decoration: InputDecoration(
               labelText: 'Additional Remarks (Optional)',
               hintText: 'Any additional information',
-              labelStyle: const TextStyle(color: _textSecondary),
-              floatingLabelStyle: const TextStyle(color: _textPrimary),
-              hintStyle: const TextStyle(color: _textSecondary),
-              prefixIcon: const Icon(Icons.comment_rounded, color: _textSecondary),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _borderColor)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _accentBlue, width: 2)),
+              labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              floatingLabelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+              hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              prefixIcon: Icon(Icons.comment_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2)),
               filled: true,
-              fillColor: _bgDark,
+              fillColor: Theme.of(context).colorScheme.surface,
             ),
             maxLines: 2,
           ),
@@ -571,18 +563,18 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFB91C1C).withOpacity(0.15),
+        color: Theme.of(context).colorScheme.error.withOpacity(0.15),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFB91C1C).withOpacity(0.4)),
+        border: Border.all(color: Theme.of(context).colorScheme.error.withOpacity(0.4)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 24),
+          Icon(Icons.error_outline_rounded, color: Theme.of(context).colorScheme.error, size: 24),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               _errorMessage!,
-              style: const TextStyle(color: _textSecondary, fontSize: 14),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14),
             ),
           ),
         ],
@@ -597,9 +589,9 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
       child: ElevatedButton(
         onPressed: _isLoading || !_canSubmit() ? null : _submitLeaveApplication,
         style: ElevatedButton.styleFrom(
-          backgroundColor: _accentBlue,
+          backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Colors.white,
-          disabledBackgroundColor: _borderColor,
+          disabledBackgroundColor: Theme.of(context).colorScheme.outline,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 0,
         ),
@@ -630,15 +622,6 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
       initialDate: _startDate ?? DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(primary: _accentBlue, surface: _cardDark, onSurface: _textPrimary),
-            dialogBackgroundColor: _cardDark,
-          ),
-          child: child!,
-        );
-      },
     );
     if (date != null) {
       setState(() {
@@ -667,15 +650,6 @@ class _ApplyLeaveScreenState extends ConsumerState<ApplyLeaveScreen> {
       initialDate: _endDate ?? _startDate!,
       firstDate: _startDate!,
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(primary: _accentBlue, surface: _cardDark, onSurface: _textPrimary),
-            dialogBackgroundColor: _cardDark,
-          ),
-          child: child!,
-        );
-      },
     );
     if (date != null) {
       setState(() {

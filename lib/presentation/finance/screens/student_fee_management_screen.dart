@@ -6,13 +6,14 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import 'dart:html' as html;
 
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/fee_refresh_provider.dart';
 import '../../../data/repositories/fee_repository.dart';
 import '../../../data/services/fee_structure_to_payment_mapper.dart';
 import '../../../domain/entities/academic_year.dart';
+import '../../../presentation/shared/pdf/pdf_branding.dart';
 import '../../shared/widgets/searchable_dropdown.dart';
 import '../widgets/ledger_fee_management_card.dart';
 
@@ -42,6 +43,7 @@ class _StudentFeeManagementScreenState
   List<String> _sections = [];
   List<Map<String, dynamic>> _students = [];
   String? get _schoolId => ref.read(currentSessionProvider)?.schoolId;
+  int _lastRefreshTimestamp = 0;
 
   @override
   void initState() {
@@ -148,8 +150,9 @@ class _StudentFeeManagementScreenState
     _applyV2Override();
   }
 
-  Future<void> _reloadStudentData() async {
+  Future<void> _reloadStudentData({bool skipV2Override = false}) async {
     if (_selectedStudentDocId == null || _schoolId == null) return;
+    print('[StudentFeeManagementScreen] Reloading student data for docId: $_selectedStudentDocId');
     try {
       final snap = await FirebaseFirestore.instance
           .collection('schools')
@@ -158,11 +161,18 @@ class _StudentFeeManagementScreenState
           .doc(_selectedStudentDocId)
           .get();
       if (snap.exists && mounted) {
+        final data = snap.data()!;
+        print('[StudentFeeManagementScreen] Student data reloaded successfully');
+        print('[StudentFeeManagementScreen] Paid Tuition: ${data['stuPaidTutionFees']}');
+        print('[StudentFeeManagementScreen] Balance Tuition: ${data['stuBalTutionFees']}');
+        print('[StudentFeeManagementScreen] Total Tuition: ${data['stuTotalTutionFees']}');
         setState(() {
-          _studentData = Map<String, dynamic>.from(snap.data()!);
+          _studentData = Map<String, dynamic>.from(data);
           _tuitionSource = 'stored';
         });
-        await _applyV2Override();
+        if (!skipV2Override) {
+          await _applyV2Override();
+        }
       }
     } catch (e) {
       print('[StudentFeeManagementScreen] Failed to reload student data: $e');
@@ -228,6 +238,14 @@ class _StudentFeeManagementScreenState
 
   @override
   Widget build(BuildContext context) {
+    // Watch for fee refresh signals and reload data when triggered
+    final refreshTimestamp = ref.watch(feeRefreshProvider);
+    if (refreshTimestamp != _lastRefreshTimestamp && _studentData != null) {
+      print('[StudentFeeManagementScreen] Fee refresh triggered: $refreshTimestamp');
+      _lastRefreshTimestamp = refreshTimestamp;
+      _reloadStudentData(skipV2Override: true);
+    }
+    
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 1024;
     final isMobile = screenWidth <= 600;
@@ -479,11 +497,11 @@ class _StudentFeeManagementScreenState
         SizedBox(height: isMobile ? 12 : 16),
         _summaryRow(
             'Arrear Fees${arrearsAy.isNotEmpty ? ' (AY $arrearsAy)' : ''}',
-            '₹${totalArrears.toStringAsFixed(0)}',
+            'Rs. ${totalArrears.toStringAsFixed(0)}',
             totalArrears > 0 ? const Color(0xFFEF4444) : _accentGreen,
             isMobile),
         SizedBox(height: isMobile ? 8 : 10),
-        _summaryRow('Concession Fees', '₹${concession.toStringAsFixed(0)}',
+        _summaryRow('Concession Fees', 'Rs. ${concession.toStringAsFixed(0)}',
             const Color(0xFF3B82F6), isMobile),
       ]),
     );
@@ -592,10 +610,10 @@ class _StudentFeeManagementScreenState
                                     (d['amount'] as num?)?.toDouble() ?? 0;
 
                                 return Container(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: _bgDark,
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(8),
                                     border: Border.all(color: _borderColor),
                                   ),
                                   child: Column(
@@ -603,53 +621,61 @@ class _StudentFeeManagementScreenState
                                         CrossAxisAlignment.start,
                                     children: [
                                       Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
                                         children: [
                                           Expanded(
                                             child: Text(
                                               receipt?.toString() ?? '',
                                               style: const TextStyle(
-                                                  color: _textSecondary,
-                                                  fontSize: 12),
-                                              overflow: TextOverflow.ellipsis,
+                                                  color: _textPrimary,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600),
                                             ),
                                           ),
                                           Text(
-                                            '₹${amount.toStringAsFixed(0)}',
+                                            'Rs. ${amount.toStringAsFixed(2)}',
                                             style: const TextStyle(
                                                 color: _accentGreen,
                                                 fontWeight: FontWeight.bold,
-                                                fontSize: 16),
+                                                fontSize: 14),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        description,
-                                        style: const TextStyle(
-                                            color: _textPrimary, fontSize: 14),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 8),
+                                      const SizedBox(height: 4),
                                       Row(
                                         children: [
                                           Icon(Icons.calendar_today_rounded,
-                                              color: _textSecondary, size: 14),
+                                              color: _textSecondary, size: 12),
                                           const SizedBox(width: 4),
                                           Text(
                                             date != null
-                                                ? DateFormat('dd MMM yyyy')
+                                                ? DateFormat('dd/MM/yyyy')
                                                     .format(date)
                                                 : 'N/A',
                                             style: const TextStyle(
                                                 color: _textSecondary,
-                                                fontSize: 12),
+                                                fontSize: 10),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              (_studentData!['stuName'] ?? 'Student').toString(),
+                                              style: const TextStyle(
+                                                  color: _textSecondary,
+                                                  fontSize: 10),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 12),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        description,
+                                        style: const TextStyle(
+                                            color: _textPrimary, fontSize: 11),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 8),
                                       Row(
                                         children: [
                                           IconButton(
@@ -695,172 +721,135 @@ class _StudentFeeManagementScreenState
                           }
 
                           // Desktop: Table layout
-                          return SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: SizedBox(
-                              width: MediaQuery.of(context).size.width - 32,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Table header
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: _bgDark,
-                                      borderRadius: const BorderRadius.only(
-                                          topLeft: Radius.circular(12),
-                                          topRight: Radius.circular(12)),
-                                      border: Border.all(color: _borderColor),
+                          return Container(
+                            decoration: BoxDecoration(
+                                color: _cardDark,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: _borderColor)),
+                            child: DataTable(
+                              headingRowColor: WidgetStateProperty.all(_bgDark),
+                              dataRowColor: WidgetStateProperty.all(_cardDark),
+                              dividerThickness: 0.5,
+                              columns: const [
+                                DataColumn(
+                                  label: Text('Receipt #',
+                                      style: TextStyle(
+                                          color: _accentGreen,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12)),
+                                ),
+                                DataColumn(
+                                  label: Text('Date',
+                                      style: TextStyle(
+                                          color: _accentGreen,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12)),
+                                ),
+                                DataColumn(
+                                  label: Text('Student',
+                                      style: TextStyle(
+                                          color: _accentGreen,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12)),
+                                ),
+                                DataColumn(
+                                  label: Text('Description',
+                                      style: TextStyle(
+                                          color: _accentGreen,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12)),
+                                ),
+                                DataColumn(
+                                  label: Text('Amount',
+                                      style: TextStyle(
+                                          color: _accentGreen,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12)),
+                                ),
+                                DataColumn(
+                                  label: Text('Actions',
+                                      style: TextStyle(
+                                          color: _accentGreen,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12)),
+                                ),
+                              ],
+                              rows: snap.data!.map((d) {
+                                final date = d['date'] as DateTime?;
+                                final receipt = d['receipt'] ?? d['id'];
+                                final description =
+                                    d['description']?.toString() ?? '';
+                                final amount =
+                                    (d['amount'] as num?)?.toDouble() ?? 0;
+                                return DataRow(
+                                  cells: [
+                                    DataCell(
+                                      Text(receipt?.toString() ?? '',
+                                          style: const TextStyle(
+                                              color: _textPrimary, fontSize: 12)),
                                     ),
-                                    child: Row(
-                                      children: [
-                                        SizedBox(
-                                            width: 100,
-                                            child: Text('Date',
-                                                style: TextStyle(
-                                                    color: _accentGreen,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12))),
-                                        SizedBox(
-                                            width: 200,
-                                            child: Text('Receipt #',
-                                                style: TextStyle(
-                                                    color: _accentGreen,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12))),
-                                        SizedBox(
-                                            width: 100,
-                                            child: Text('Amount',
-                                                style: TextStyle(
-                                                    color: _accentGreen,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12))),
-                                        SizedBox(
-                                            width: 120,
-                                            child: Text('Actions',
-                                                style: TextStyle(
-                                                    color: _accentGreen,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12))),
-                                        Flexible(
-                                            child: Text('Descriptions',
-                                                style: TextStyle(
-                                                    color: _accentGreen,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12))),
-                                      ],
+                                    DataCell(
+                                      Text(
+                                          date != null
+                                              ? DateFormat('dd/MM/yyyy')
+                                                  .format(date)
+                                              : 'N/A',
+                                          style: const TextStyle(
+                                              color: _textPrimary, fontSize: 12)),
                                     ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ...snap.data!.asMap().entries.map((entry) {
-                                    final index = entry.key;
-                                    final d = entry.value;
-                                    final date = d['date'] as DateTime?;
-                                    final receipt = d['receipt'] ?? d['id'];
-                                    final description =
-                                        d['description']?.toString() ?? '';
-                                    final amount =
-                                        (d['amount'] as num?)?.toDouble() ?? 0;
-
-                                    return Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 12),
-                                      decoration: BoxDecoration(
-                                        color: index % 2 == 0
-                                            ? _bgDark
-                                            : _cardDark,
-                                        border: Border.all(color: _borderColor),
-                                      ),
-                                      child: Row(
+                                    DataCell(
+                                      Text(
+                                          (_studentData!['stuName'] ?? 'Student').toString(),
+                                          style: const TextStyle(
+                                              color: _textPrimary, fontSize: 12)),
+                                    ),
+                                    DataCell(
+                                      Text(description,
+                                          style: const TextStyle(
+                                              color: _textSecondary, fontSize: 11),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis),
+                                    ),
+                                    DataCell(
+                                      Text('Rs. ${amount.toStringAsFixed(2)}',
+                                          style: const TextStyle(
+                                              color: _accentGreen,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12)),
+                                    ),
+                                    DataCell(
+                                      Row(
                                         children: [
-                                          SizedBox(
-                                              width: 100,
-                                              child: Text(
-                                                  date != null
-                                                      ? DateFormat('dd/MM/yyyy')
-                                                          .format(date)
-                                                      : 'N/A',
-                                                  style: const TextStyle(
-                                                      color: _textPrimary,
-                                                      fontSize: 12),
-                                                  overflow:
-                                                      TextOverflow.ellipsis)),
-                                          SizedBox(
-                                              width: 200,
-                                              child: Text(
-                                                  receipt?.toString() ?? '',
-                                                  style: const TextStyle(
-                                                      color: _textPrimary,
-                                                      fontSize: 12),
-                                                  overflow:
-                                                      TextOverflow.ellipsis)),
-                                          SizedBox(
-                                              width: 100,
-                                              child: Text(
-                                                  '₹${amount.toStringAsFixed(0)}',
-                                                  style: const TextStyle(
-                                                      color: _accentGreen,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 12),
-                                                  overflow:
-                                                      TextOverflow.ellipsis)),
-                                          SizedBox(
-                                            width: 120,
-                                            child: Row(
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(
-                                                      Icons.visibility_rounded,
-                                                      color: _accentBlue,
-                                                      size: 18),
-                                                  onPressed: () =>
-                                                      _showBillDetails(d),
-                                                  tooltip: 'View Bill',
-                                                  padding: EdgeInsets.zero,
-                                                  constraints:
-                                                      const BoxConstraints(),
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                      Icons.print_rounded,
-                                                      color: _textSecondary,
-                                                      size: 18),
-                                                  onPressed: () =>
-                                                      _printBill(d),
-                                                  tooltip: 'Print Bill',
-                                                  padding: EdgeInsets.zero,
-                                                  constraints:
-                                                      const BoxConstraints(),
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                      Icons.download_rounded,
-                                                      color: _accentGreen,
-                                                      size: 18),
-                                                  onPressed: () =>
-                                                      _downloadBill(d),
-                                                  tooltip: 'Download Bill',
-                                                  padding: EdgeInsets.zero,
-                                                  constraints:
-                                                      const BoxConstraints(),
-                                                ),
-                                              ],
-                                            ),
+                                          IconButton(
+                                            icon: const Icon(Icons.visibility_rounded,
+                                                color: _accentBlue, size: 16),
+                                            tooltip: 'View',
+                                            onPressed: () => _showBillDetails(d),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
                                           ),
-                                          Flexible(
-                                              child: Text(description,
-                                                  style: const TextStyle(
-                                                      color: _textPrimary,
-                                                      fontSize: 12),
-                                                  softWrap: true)),
+                                          IconButton(
+                                            icon: const Icon(Icons.print_rounded,
+                                                color: Color(0xFF3B82F6), size: 16),
+                                            tooltip: 'Print',
+                                            onPressed: () => _printBill(d),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.download_rounded,
+                                                color: _accentGreen, size: 16),
+                                            tooltip: 'Download',
+                                            onPressed: () => _downloadBill(d),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                          ),
                                         ],
                                       ),
-                                    );
-                                  }).toList(),
-                                ],
-                              ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
                             ),
                           );
                         },
@@ -1229,7 +1218,7 @@ class _StudentFeeManagementScreenState
                                 Expanded(
                                     flex: 1,
                                     child: Text(
-                                        '₹${((billData['amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
+                                        'Rs. ${((billData['amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
                                         style: TextStyle(
                                             color: _accentGreen,
                                             fontWeight: FontWeight.bold,
@@ -1239,44 +1228,6 @@ class _StudentFeeManagementScreenState
                           ),
                         ],
                       ),
-                    ),
-                    SizedBox(height: isMobile ? 16 : 20),
-
-                    // Action Buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => _printBill(billData),
-                            icon: Icon(Icons.print_rounded,
-                                size: isMobile ? 16 : 18),
-                            label: Text('Print',
-                                style: TextStyle(fontSize: isMobile ? 14 : 16)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _accentBlue,
-                              foregroundColor: Colors.white,
-                              padding: EdgeInsets.symmetric(
-                                  vertical: isMobile ? 10 : 12),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: isMobile ? 8 : 12),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => _downloadBill(billData),
-                            icon: Icon(Icons.download_rounded,
-                                size: isMobile ? 16 : 18),
-                            label: Text('Download',
-                                style: TextStyle(fontSize: isMobile ? 14 : 16)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _accentGreen,
-                              foregroundColor: Colors.white,
-                              padding: EdgeInsets.symmetric(
-                                  vertical: isMobile ? 10 : 12),
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -1323,7 +1274,7 @@ class _StudentFeeManagementScreenState
               Expanded(
                   flex: 1,
                   child: Text(
-                      '₹${double.tryParse(fee['amount'].toString())?.toStringAsFixed(0) ?? '0'}',
+                      'Rs. ${double.tryParse(fee['amount'].toString())?.toStringAsFixed(0) ?? '0'}',
                       style:
                           const TextStyle(color: _textPrimary, fontSize: 12))),
             ],
@@ -1334,376 +1285,176 @@ class _StudentFeeManagementScreenState
   }
 
   void _printBill(Map<String, dynamic> billData) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _cardDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Select Copy Type',
-            style: TextStyle(color: _textPrimary, fontSize: 18)),
-        content: const Text('Choose which copy to print:',
-            style: TextStyle(color: _textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _generateAndPrintBill(billData, 'Student Copy');
-            },
-            child: const Text('Student Copy',
-                style: TextStyle(color: _accentGreen)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _generateAndPrintBill(billData, 'School Copy');
-            },
-            child:
-                const Text('School Copy', style: TextStyle(color: _accentBlue)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text('Cancel', style: TextStyle(color: _textSecondary)),
-          ),
-        ],
-      ),
-    );
+    _generateAndPrintBill(billData);
   }
 
   void _downloadBill(Map<String, dynamic> billData) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _cardDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Select Copy Type',
-            style: TextStyle(color: _textPrimary, fontSize: 18)),
-        content: const Text('Choose which copy to download:',
-            style: TextStyle(color: _textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _generateAndDownloadBill(billData, 'Student Copy');
-            },
-            child: const Text('Student Copy',
-                style: TextStyle(color: _accentGreen)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _generateAndDownloadBill(billData, 'School Copy');
-            },
-            child:
-                const Text('School Copy', style: TextStyle(color: _accentBlue)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text('Cancel', style: TextStyle(color: _textSecondary)),
-          ),
-        ],
-      ),
-    );
+    _generateAndDownloadBill(billData);
   }
 
-  Future<void> _generateAndPrintBill(
-      Map<String, dynamic> billData, String copyType) async {
-    final pdf = await _generateBillPDF(billData, copyType);
+  Future<void> _generateAndPrintBill(Map<String, dynamic> billData) async {
+    final pdf = await _generateBillPDF(billData);
     await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) => pdf,
+      onLayout: (format) async => pdf,
       name: 'Fee_Receipt_${billData['receipt']}.pdf',
     );
   }
 
-  Future<void> _generateAndDownloadBill(
-      Map<String, dynamic> billData, String copyType) async {
-    final pdf = await _generateBillPDF(billData, copyType);
-    final directory = await getApplicationDocumentsDirectory();
-    final path =
-        '${directory.path}/Fee_Receipt_${billData['receipt']}_$copyType.pdf';
-    final file = File(path);
-    await file.writeAsBytes(await pdf);
+  Future<void> _generateAndDownloadBill(Map<String, dynamic> billData) async {
+    final pdf = await _generateBillPDF(billData);
+    
+    // Web download
+    final blob = html.Blob([pdf], 'application/pdf');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute('download', 'Fee_Receipt_${billData['receipt']}.pdf')
+      ..click();
+    html.Url.revokeObjectUrl(url);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Bill saved to: $path'),
+        content: Text('Bill downloaded successfully'),
         backgroundColor: _accentGreen,
       ),
     );
   }
 
-  Future<Uint8List> _generateBillPDF(
-      Map<String, dynamic> billData, String copyType) async {
+  Future<Uint8List> _generateBillPDF(Map<String, dynamic> billData) async {
+    if (_schoolId == null) return Uint8List(0);
+    final branding = await PdfBranding.forSchool(_schoolId!);
     final pdf = pw.Document();
 
-    final description = billData['description']?.toString() ?? '';
-    final feeItems = description.split(',').map((item) {
-      final match = RegExp(r'(.+?)\s*\(₹([\d,]+)\)').firstMatch(item.trim());
-      if (match != null) {
-        return {
-          'name': match.group(1)?.trim() ?? item.trim(),
-          'amount':
-              double.tryParse(match.group(2)?.replaceAll(',', '') ?? '0') ??
-                  0.0,
-        };
-      }
-      return {'name': item.trim(), 'amount': 0.0};
-    }).toList();
+    final amount = (billData['amount'] as num?)?.toDouble() ?? 0;
+    final date = billData['date'] is DateTime
+        ? billData['date'] as DateTime
+        : DateTime.now();
+    final description = (billData['description'] ?? '').toString().replaceAll('₹', 'Rs.');
 
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return pw.Container(
-            padding: const pw.EdgeInsets.all(32),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                // Header
-                pw.Row(
+    final schoolName = branding.schoolName.isNotEmpty ? branding.schoolName : 'School';
+    final schoolAddr = branding.schoolAddress;
+    final schoolPhone = branding.schoolPhone;
+    final schoolEmail = branding.schoolEmail;
+    final schoolWebsite = branding.schoolWebsite;
+
+    pw.Widget buildReceiptCopy(String copyLabel) {
+      final bold = pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10);
+      const normal = pw.TextStyle(fontSize: 9);
+      const small = pw.TextStyle(fontSize: 8);
+      return pw.Container(
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Expanded(
+                      child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                        pw.Text(schoolName,
+                            style: pw.TextStyle(
+                                fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(schoolAddr, style: small),
+                        pw.Text('Ph: $schoolPhone', style: small),
+                        if (schoolEmail.isNotEmpty)
+                          pw.Text('Email: $schoolEmail', style: small),
+                        if (schoolWebsite.isNotEmpty)
+                          pw.Text('Web: $schoolWebsite', style: small),
+                      ])),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration:
+                        pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
+                    child: pw.Text(copyLabel,
+                        style: pw.TextStyle(
+                            fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                  ),
+                ]),
+            pw.Divider(thickness: 0.5, height: 8),
+            pw.Center(
+                child: pw.Text(
+              'FEE RECEIPT',
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+            )),
+            pw.SizedBox(height: 4),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Receipt #${billData['receipt'] ?? ''}', style: bold),
+                  pw.Text('Date: ${DateFormat('dd/MM/yyyy').format(date)}',
+                      style: bold),
+                ]),
+            pw.SizedBox(height: 4),
+            pw.Row(children: [
+              pw.Text('Student: ', style: bold),
+              pw.Text(
+                  '${_studentData!['stuName'] ?? 'N/A'} (ID: ${_studentData!['stuId'] ?? 'N/A'})',
+                  style: normal),
+            ]),
+            pw.Row(children: [
+              pw.Text('Class: ', style: bold),
+              pw.Text(
+                  '${_studentData!['className'] ?? ''} - ${_studentData!['section'] ?? ''}',
+                  style: normal),
+            ]),
+            pw.SizedBox(height: 2),
+            if (description.isNotEmpty) ...[
+              pw.Text('Fee Details:', style: bold),
+              pw.SizedBox(height: 2),
+              pw.Container(
+                width: double.infinity,
+                child: pw.Text(description, style: small, maxLines: 3),
+              ),
+            ],
+            pw.SizedBox(height: 6),
+            pw.Container(
+              padding:
+                  const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
+              child: pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(
-                          (_studentData!['schoolName'] ?? 'School').toString(),
-                          style: pw.TextStyle(
-                              fontSize: 24, fontWeight: pw.FontWeight.bold),
-                        ),
-                        pw.SizedBox(height: 8),
-                        pw.Text(
-                          'Fee Receipt',
-                          style: pw.TextStyle(
-                              fontSize: 18, fontWeight: pw.FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        pw.Text(
-                          copyType.toUpperCase(),
-                          style: pw.TextStyle(
-                            fontSize: 16,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.blue,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 24),
-
-                // Receipt Info
-                pw.Container(
-                  padding: const pw.EdgeInsets.all(16),
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey300),
-                    borderRadius: pw.BorderRadius.circular(8),
-                  ),
-                  child: pw.Row(
-                    children: [
-                      pw.Expanded(
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text('Receipt #',
-                                style: pw.TextStyle(
-                                    fontSize: 10, color: PdfColors.grey700)),
-                            pw.Text((billData['receipt'] ?? '').toString(),
-                                style: pw.TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: pw.FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                      pw.Expanded(
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text('Date',
-                                style: pw.TextStyle(
-                                    fontSize: 10, color: PdfColors.grey700)),
-                            pw.Text(
-                              billData['date'] != null
-                                  ? DateFormat('dd MMM yyyy')
-                                      .format(billData['date'] as DateTime)
-                                  : 'N/A',
-                              style: pw.TextStyle(
-                                  fontSize: 14, fontWeight: pw.FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                pw.SizedBox(height: 16),
-
-                // Student Info
-                pw.Container(
-                  padding: const pw.EdgeInsets.all(16),
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey300),
-                    borderRadius: pw.BorderRadius.circular(8),
-                  ),
-                  child: pw.Row(
-                    children: [
-                      pw.Expanded(
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text('Student Name',
-                                style: pw.TextStyle(
-                                    fontSize: 10, color: PdfColors.grey700)),
-                            pw.Text(
-                                (_studentData!['stuName'] ?? 'Student')
-                                    .toString(),
-                                style: pw.TextStyle(fontSize: 14)),
-                          ],
-                        ),
-                      ),
-                      pw.Expanded(
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text('Class',
-                                style: pw.TextStyle(
-                                    fontSize: 10, color: PdfColors.grey700)),
-                            pw.Text(
-                                (_studentData!['className'] ?? '-').toString(),
-                                style: pw.TextStyle(fontSize: 14)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                pw.SizedBox(height: 24),
-
-                // Fee Breakdown Table
-                pw.Container(
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey300),
-                    borderRadius: pw.BorderRadius.circular(8),
-                  ),
-                  child: pw.Column(
-                    children: [
-                      // Header
-                      pw.Container(
-                        padding: const pw.EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        decoration: const pw.BoxDecoration(
-                          color: PdfColors.blue100,
-                        ),
-                        child: pw.Row(
-                          children: [
-                            pw.Expanded(
-                                flex: 3,
-                                child: pw.Text('Description',
-                                    style: pw.TextStyle(
-                                        fontWeight: pw.FontWeight.bold))),
-                            pw.Expanded(
-                                flex: 1,
-                                child: pw.Text('Amount',
-                                    style: pw.TextStyle(
-                                        fontWeight: pw.FontWeight.bold))),
-                          ],
-                        ),
-                      ),
-                      // Rows
-                      ...feeItems.map((fee) {
-                        return pw.Container(
-                          padding: const pw.EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                          decoration: const pw.BoxDecoration(
-                            border: pw.Border(
-                                bottom:
-                                    pw.BorderSide(color: PdfColors.grey300)),
-                          ),
-                          child: pw.Row(
-                            children: [
-                              pw.Expanded(
-                                  flex: 3,
-                                  child:
-                                      pw.Text((fee['name'] ?? '').toString())),
-                              pw.Expanded(
-                                  flex: 1,
-                                  child: pw.Text(
-                                      '₹${double.tryParse(fee['amount'].toString())?.toStringAsFixed(0) ?? '0'}')),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      // Total
-                      pw.Container(
-                        padding: const pw.EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        decoration: const pw.BoxDecoration(
-                          color: PdfColors.blue100,
-                        ),
-                        child: pw.Row(
-                          children: [
-                            pw.Expanded(
-                                flex: 3,
-                                child: pw.Text('Total',
-                                    style: pw.TextStyle(
-                                        fontWeight: pw.FontWeight.bold,
-                                        fontSize: 14))),
-                            pw.Expanded(
-                                flex: 1,
-                                child: pw.Text(
-                                    '₹${((billData['amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
-                                    style: pw.TextStyle(
-                                        fontWeight: pw.FontWeight.bold,
-                                        fontSize: 16))),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                pw.SizedBox(height: 32),
-
-                // Signature Area
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Column(
-                      children: [
-                        pw.SizedBox(height: 40),
-                        pw.Container(width: 150, child: pw.Divider()),
-                        pw.SizedBox(height: 8),
-                        pw.Text('Student Signature',
-                            style: pw.TextStyle(fontSize: 10)),
-                      ],
-                    ),
-                    pw.Column(
-                      children: [
-                        pw.SizedBox(height: 40),
-                        pw.Container(width: 150, child: pw.Divider()),
-                        pw.SizedBox(height: 8),
-                        pw.Text('School Authority',
-                            style: pw.TextStyle(fontSize: 10)),
-                      ],
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 16),
-                pw.Text(
-                  'This is a computer-generated receipt.',
-                  style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-                ),
-              ],
+                    pw.Text('AMOUNT:',
+                        style: pw.TextStyle(
+                            fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('Rs. ${amount.toStringAsFixed(2)}',
+                        style: pw.TextStyle(
+                            fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                  ]),
             ),
-          );
-        },
+            pw.SizedBox(height: 6),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Signature: _______________', style: small),
+                ]),
+          ],
+        ),
+      );
+    }
+
+    // Two copies on one A5 page
+    pdf.addPage(pw.Page(
+      pageFormat: PdfPageFormat.a5,
+      margin: const pw.EdgeInsets.all(24),
+      build: (ctx) => pw.Column(
+        children: [
+          buildReceiptCopy('SCHOOL COPY'),
+          pw.SizedBox(height: 6),
+          pw.Center(
+              child: pw.Text(
+            '- - - - - - - - - - - - - - - - - -  Cut Here  - - - - - - - - - - - - - - - - - -',
+            style: const pw.TextStyle(fontSize: 7),
+          )),
+          pw.SizedBox(height: 6),
+          buildReceiptCopy('PARENT COPY'),
+        ],
       ),
-    );
+    ));
 
     return pdf.save();
   }

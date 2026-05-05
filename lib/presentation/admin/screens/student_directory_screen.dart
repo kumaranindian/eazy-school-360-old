@@ -14,7 +14,7 @@ import '../../../domain/entities/academic_year.dart';
 import '../../../domain/entities/app_user.dart';
 import '../../../domain/entities/concession_category.dart';
 import '../../../domain/entities/student.dart';
-import '../../../firebase_options.dart';
+import '../../../config/environment_config.dart';
 
 class StudentDirectoryScreen extends ConsumerStatefulWidget {
   const StudentDirectoryScreen({super.key});
@@ -2041,7 +2041,7 @@ class _StudentDirectoryScreenState
       } on FirebaseException {
         secondaryApp = await Firebase.initializeApp(
           name: 'parent-helper',
-          options: DefaultFirebaseOptions.currentPlatform,
+          options: EnvironmentConfig.firebaseOptions,
         );
       }
       final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
@@ -2497,7 +2497,7 @@ class _StudentDirectoryScreenState
       } on FirebaseException {
         secondaryApp = await Firebase.initializeApp(
           name: 'parent-helper',
-          options: DefaultFirebaseOptions.currentPlatform,
+          options: EnvironmentConfig.firebaseOptions,
         );
       }
       final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);

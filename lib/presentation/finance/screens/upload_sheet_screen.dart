@@ -1064,7 +1064,7 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
   // ============ FILE PICKER ============
   Future<void> _pickFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
         withData: true,
