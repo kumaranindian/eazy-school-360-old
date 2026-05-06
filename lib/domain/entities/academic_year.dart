@@ -1,11 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Represents an academic year (May to April)
-/// Example: "2024-25" runs from May 1, 2024 to April 30, 2025
+/// Example: "2024-2025" runs from May 1, 2024 to April 30, 2025
 class AcademicYear {
   final String id;
   final String schoolId;
-  final String yearCode; // e.g., "2024-25"
+  final String yearCode; // e.g., "2024-2025"
   final DateTime startDate; // May 1
   final DateTime endDate; // April 30
   final bool isCurrent;
@@ -56,11 +56,11 @@ class AcademicYear {
   }
 
   /// Creates an academic year from a starting year
-  /// Example: fromYear(2024) creates "2024-25" from May 1, 2024 to April 30, 2025
+  /// Example: fromYear(2024) creates "2024-2025" from May 1, 2024 to April 30, 2025
   factory AcademicYear.fromYear(String schoolId, int startYear, {bool isCurrent = false}) {
     final startDate = DateTime(startYear, 5, 1); // May 1
     final endDate = DateTime(startYear + 1, 4, 30); // April 30 next year
-    final yearCode = '$startYear-${(startYear + 1) % 100}';
+    final yearCode = '$startYear-${startYear + 1}';
     final now = DateTime.now();
 
     return AcademicYear(
@@ -79,7 +79,7 @@ class AcademicYear {
   static String getCurrentYearCode() {
     final now = DateTime.now();
     final year = now.month >= 5 ? now.year : now.year - 1;
-    return '$year-${(year + 1) % 100}';
+    return '$year-${year + 1}';
   }
 
   /// Checks if a date falls within this academic year
@@ -135,11 +135,11 @@ class AcademicYear {
 }
 
 /// Represents a fiscal year (April to March)
-/// Example: "2024-25" runs from April 1, 2024 to March 31, 2025
+/// Example: "2024-2025" runs from April 1, 2024 to March 31, 2025
 class FiscalYear {
   final String id;
   final String schoolId;
-  final String yearCode; // e.g., "2024-25"
+  final String yearCode; // e.g., "2024-2025"
   final DateTime startDate; // April 1
   final DateTime endDate; // March 31
   final bool isCurrent;
@@ -190,11 +190,11 @@ class FiscalYear {
   }
 
   /// Creates a fiscal year from a starting year
-  /// Example: fromYear(2024) creates "2024-25" from April 1, 2024 to March 31, 2025
+  /// Example: fromYear(2024) creates "2024-2025" from April 1, 2024 to March 31, 2025
   factory FiscalYear.fromYear(String schoolId, int startYear, {bool isCurrent = false}) {
     final startDate = DateTime(startYear, 4, 1); // April 1
     final endDate = DateTime(startYear + 1, 3, 31); // March 31 next year
-    final yearCode = '$startYear-${(startYear + 1) % 100}';
+    final yearCode = '$startYear-${startYear + 1}';
     final now = DateTime.now();
 
     return FiscalYear(
@@ -213,7 +213,7 @@ class FiscalYear {
   static String getCurrentYearCode() {
     final now = DateTime.now();
     final year = now.month >= 4 ? now.year : now.year - 1;
-    return '$year-${(year + 1) % 100}';
+    return '$year-${year + 1}';
   }
 
   /// Checks if a date falls within this fiscal year

@@ -201,8 +201,8 @@ class PayrollRepository {
     final currentYear = DateTime.now().year;
     final currentMonth = DateTime.now().month;
     final academicYear = currentMonth >= 6
-        ? '$currentYear-${(currentYear + 1) % 100}'
-        : '${currentYear - 1}-${currentYear % 100}';
+        ? '$currentYear-${currentYear + 1}'
+        : '${currentYear - 1}-$currentYear';
 
     final snapshot = await _firestore
         .collection('schools')
@@ -366,7 +366,7 @@ class PayrollRepository {
       staffName: config.staffName,
       employeeId: config.employeeId,
       userId: staff.userId,
-      department: staff.department,
+      department: '',
       designation: staff.designation ?? '',
       month: month,
       year: year,

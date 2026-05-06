@@ -142,13 +142,13 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
   }
 
   /// Gets the previous academic year code from the current year code
-  /// Example: "2024-25" -> "2023-24"
+  /// Example: "2024-2025" -> "2023-2024"
   String _getPreviousAcademicYear(String currentYear) {
     final parts = currentYear.split('-');
     if (parts.length != 2) return currentYear;
     final startYear = int.tryParse(parts[0]) ?? 0;
     final prevStartYear = startYear - 1;
-    return '$prevStartYear-${(prevStartYear + 1) % 100}';
+    return '$prevStartYear-${prevStartYear + 1}';
   }
 
   /// Scans an excel sheet's header row for an academicYear-like column and
@@ -265,7 +265,7 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
     final base = current.month >= 5 ? current.year : current.year - 1;
     return List.generate(7, (i) {
       final start = base - 3 + i;
-      return '$start-${(start + 1) % 100}';
+      return '$start-${start + 1}';
     });
   }
 

@@ -17,7 +17,9 @@ import '../../admin/screens/leave_approval_screen.dart';
 import '../../admin/screens/permission_approval_screen.dart';
 import '../../admin/screens/holiday_management_screen.dart';
 import '../../admin/screens/rfid_card_management_screen.dart';
+import '../../admin/screens/communication_logs_screen.dart';
 import '../../admin/screens/student_directory_screen.dart';
+import '../../admin/screens/student_directory_with_ledger_screen.dart';
 import '../../admin/screens/class_teacher_assignment_screen.dart';
 import '../../admin/screens/student_leave_approval_screen.dart';
 import '../../admin/screens/student_promotion_screen.dart';
@@ -135,6 +137,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           icon: Icons.list,
           label: 'Student Directory'),
       MenuItem(
+          id: 'student_ledgers',
+          icon: Icons.account_balance_wallet,
+          label: 'Student Ledgers & Payments'),
+      MenuItem(
           id: 'class_teacher_assign',
           icon: Icons.assignment_ind,
           label: 'Class Teacher Assignment'),
@@ -198,6 +204,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         id: 'academic-year-mgmt',
         icon: Icons.calendar_month_rounded,
         label: 'Academic Year Management'),
+    MenuItem(
+        id: 'communication_logs',
+        icon: Icons.forum_rounded,
+        label: 'Communication Logs'),
     MenuItem(
         id: 'whatsapp_settings',
         icon: Icons.chat_rounded,
@@ -715,6 +725,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return 'RFID Card Management';
       case 'student_management':
         return 'Student Directory';
+      case 'student_ledgers':
+        return 'Student Ledgers & Payments';
       case 'class_teacher_assign':
         return 'Class Teacher Assignment';
       case 'student_leave_approval':
@@ -739,6 +751,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return 'Financial Reports';
       case 'upload_sheet':
         return 'Upload Sheet';
+      case 'communication_logs':
+        return 'Communication Logs';
       case 'whatsapp_settings':
         return 'WhatsApp Settings';
       case 'upi_settings':
@@ -902,8 +916,12 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return const PayrollManagementScreen();
       case 'rfid_card_management':
         return const RfidCardManagementScreen();
+      case 'communication_logs':
+        return const CommunicationLogsScreen();
       case 'student_management':
         return const StudentDirectoryScreen();
+      case 'student_ledgers':
+        return const StudentDirectoryWithLedgerScreen();
       case 'class_teacher_assign':
         return const ClassTeacherAssignmentScreen();
       case 'student_leave_approval':
@@ -924,8 +942,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           final currentYear = now.year;
           final nextYear = currentYear + 1;
           final academicYear = now.month >= 4
-              ? '$currentYear-${nextYear.toString().substring(2)}'
-              : '${currentYear - 1}-${currentYear.toString().substring(2)}';
+              ? '$currentYear-$nextYear'
+              : '${currentYear - 1}-$currentYear';
           return AdHocFeeAssignmentScreen(
             schoolId: (session?.schoolId as String?) ?? '',
             academicYear: academicYear,

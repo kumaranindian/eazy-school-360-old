@@ -53,6 +53,7 @@ class StudentYearlyHistoryService {
       final snap = StudentYearlyHistory(
         id: academicYear,
         schoolId: schoolId,
+        studentId: studentDocId,
         studentDocId: studentDocId,
         studentNumericId: student.studentId.toString(),
         studentName: student.name,

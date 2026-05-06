@@ -25,9 +25,9 @@ class _HolidayCalendarScreenState extends ConsumerState<HolidayCalendarScreen> {
   List<String> _generateAcademicYears() {
     final y = DateTime.now().year;
     return [
-      '${y - 1}-${y.toString().substring(2)}',
-      '$y-${(y + 1).toString().substring(2)}',
-      '${y + 1}-${(y + 2).toString().substring(2)}',
+      '${y - 1}-$y',
+      '$y-${y + 1}',
+      '${y + 1}-${y + 2}',
     ];
   }
 

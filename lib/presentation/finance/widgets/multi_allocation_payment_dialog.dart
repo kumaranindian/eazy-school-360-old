@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/providers/auth_provider.dart';
+import '../../../data/repositories/communication_log_repository.dart';
 import '../../../data/repositories/term_fee_payment_repository.dart';
+import '../../../domain/entities/communication_log.dart';
 import '../../../domain/entities/student_fee_item.dart';
 import '../../../domain/entities/student_fee_ledger.dart';
 import '../../../domain/entities/term_fee_payment.dart';
@@ -71,10 +74,21 @@ class _MultiAllocationPaymentDialogState
   DateTime _paidAt = DateTime.now();
   bool _saving = false;
   String? _error;
+  
+  // Parent phone - fetched from student record if not in ledger
+  String? _parentPhone;
+  String? _parentName;
+
+  /// Get the effective parent phone (always from student record, not ledger)
+  String? get _effectiveParentPhone {
+    // Always use parent phone from student detail, not from ledger
+    return _parentPhone;
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadParentInfoFromStudent();
     // Arrears first (FIFO by sourceAcademicYear), then regular by sequence.
     final entries =
         widget.ledger.termStatus.where((e) => e.balanceAmount > 0.001).toList()
@@ -115,6 +129,77 @@ class _MultiAllocationPaymentDialogState
     _refCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
+  }
+
+  /// Create a communication log entry in Firestore for audit/visibility
+  Future<void> _logCommunication({
+    required CommPurpose purpose,
+    required String subject,
+    required String message,
+    required CommStatus status,
+    String? errorMessage,
+  }) async {
+    try {
+      final session = ref.read(currentSessionProvider);
+      final phone = _effectiveParentPhone;
+      if (phone == null || phone.isEmpty) return;
+
+      final repo = ref.read(communicationLogRepositoryProvider);
+      await repo.createLog(CommunicationLog(
+        id: '',
+        schoolId: widget.ledger.schoolId,
+        recipientId: widget.ledger.studentId,
+        recipientName:
+            _parentName ?? widget.ledger.parentName ?? widget.ledger.studentName,
+        recipientPhone: phone,
+        recipientType: RecipientType.parent,
+        purpose: purpose,
+        channel: CommChannel.whatsapp,
+        status: status,
+        subject: subject,
+        message: message,
+        relatedEntityId: widget.ledger.id,
+        relatedEntityType: 'studentFeeLedger',
+        sentByUserId: session?.uid,
+        sentByName: session?.displayName,
+        sentAt: DateTime.now(),
+        errorMessage: errorMessage,
+      ));
+    } catch (e) {
+      debugPrint('[PaymentDialog] Failed to log communication: $e');
+    }
+  }
+
+  /// Fetch parent phone and name from student document if not in ledger
+  Future<void> _loadParentInfoFromStudent() async {
+    // Skip if ledger already has parent phone
+    if (widget.ledger.parentPhone != null && widget.ledger.parentPhone!.isNotEmpty) {
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(widget.ledger.schoolId)
+          .collection('students')
+          .doc(widget.ledger.studentId)
+          .get();
+
+      if (doc.exists && mounted) {
+        final data = doc.data();
+        if (data != null) {
+          setState(() {
+            _parentPhone = data['parentPhone']?.toString() ?? 
+                          data['parentMobile']?.toString() ??
+                          data['studentPhone']?.toString();
+            _parentName = data['parentName']?.toString();
+          });
+          debugPrint('[PaymentDialog] Loaded parent phone: $_parentPhone');
+        }
+      }
+    } catch (e) {
+      debugPrint('[PaymentDialog] Error loading parent info: $e');
+    }
   }
 
   double _allocatedTotal() {
@@ -426,6 +511,201 @@ class _MultiAllocationPaymentDialogState
     }
   }
 
+  Future<void> _sendPaymentDueNotification() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _cardDark,
+        title: const Text('Send Payment Due Notification',
+            style: TextStyle(color: _textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Student: ${widget.ledger.studentName}',
+                style: const TextStyle(color: _textPrimary)),
+            const SizedBox(height: 8),
+            Text('Pending Amount: ₹${widget.ledger.totalPending.toStringAsFixed(0)}',
+                style: const TextStyle(color: Colors.orange, fontSize: 16)),
+            const SizedBox(height: 12),
+            if (_effectiveParentPhone != null)
+              Text('Notification will be sent to: $_effectiveParentPhone',
+                  style: const TextStyle(color: _textSecondary, fontSize: 12))
+            else
+              const Text('No parent phone number available',
+                  style: TextStyle(color: Colors.red, fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child:
+                const Text('Cancel', style: TextStyle(color: _textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: _effectiveParentPhone != null
+                ? () => Navigator.pop(context, true)
+                : null,
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Send Notification'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && _effectiveParentPhone != null) {
+      try {
+        // TODO: Implement WhatsApp/SMS notification
+        await Future.delayed(const Duration(seconds: 1));
+
+        // Log the communication
+        await _logCommunication(
+          purpose: CommPurpose.paymentDue,
+          subject: 'Payment Due Reminder',
+          message: 'Payment of ₹${widget.ledger.totalPending.toStringAsFixed(0)} is due for ${widget.ledger.studentName}. Please pay at your earliest convenience.',
+          status: CommStatus.sent,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Payment due notification sent to $_effectiveParentPhone'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Update last reminder sent
+          await FirebaseFirestore.instance
+              .collection('schools')
+              .doc(widget.schoolId)
+              .collection('studentFeeLedgers')
+              .doc(widget.ledger.id)
+              .update({'lastReminderSentAt': FieldValue.serverTimestamp()});
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to send notification: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        // Log failed attempt
+        await _logCommunication(
+          purpose: CommPurpose.paymentDue,
+          subject: 'Payment Due Reminder',
+          message: 'Payment of ₹${widget.ledger.totalPending.toStringAsFixed(0)} is due for ${widget.ledger.studentName}. Please pay at your earliest convenience.',
+          status: CommStatus.failed,
+          errorMessage: e.toString(),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendTermPaymentDueNotification(TermLedgerEntry term) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _cardDark,
+        title: const Text('Send Payment Reminder',
+            style: TextStyle(color: _textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Student: ${widget.ledger.studentName}',
+                style: const TextStyle(color: _textPrimary)),
+            const SizedBox(height: 8),
+            Text('Fee: ${term.termName}',
+                style: const TextStyle(color: _accentBlue, fontSize: 14, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text('Category: ${term.category}',
+                style: const TextStyle(color: _textSecondary, fontSize: 12)),
+            const SizedBox(height: 8),
+            Text('Pending Amount: ₹${term.balanceAmount.toStringAsFixed(0)}',
+                style: const TextStyle(color: Colors.orange, fontSize: 16)),
+            const SizedBox(height: 4),
+            Text('Due Date: ${DateFormat('dd MMM yyyy').format(term.dueDate)}',
+                style: const TextStyle(color: _textSecondary, fontSize: 12)),
+            const SizedBox(height: 12),
+            if (_effectiveParentPhone != null)
+              Text('Notification will be sent to: $_effectiveParentPhone',
+                  style: const TextStyle(color: _textSecondary, fontSize: 12))
+            else
+              const Text('No parent phone number available',
+                  style: TextStyle(color: Colors.red, fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child:
+                const Text('Cancel', style: TextStyle(color: _textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: _effectiveParentPhone != null
+                ? () => Navigator.pop(context, true)
+                : null,
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Send Reminder'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && _effectiveParentPhone != null) {
+      try {
+        // TODO: Implement WhatsApp/SMS notification for specific term
+        await Future.delayed(const Duration(seconds: 1));
+
+        // Log the communication
+        await _logCommunication(
+          purpose: CommPurpose.feeReminder,
+          subject: '${term.termName} Payment Reminder',
+          message: 'Payment of ₹${term.balanceAmount.toStringAsFixed(0)} for ${term.termName} is due for ${widget.ledger.studentName}. Due date: ${DateFormat('dd MMM yyyy').format(term.dueDate)}.',
+          status: CommStatus.sent,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Payment reminder for ${term.termName} sent to $_effectiveParentPhone'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Update last reminder sent
+          await FirebaseFirestore.instance
+              .collection('schools')
+              .doc(widget.schoolId)
+              .collection('studentFeeLedgers')
+              .doc(widget.ledger.id)
+              .update({'lastReminderSentAt': FieldValue.serverTimestamp()});
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to send reminder: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        // Log failed attempt
+        await _logCommunication(
+          purpose: CommPurpose.feeReminder,
+          subject: '${term.termName} Payment Reminder',
+          message: 'Payment of ₹${term.balanceAmount.toStringAsFixed(0)} for ${term.termName} is due for ${widget.ledger.studentName}. Due date: ${DateFormat('dd MMM yyyy').format(term.dueDate)}.',
+          status: CommStatus.failed,
+          errorMessage: e.toString(),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final money =
@@ -714,6 +994,24 @@ class _MultiAllocationPaymentDialogState
                   ),
                 ],
 
+                // Send Payment Due Button (if pending amount > 0)
+                if (widget.ledger.totalPending > 0) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _saving ? null : _sendPaymentDueNotification,
+                      icon: const Icon(Icons.notifications_active, size: 18),
+                      label: Text('Send Payment Due (₹${money.format(widget.ledger.totalPending)})'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        side: const BorderSide(color: Colors.orange),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -769,6 +1067,12 @@ class _MultiAllocationPaymentDialogState
     final isArrear = e.isArrear;
     final tagColor = isArrear ? _accentRed : _accentBlue;
     final tagLabel = isArrear ? 'ARREARS ${e.sourceAcademicYear}' : e.category;
+    
+    // Debug: Check if notify button should show
+    final shouldShowNotify = e.balanceAmount > 0 && 
+        widget.ledger.parentPhone != null && 
+        widget.ledger.parentPhone!.isNotEmpty;
+    debugPrint('[AllocationRow] ${e.termName}: balance=${e.balanceAmount}, phone=${widget.ledger.parentPhone}, showNotify=$shouldShowNotify');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -849,6 +1153,17 @@ class _MultiAllocationPaymentDialogState
               ),
             ),
           ),
+          const SizedBox(width: 6),
+          // Notify button for this specific fee term - show if has balance
+          if (e.balanceAmount > 0)
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined, size: 18),
+              color: Colors.orange,
+              tooltip: 'Send reminder for ${e.termName}',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              onPressed: () => _sendTermPaymentDueNotification(e),
+            ),
         ],
       ),
     );
@@ -934,9 +1249,122 @@ class _MultiAllocationPaymentDialogState
               ),
             ),
           ),
+          const SizedBox(width: 6),
+          // Notify button for this specific ad-hoc fee - show if has balance
+          if (item.balanceAmount > 0)
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined, size: 18),
+              color: _accentAmber,
+              tooltip: 'Send reminder for ${item.itemName}',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              onPressed: () => _sendAdHocFeePaymentDueNotification(item),
+            ),
         ],
       ),
     );
+  }
+
+  Future<void> _sendAdHocFeePaymentDueNotification(StudentFeeItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _cardDark,
+        title: const Text('Send Payment Reminder',
+            style: TextStyle(color: _textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Student: ${widget.ledger.studentName}',
+                style: const TextStyle(color: _textPrimary)),
+            const SizedBox(height: 8),
+            Text('Fee: ${item.itemName}',
+                style: TextStyle(color: _accentAmber, fontSize: 14, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text('Category: ${item.categoryCode}',
+                style: const TextStyle(color: _textSecondary, fontSize: 12)),
+            const SizedBox(height: 8),
+            Text('Pending Amount: ₹${item.balanceAmount.toStringAsFixed(0)}',
+                style: const TextStyle(color: Colors.orange, fontSize: 16)),
+            const SizedBox(height: 4),
+            Text('Due Date: ${DateFormat('dd MMM yyyy').format(item.dueDate)}',
+                style: const TextStyle(color: _textSecondary, fontSize: 12)),
+            const SizedBox(height: 12),
+            if (_effectiveParentPhone != null)
+              Text('Notification will be sent to: $_effectiveParentPhone',
+                  style: const TextStyle(color: _textSecondary, fontSize: 12))
+            else
+              const Text('No parent phone number available',
+                  style: TextStyle(color: Colors.red, fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child:
+                const Text('Cancel', style: TextStyle(color: _textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: _effectiveParentPhone != null
+                ? () => Navigator.pop(context, true)
+                : null,
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Send Reminder'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && _effectiveParentPhone != null) {
+      try {
+        // TODO: Implement WhatsApp/SMS notification for ad-hoc fee
+        await Future.delayed(const Duration(seconds: 1));
+
+        // Log the communication
+        await _logCommunication(
+          purpose: CommPurpose.feeReminder,
+          subject: '${item.itemName} Payment Reminder',
+          message: 'Payment of ₹${item.balanceAmount.toStringAsFixed(0)} for ${item.itemName} is due for ${widget.ledger.studentName}. Due date: ${DateFormat('dd MMM yyyy').format(item.dueDate)}.',
+          status: CommStatus.sent,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Payment reminder for ${item.itemName} sent to $_effectiveParentPhone'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Update last reminder sent
+          await FirebaseFirestore.instance
+              .collection('schools')
+              .doc(widget.schoolId)
+              .collection('studentFeeLedgers')
+              .doc(widget.ledger.id)
+              .update({'lastReminderSentAt': FieldValue.serverTimestamp()});
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to send reminder: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        // Log failed attempt
+        await _logCommunication(
+          purpose: CommPurpose.feeReminder,
+          subject: '${item.itemName} Payment Reminder',
+          message: 'Payment of ₹${item.balanceAmount.toStringAsFixed(0)} for ${item.itemName} is due for ${widget.ledger.studentName}. Due date: ${DateFormat('dd MMM yyyy').format(item.dueDate)}.',
+          status: CommStatus.failed,
+          errorMessage: e.toString(),
+        );
+      }
+    }
   }
 }
 

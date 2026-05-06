@@ -2,20 +2,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Per-academic-year snapshot of a student's class, fees and balances.
 ///
-/// Stored at `schools/{schoolId}/students/{studentDocId}/yearly_history/{academicYear}`.
+/// Stored at `schools/{schoolId}/students/{studentId}/yearly_history/{academicYear}`.
 /// This is the source of truth for "what class was the student in during
 /// academic year X, and what fees did they owe/pay that year".
 ///
-/// The document id is the academic year code (e.g. `2025-26`) so lookups
+/// The document id is the academic year code (e.g. `2025-2026`) so lookups
 /// are trivial.
 class StudentYearlyHistory {
   final String id; // academicYear code, also the doc id
   final String schoolId;
-  final String studentDocId; // Firestore doc id of the student
-  final String studentNumericId; // human-readable stuId
+  final String studentId; // Firestore doc id of the student
+  final String studentDocId; // Firestore doc id (duplicate for compatibility)
+  final String studentNumericId; // Numeric student ID (e.g., "149")
   final String studentName;
 
-  final String academicYear; // e.g. "2025-26"
+  final String academicYear; // e.g. "2025-2026"
   final String className;
   final String section;
 
@@ -48,6 +49,7 @@ class StudentYearlyHistory {
   const StudentYearlyHistory({
     required this.id,
     required this.schoolId,
+    required this.studentId,
     required this.studentDocId,
     required this.studentNumericId,
     required this.studentName,
@@ -87,6 +89,7 @@ class StudentYearlyHistory {
     return StudentYearlyHistory(
       id: doc.id,
       schoolId: data['schoolId'] as String? ?? '',
+      studentId: data['studentDocId'] as String? ?? data['studentId'] as String? ?? '',
       studentDocId: data['studentDocId'] as String? ?? '',
       studentNumericId: data['studentNumericId']?.toString() ?? '',
       studentName: data['studentName'] as String? ?? '',

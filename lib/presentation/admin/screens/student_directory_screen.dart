@@ -949,7 +949,7 @@ class _StudentDirectoryScreenState
       final base = current.month >= 5 ? current.year : current.year - 1;
       return List.generate(7, (i) {
         final year = base + i - 3; // 3 years before to 3 years after
-        return '$year-${(year + 1) % 100}';
+        return '$year-${year + 1}';
       });
     }
 
@@ -1913,7 +1913,7 @@ class _StudentDirectoryScreenState
 
         // Apply V2 override if applicable
         final className = data['stuClass']?.toString() ?? '';
-        final ay = data['academicYear']?.toString() ?? '2024-25';
+        final ay = data['academicYear']?.toString() ?? '2024-2025';
 
         if (className.isNotEmpty) {
           try {
@@ -3105,7 +3105,7 @@ class _StudentFeeDetailsDialogState extends State<_StudentFeeDetailsDialog> {
     final ay =
         (_studentFeeData!['academicYear']?.toString().isNotEmpty ?? false)
             ? _studentFeeData!['academicYear'].toString()
-            : '2024-25';
+            : '2024-2025';
 
     try {
       final repo = FirebaseFirestore.instance;

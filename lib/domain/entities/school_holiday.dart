@@ -298,9 +298,9 @@ class AcademicYearHelper {
     
     // Academic year starts June 1
     if (now.month < 6) {
-      return '${currentYear - 1}-${currentYear.toString().substring(2)}';
+      return '${currentYear - 1}-$currentYear';
     } else {
-      return '$currentYear-${(currentYear + 1).toString().substring(2)}';
+      return '$currentYear-${currentYear + 1}';
     }
   }
 
@@ -309,9 +309,9 @@ class AcademicYearHelper {
     final year = date.year;
     
     if (date.month < 6) {
-      return '${year - 1}-${year.toString().substring(2)}';
+      return '${year - 1}-$year';
     } else {
-      return '$year-${(year + 1).toString().substring(2)}';
+      return '$year-${year + 1}';
     }
   }
 

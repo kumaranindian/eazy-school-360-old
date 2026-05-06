@@ -148,9 +148,9 @@ class _HolidayManagementScreenState
   List<String> _generateAcademicYears() {
     final currentYear = DateTime.now().year;
     return [
-      '${currentYear - 1}-${currentYear.toString().substring(2)}',
-      '$currentYear-${(currentYear + 1).toString().substring(2)}',
-      '${currentYear + 1}-${(currentYear + 2).toString().substring(2)}',
+      '${currentYear - 1}-$currentYear',
+      '$currentYear-${currentYear + 1}',
+      '${currentYear + 1}-${currentYear + 2}',
     ];
   }
 

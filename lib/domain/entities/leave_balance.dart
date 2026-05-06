@@ -8,7 +8,7 @@ class LeaveBalance {
   final String userId;
   final String leaveTypeId;
   final String leaveTypeCode;
-  final String academicYear; // Format: "2024-25"
+  final String academicYear; // Format: "2024-2025"
   final int totalAllowed; // Total quota for the year
   final int used; // Days used in current year
   final int pending; // Days in pending requests
@@ -159,9 +159,9 @@ class AcademicYear {
     
     // If current date is before June 1, we're still in previous academic year
     if (now.month < 6) {
-      return '${currentYear - 1}-${currentYear.toString().substring(2)}';
+      return '${currentYear - 1}-$currentYear';
     } else {
-      return '$currentYear-${(currentYear + 1).toString().substring(2)}';
+      return '$currentYear-${currentYear + 1}';
     }
   }
 
@@ -170,9 +170,9 @@ class AcademicYear {
     final year = date.year;
     
     if (date.month < 6) {
-      return '${year - 1}-${year.toString().substring(2)}';
+      return '${year - 1}-$year';
     } else {
-      return '$year-${(year + 1).toString().substring(2)}';
+      return '$year-${year + 1}';
     }
   }
 
@@ -192,14 +192,14 @@ class AcademicYear {
   static String getNextAcademicYear(String currentYear) {
     final startYear = int.parse(currentYear.split('-')[0]);
     final nextStartYear = startYear + 1;
-    return '$nextStartYear-${(nextStartYear + 1).toString().substring(2)}';
+    return '$nextStartYear-${nextStartYear + 1}';
   }
 
   /// Get previous academic year
   static String getPreviousAcademicYear(String currentYear) {
     final startYear = int.parse(currentYear.split('-')[0]);
     final prevStartYear = startYear - 1;
-    return '$prevStartYear-${(prevStartYear + 1).toString().substring(2)}';
+    return '$prevStartYear-${prevStartYear + 1}';
   }
 
   /// Check if date falls within academic year
