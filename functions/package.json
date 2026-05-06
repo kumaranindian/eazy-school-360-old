@@ -3,10 +3,11 @@
   "description": "Cloud Functions for Eazy School 360 Leave Management System",
   "scripts": {
     "lint": "eslint .",
-    "serve": "firebase emulators:start --only functions",
-    "shell": "firebase functions:shell",
+    "build": "tsc",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
-    "deploy": "firebase deploy --only functions",
+    "deploy": "npm run build && firebase deploy --only functions",
     "logs": "firebase functions:log"
   },
   "engines": {
@@ -14,14 +15,16 @@
   },
   "main": "index.js",
   "dependencies": {
-    "firebase-admin": "^13.6.0",
-    "firebase-functions": "^7.0.2",
-    "axios": "^1.6.0"
+    "axios": "^1.6.0",
+    "firebase-admin": "^10.1.0",
+    "firebase-functions": "^4.9.0"
   },
   "devDependencies": {
     "eslint": "^8.15.0",
     "eslint-config-google": "^0.14.0",
-    "firebase-functions-test": "^3.1.0"
+    "firebase-functions-test": "^3.1.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
   },
   "private": true
 }

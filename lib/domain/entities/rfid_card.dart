@@ -4,8 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class RfidCard {
   final String id;
   final String uuid;
-  final String staffId;
-  final String staffName;
+  final String? staffId;  // Nullable - null when unassigned
+  final String? staffName;  // Nullable - null when unassigned
   final RfidCardType cardType;
   final bool isActive;
   final DateTime assignedAt;
@@ -16,8 +16,8 @@ class RfidCard {
   RfidCard({
     required this.id,
     required this.uuid,
-    required this.staffId,
-    required this.staffName,
+    this.staffId,  // Optional - null when unassigned
+    this.staffName,  // Optional - null when unassigned
     required this.cardType,
     required this.isActive,
     required this.assignedAt,
@@ -31,8 +31,8 @@ class RfidCard {
     return RfidCard(
       id: id,
       uuid: data['uuid'] as String? ?? '',
-      staffId: data['staffId'] as String? ?? '',
-      staffName: data['staffName'] as String? ?? '',
+      staffId: data['staffId'] as String?,  // Can be null
+      staffName: data['staffName'] as String?,  // Can be null
       cardType: RfidCardType.fromString(data['cardType'] as String? ?? 'primary'),
       isActive: data['isActive'] as bool? ?? true,
       assignedAt: (data['assignedAt'] as Timestamp).toDate(),

@@ -35,10 +35,14 @@ class LeaveConfigurationRepository {
           final leaveTypes = snapshot.docs
               .map((doc) => LeaveTypeConfig.fromFirestore(doc))
               .toList();
-          
+
+          // Deduplicate by code — keep the first occurrence (oldest doc) per code
+          final seen = <String>{};
+          final deduplicated = leaveTypes.where((lt) => seen.add(lt.code.toUpperCase())).toList();
+
           // Sort in memory until index is ready
-          leaveTypes.sort((a, b) => a.code.compareTo(b.code));
-          return leaveTypes;
+          deduplicated.sort((a, b) => a.code.compareTo(b.code));
+          return deduplicated;
         });
   }
 
@@ -265,20 +269,37 @@ class LeaveConfigurationRepository {
     }
   }
 
-  /// Initialize default leave types for a new school
+  /// Initialize default leave types for a new school (skips codes that already exist)
   Future<void> initializeDefaultLeaveTypes(String schoolId, String adminUserId) async {
     try {
       await _validateAdminAccess(adminUserId, schoolId);
 
+      // Fetch all existing leave type codes for this school to avoid duplicates
+      final existingSnapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('leaveTypes')
+          .get();
+      final existingCodes = existingSnapshot.docs
+          .map((doc) => ((doc.data()['code'] as String?) ?? '').toUpperCase())
+          .toSet();
+
       final defaultConfigs = _getDefaultLeaveTypeConfigs();
       final batch = _firestore.batch();
+      int added = 0;
 
       for (final config in defaultConfigs) {
+        final code = (config['code'] as String).toUpperCase();
+        if (existingCodes.contains(code)) {
+          print('⏭️ [LEAVE_CONFIG_REPO] Skipping existing leave type code: $code');
+          continue;
+        }
+
         final leaveTypeConfig = LeaveTypeConfig(
           id: '',
           schoolId: schoolId,
           name: config['name'] as String,
-          code: config['code'] as String,
+          code: code,
           description: config['description'] as String,
           annualQuota: config['annualQuota'] as int,
           carryForwardAllowed: config['carryForwardAllowed'] as bool,
@@ -298,9 +319,15 @@ class LeaveConfigurationRepository {
             .doc();
 
         batch.set(docRef, leaveTypeConfig.toFirestore());
+        added++;
       }
 
-      await batch.commit();
+      if (added > 0) {
+        await batch.commit();
+        print('✅ [LEAVE_CONFIG_REPO] Initialized $added default leave types for school: $schoolId');
+      } else {
+        print('ℹ️ [LEAVE_CONFIG_REPO] All default leave types already exist for school: $schoolId');
+      }
     } catch (e) {
       throw Exception('Failed to initialize default leave types: $e');
     }

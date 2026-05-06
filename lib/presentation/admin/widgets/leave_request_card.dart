@@ -37,11 +37,12 @@ class LeaveRequestCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Staff ID: ${leave.staffId}',
+                        leave.staffName ?? 'Staff ID: ${leave.staffId}',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         leave.leaveTypeCode,

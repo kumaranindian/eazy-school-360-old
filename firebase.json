@@ -1,7 +1,17 @@
 {
   "firestore": {
     "rules": "firebase/firestore.rules",
-    "indexes": "firestore.indexes.json"
+    "indexes": "firebase/firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "*.local"
+    ]
   },
   "storage": {
     "rules": "storage.rules"

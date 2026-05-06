@@ -581,6 +581,7 @@ class _LedgerFeeManagementCardState
       agg.total += e.amount + e.lateFeeApplied;
       agg.paid += e.paidAmount;
       agg.balance += e.balanceAmount;
+      print('[LedgerFeeManagementCard] Term: ${e.termName}, Amount: ${e.amount}, Paid: ${e.paidAmount}, LateFee: ${e.lateFeeApplied}, Balance: ${e.balanceAmount}, Category: ${e.category}');
     }
 
     // Add ad-hoc fees to the category aggregation
@@ -611,6 +612,11 @@ class _LedgerFeeManagementCardState
     final cats = byCategory.values.toList()
       ..sort((a, b) =>
           _categoryRank(a.category).compareTo(_categoryRank(b.category)));
+
+    // Debug: print category aggregates
+    for (final cat in cats) {
+      print('[LedgerFeeManagementCard] Category ${cat.category}: Total=${cat.total}, Paid=${cat.paid}, Balance=${cat.balance}');
+    }
 
     const totalColor = _accentAmber;
     const paidColor = _accentGreen;
@@ -793,11 +799,14 @@ class _LedgerFeeManagementCardState
     double actualOutstanding = 0;
     for (final entry in ledger.termStatus) {
       actualOutstanding += entry.balanceAmount;
+      print('[LedgerFeeManagementCard] Outstanding calc: Term=${entry.termName}, Balance=${entry.balanceAmount}, RunningTotal=$actualOutstanding');
     }
     // Also include ad-hoc fee items
     for (final item in _adhocFeeItems) {
       actualOutstanding += item.balanceAmount;
+      print('[LedgerFeeManagementCard] Outstanding calc: AdHoc=${item.itemName}, Balance=${item.balanceAmount}, RunningTotal=$actualOutstanding');
     }
+    print('[LedgerFeeManagementCard] Final outstanding balance: $actualOutstanding, ledger.totalPending: ${ledger.totalPending}');
 
     final outstanding =
         actualOutstanding > 0 ? actualOutstanding : ledger.totalPending;
@@ -886,12 +895,12 @@ class _LedgerFeeManagementCardState
     return pretty;
   }
 
-  /// Calculates previous academic year from current AY (e.g., 2026-27 → 2025-26)
+  /// Calculates previous academic year from current AY (e.g., 2026-2027 → 2025-2026)
   String _getPreviousAcademicYear(String currentAy) {
     final match = RegExp(r'^(\d{4})').firstMatch(currentAy);
     if (match == null) return currentAy;
     final startYear = int.tryParse(match.group(1)!) ?? DateTime.now().year;
-    return '${startYear - 1}-${startYear}';
+    return '${startYear - 1}-${startYear - 1 + 1}';
   }
 }
 

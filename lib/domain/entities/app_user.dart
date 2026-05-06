@@ -7,19 +7,19 @@ enum OnboardingStatus { PENDING_ACTIVATION, EMAIL_VERIFIED, PROFILE_COMPLETED, A
 
 class UserProfile {
   final String? phoneNumber;
-  final String? department;
   final String? designation;
   final String? employeeId;
   final DateTime? joiningDate;
+  final DateTime? birthDate;
   final Map<String, dynamic>? address;
   final Map<String, dynamic>? emergencyContact;
 
   const UserProfile({
     this.phoneNumber,
-    this.department,
     this.designation,
     this.employeeId,
     this.joiningDate,
+    this.birthDate,
     this.address,
     this.emergencyContact,
   });
@@ -27,10 +27,10 @@ class UserProfile {
   factory UserProfile.fromMap(Map<String, dynamic> map) {
     return UserProfile(
       phoneNumber: map['phoneNumber'] as String?,
-      department: map['department'] as String?,
       designation: map['designation'] as String?,
       employeeId: map['employeeId'] as String?,
       joiningDate: (map['joiningDate'] as Timestamp?)?.toDate(),
+      birthDate: (map['birthDate'] as Timestamp?)?.toDate(),
       address: map['address'] as Map<String, dynamic>?,
       emergencyContact: map['emergencyContact'] as Map<String, dynamic>?,
     );
@@ -39,10 +39,10 @@ class UserProfile {
   Map<String, dynamic> toMap() {
     return {
       'phoneNumber': phoneNumber,
-      'department': department,
       'designation': designation,
       'employeeId': employeeId,
       'joiningDate': joiningDate != null ? Timestamp.fromDate(joiningDate!) : null,
+      'birthDate': birthDate != null ? Timestamp.fromDate(birthDate!) : null,
       'address': address,
       'emergencyContact': emergencyContact,
     };
@@ -217,8 +217,14 @@ class AppUser {
   }
 
   static UserRole _parseRole(dynamic role) {
-    if (role == null) return UserRole.STAFF;
-    switch (role.toString().toUpperCase()) {
+    print('🔍 [APP_USER] Parsing role: $role (type: ${role.runtimeType})');
+    if (role == null) {
+      print('🔍 [APP_USER] Role is null, defaulting to STAFF');
+      return UserRole.STAFF;
+    }
+    final roleStr = role.toString().toUpperCase();
+    print('🔍 [APP_USER] Role string: $roleStr');
+    switch (roleStr) {
       case 'SUPER_ADMIN':
         return UserRole.SUPER_ADMIN;
       // Legacy tenant admin roles should be treated as ADMIN
@@ -231,10 +237,12 @@ class AppUser {
         return UserRole.FINANCE;
       case 'TEACHER':
       case 'STAFF':
+        print('✅ [APP_USER] Parsed as STAFF');
         return UserRole.STAFF;
       case 'PARENT':
         return UserRole.PARENT;
       default:
+        print('❌ [APP_USER] Unknown role: $roleStr, defaulting to NONE');
         return UserRole.NONE;
     }
   }
@@ -319,6 +327,8 @@ class AppUser {
       'schoolId': schoolId,
       'staffType': staffType?.name,
       'status': status.name,
+      // User is active only if status is ACTIVE AND onboarding is complete (not PENDING_ACTIVATION)
+      'isActive': status == UserStatus.ACTIVE && onboardingStatus != OnboardingStatus.PENDING_ACTIVATION,
       'onboardingStatus': onboardingStatus.name,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),

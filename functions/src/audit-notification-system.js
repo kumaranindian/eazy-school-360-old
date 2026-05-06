@@ -612,7 +612,9 @@ exports.markNotificationRead = functions.https.onCall(async (data, context) => {
 
 /**
  * Scheduled dashboard stats update (runs every hour)
+ * DISABLED TO REDUCE COSTS - Can be re-enabled if needed
  */
+/*
 exports.scheduledDashboardUpdate = functions.pubsub
   .schedule('0 * * * *') // Every hour
   .onRun(async (context) => {
@@ -634,3 +636,4 @@ exports.scheduledDashboardUpdate = functions.pubsub
       console.error('Scheduled dashboard update failed:', error);
     }
   });
+*/

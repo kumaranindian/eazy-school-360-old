@@ -110,12 +110,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     try {
       state = AuthState.loading;
+      print('🔐 [AUTH] Attempting sign in for email: $email');
+      print('🔐 [AUTH] Password length: ${password.length}');
+      print('🔐 [AUTH] Password entered: $password');
 
       // Firebase Authentication
       final credential = await _firebaseAuth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
+
+      print('✅ [AUTH] Firebase Auth successful for email: $email');
 
       if (credential.user == null) {
         state = AuthState.unauthenticated;
@@ -149,6 +154,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       return AuthResult.success(session);
     } on FirebaseAuthException catch (e) {
+      print('❌ [AUTH] Firebase Auth error for email: $email');
+      print('❌ [AUTH] Error code: ${e.code}');
+      print('❌ [AUTH] Error message: ${e.message}');
       state = AuthState.unauthenticated;
       return AuthResult.failure(_getFirebaseAuthErrorMessage(e));
     } catch (e) {

@@ -14,6 +14,7 @@ class LeaveApplication {
   final String schoolId;
   final String applicantId; // User ID of the applicant
   final String staffId; // Staff profile ID
+  final String? staffName; // Staff name for display
   final String leaveTypeId;
   final String leaveTypeCode;
   final String academicYear;
@@ -36,6 +37,7 @@ class LeaveApplication {
     required this.schoolId,
     required this.applicantId,
     required this.staffId,
+    this.staffName,
     required this.leaveTypeId,
     required this.leaveTypeCode,
     required this.academicYear,
@@ -61,6 +63,7 @@ class LeaveApplication {
       schoolId: data['schoolId'] as String,
       applicantId: data['applicantId'] as String,
       staffId: data['staffId'] as String,
+      staffName: data['staffName'] as String?,
       leaveTypeId: data['leaveTypeId'] as String,
       leaveTypeCode: data['leaveTypeCode'] as String,
       academicYear: data['academicYear'] as String,
@@ -121,6 +124,7 @@ class LeaveApplication {
       'rejectionReason': rejectionReason,
       'remarks': remarks,
       'metadata': metadata,
+      'staffName': staffName,
     };
   }
 
@@ -129,6 +133,7 @@ class LeaveApplication {
     String? schoolId,
     String? applicantId,
     String? staffId,
+    String? staffName,
     String? leaveTypeId,
     String? leaveTypeCode,
     String? academicYear,
@@ -151,6 +156,7 @@ class LeaveApplication {
       schoolId: schoolId ?? this.schoolId,
       applicantId: applicantId ?? this.applicantId,
       staffId: staffId ?? this.staffId,
+      staffName: staffName ?? this.staffName,
       leaveTypeId: leaveTypeId ?? this.leaveTypeId,
       leaveTypeCode: leaveTypeCode ?? this.leaveTypeCode,
       academicYear: academicYear ?? this.academicYear,

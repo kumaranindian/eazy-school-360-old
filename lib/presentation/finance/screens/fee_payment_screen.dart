@@ -167,7 +167,7 @@ class _FeePaymentScreenState extends ConsumerState<FeePaymentScreen> {
         'academicYear': currentAY,
         'fiscalYear': currentFY,
         // But we keep track of where the unpaid fees originally came from,
-        // so historical reports can show "X paid in 2026-27 for Class III of 2025-26".
+        // so historical reports can show "X paid in 2026-2027 for Class III of 2025-2026".
         'originatingAcademicYear': originatingAY,
         'originatingClass': originatingClass,
         'isArrear': _isArrear,

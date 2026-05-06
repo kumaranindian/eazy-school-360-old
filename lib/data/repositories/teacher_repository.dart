@@ -4,7 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:eazy_school_360/domain/entities/teacher.dart';
-import 'package:eazy_school_360/firebase_options.dart';
+import 'package:eazy_school_360/config/environment_config.dart';
 
 class TeacherRepository {
   final FirebaseFirestore _firestore;
@@ -26,7 +26,7 @@ class TeacherRepository {
     } on FirebaseException {
       secondaryApp = await Firebase.initializeApp(
         name: 'teacher-helper',
-        options: DefaultFirebaseOptions.currentPlatform,
+        options: EnvironmentConfig.firebaseOptions,
       );
     }
 

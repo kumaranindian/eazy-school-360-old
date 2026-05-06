@@ -1,10 +1,12 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:eazy_school_360/domain/entities/staff_profile.dart';
 import 'package:eazy_school_360/domain/entities/app_user.dart';
-import 'package:eazy_school_360/firebase_options.dart';
+import 'package:eazy_school_360/config/environment_config.dart';
 import 'package:eazy_school_360/data/services/leave_balance_service.dart';
 import 'package:eazy_school_360/data/services/membership_service.dart';
 import 'package:eazy_school_360/core/services/id_generator_service.dart';
@@ -25,18 +27,24 @@ class StaffManagementRepository {
   Future<FirebaseAuth> _getSecondaryAuth() async {
     if (_secondaryAuth != null) return _secondaryAuth!;
 
+    print('🔧 [STAFF_REPO] Initializing secondary auth with project: ${EnvironmentConfig.projectId}');
+    
     // Try to reuse existing secondary app if it was initialized elsewhere
     FirebaseApp secondaryApp;
     try {
       secondaryApp = Firebase.app('admin-helper');
+      print('✅ [STAFF_REPO] Reusing existing admin-helper app');
     } on FirebaseException {
+      print('🔧 [STAFF_REPO] Creating new admin-helper app');
       secondaryApp = await Firebase.initializeApp(
         name: 'admin-helper',
-        options: DefaultFirebaseOptions.currentPlatform,
+        options: EnvironmentConfig.firebaseOptions,
       );
+      print('✅ [STAFF_REPO] Secondary app created for project: ${EnvironmentConfig.projectId}');
     }
 
     _secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+    print('✅ [STAFF_REPO] Secondary auth instance ready');
     return _secondaryAuth!;
   }
 
@@ -150,6 +158,7 @@ class StaffManagementRepository {
         .doc(schoolId)
         .collection('staff')
         .orderBy('name')
+        .limit(10000)
         .snapshots()
         .handleError((error) {
           print('❌ [STAFF_REPO] Error getting staff: $error');
@@ -197,6 +206,29 @@ class StaffManagementRepository {
     }
   }
 
+  /// Get staff by email
+  Future<StaffProfile?> getStaffByEmail(String schoolId, String email) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('staff')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        final staff = StaffProfile.fromFirestore(querySnapshot.docs.first);
+        return staff;
+      }
+      
+      return null;
+    } catch (e) {
+      print('❌ [STAFF_REPO] Error getting staff by email: $e');
+      throw Exception('Failed to get staff by email: $e');
+    }
+  }
+
   /// Check if employee ID is unique within school
   Future<bool> isEmployeeIdUnique(String schoolId, String employeeId, {String? excludeStaffId}) async {
     try {
@@ -221,41 +253,69 @@ class StaffManagementRepository {
 
   /// Create new staff member (Admin only)
   /// Returns a map with 'staffId' and 'employeeId'
-  Future<Map<String, String>> createStaff(String schoolId, String adminUserId, CreateStaffRequest request) async {
+  Future<Map<String, dynamic>> createStaff(
+    String schoolId,
+    String adminUserId,
+    CreateStaffRequest request, {
+    bool sendWelcomeEmail = true,
+  }) async {
+    print('🚀 [STAFF_REPO] createStaff called for email: ${request.email}');
     try {
       // Validate admin permissions
       await _validateAdminAccess(adminUserId, schoolId);
+      print('✅ [STAFF_REPO] Admin validation done');
 
+      print('📍 [STAFF_REPO] Step 2: Processing employee ID');
       // Auto-generate employee ID if not provided or empty
       String employeeId = request.employeeId;
       if (employeeId.isEmpty) {
+        print('🔢 [STAFF_REPO] Auto-generating employee ID...');
         final idGenerator = IdGeneratorService(_firestore);
         employeeId = await idGenerator.generateStaffId(schoolId);
         print('✅ [STAFF_REPO] Auto-generated employee ID: $employeeId');
       } else {
+        print('🔢 [STAFF_REPO] Checking employee ID uniqueness for: $employeeId');
         // Check employee ID uniqueness only if manually provided
         final isUnique = await isEmployeeIdUnique(schoolId, employeeId);
         if (!isUnique) {
           throw Exception('Employee ID $employeeId already exists in this school');
         }
+        print('✅ [STAFF_REPO] Employee ID is unique');
       }
 
+      print('📍 [STAFF_REPO] Step 3: Checking if email exists');
       // Check if email is already in use
       final existingUser = await _getUserByEmail(request.email);
       if (existingUser != null) {
         throw Exception('Email ${request.email} is already registered');
       }
+      print('✅ [STAFF_REPO] Email is available');
 
+      print('📍 [STAFF_REPO] Step 4: Creating Firebase Auth user');
       // Create Firebase Auth user using SECONDARY auth instance so we
       // don't sign out the current admin in the primary auth instance.
-      final tempPassword = _generateTemporaryPassword();
+      // Use a random password that will be immediately reset
+      final randomPassword = _generateRandomPassword();
+      print('🔐 [STAFF_REPO] About to get secondary auth for ${request.email}');
+      print('🔐 [STAFF_REPO] Current environment: ${EnvironmentConfig.environmentName}');
+      print('🔐 [STAFF_REPO] Current project: ${EnvironmentConfig.projectId}');
       final secondaryAuth = await _getSecondaryAuth();
+      print('✅ [STAFF_REPO] Got secondary auth instance');
+      print('🔐 [STAFF_REPO] Creating auth user for ${request.email}');
       final userCredential = await secondaryAuth.createUserWithEmailAndPassword(
         email: request.email,
-        password: tempPassword,
+        password: randomPassword,
       );
+      print('✅ [STAFF_REPO] Firebase Auth user created successfully for ${request.email}');
+      print('✅ [STAFF_REPO] User ID: ${userCredential.user!.uid}');
+      
+      print('📍 [STAFF_REPO] Step 5: Signing out from secondary auth');
+      // Sign out from secondary auth immediately
+      await secondaryAuth.signOut();
+      print('✅ [STAFF_REPO] Signed out from secondary auth');
 
       final userId = userCredential.user!.uid;
+      print('📍 [STAFF_REPO] Step 6: Creating user document in Firestore');
 
       // Create user document in users collection
       final userData = AppUser(
@@ -272,18 +332,49 @@ class StaffManagementRepository {
         createdBy: adminUserId,
         profile: UserProfile(
           phoneNumber: request.phoneNumber,
-          department: request.department,
           designation: request.designation,
           joiningDate: request.joiningDate,
+          birthDate: request.birthDate,
           address: request.address != null ? {'street': request.address} : null,
-          emergencyContact: request.emergencyContact != null 
+          emergencyContact: request.emergencyContact != null
             ? {'name': request.emergencyContact} : null,
         ),
         permissions: UserPermissions.forRole(UserRole.STAFF),
       );
 
-      await _firestore.collection('users').doc(userId).set(userData.toFirestore());
+      final firestoreData = userData.toFirestore();
+      print('🔍 [STAFF_REPO] User data to save: ${firestoreData.keys}');
+      print('🔍 [STAFF_REPO] Role being saved: ${firestoreData['role']}');
+      print('📝 [STAFF_REPO] Writing user document to Firestore...');
+      await _firestore.collection('users').doc(userId).set(firestoreData);
+      print('✅ [STAFF_REPO] User document created in Firestore for ${request.email}');
 
+      print('📍 [STAFF_REPO] Step 7: Creating membership');
+      // Get school name for membership
+      try {
+        print('🔍 [STAFF_REPO] Fetching school document...');
+        final schoolDoc = await _firestore.collection('schools').doc(schoolId).get();
+        final schoolName = schoolDoc.exists ? (schoolDoc.data()?['name'] as String? ?? 'Unknown School') : 'Unknown School';
+        print('🔍 [STAFF_REPO] School name: $schoolName');
+
+        // Create membership with STAFF role
+        final membershipService = MembershipService(firestore: _firestore);
+        print('🔍 [STAFF_REPO] Creating membership for userId: $userId, schoolId: $schoolId');
+        await membershipService.upsertRoles(
+          uid: userId,
+          schoolId: schoolId,
+          schoolName: schoolName,
+          roles: const [UserRole.STAFF],
+          ensureActive: true,
+          createdBy: adminUserId,
+        );
+        print('✅ [STAFF_REPO] Membership created with UserRole.STAFF for ${request.email}');
+      } catch (e) {
+        print('❌ [STAFF_REPO] Failed to create membership: $e');
+        throw Exception('Failed to create membership: $e');
+      }
+
+      print('📍 [STAFF_REPO] Step 8: Creating staff profile');
       // Create staff profile in school subcollection
       final staffProfile = StaffProfile(
         id: '', // Will be set by Firestore
@@ -292,10 +383,10 @@ class StaffManagementRepository {
         name: request.name,
         employeeId: employeeId, // Use auto-generated or provided employeeId
         email: request.email,
-        department: request.department,
         staffType: request.staffType,
         status: UserStatus.ACTIVE,
         joiningDate: request.joiningDate,
+        birthDate: request.birthDate,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         createdBy: adminUserId,
@@ -305,12 +396,15 @@ class StaffManagementRepository {
         designation: request.designation,
       );
 
+      print('📝 [STAFF_REPO] Writing staff profile to Firestore...');
       final docRef = await _firestore
           .collection('schools')
           .doc(schoolId)
           .collection('staff')
           .add(staffProfile.toFirestore());
+      print('✅ [STAFF_REPO] Staff profile created with ID: ${docRef.id}');
 
+      print('📍 [STAFF_REPO] Step 9: Initializing leave balances');
       // Auto-assign leave balances for all active leave types
       try {
         final leaveBalanceService = LeaveBalanceService(_firestore);
@@ -326,16 +420,37 @@ class StaffManagementRepository {
         // Non-blocking - staff creation should still succeed even if leave balance init fails
       }
 
-      // Send welcome email (implement separately)
-      await _sendWelcomeEmail(request.email, request.name, tempPassword);
+      print('📍 [STAFF_REPO] Step 10: Sending password reset email');
+      // Send password reset email so user can set their own password
+      if (sendWelcomeEmail) {
+        await _sendPasswordResetEmail(request.email, request.name);
+        print('✅ [STAFF_REPO] Password reset email sent');
+      }
+
+      print('🎉 [STAFF_REPO] Staff creation completed successfully!');
 
       return {
         'staffId': docRef.id,
         'employeeId': employeeId,
         'name': request.name,
         'email': request.email,
+        'message': 'Password reset email sent to ${request.email}',
       };
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ [STAFF_REPO] Error creating staff: $e');
+      print('❌ [STAFF_REPO] Error type: ${e.runtimeType}');
+      print('❌ [STAFF_REPO] Error toString: ${e.toString()}');
+      
+      // Try to extract more details from the error
+      try {
+        final errorObj = e as dynamic;
+        print('❌ [STAFF_REPO] Error code: ${errorObj.code}');
+        print('❌ [STAFF_REPO] Error message: ${errorObj.message}');
+      } catch (_) {
+        print('❌ [STAFF_REPO] Could not extract error details');
+      }
+      
+      print('❌ [STAFF_REPO] Stack trace: $stackTrace');
       throw Exception('Failed to create staff member: $e');
     }
   }
@@ -376,15 +491,15 @@ class StaffManagementRepository {
       }
 
       // If other profile fields changed, update user profile
-      if (request.name != null || request.department != null || request.phoneNumber != null) {
+      if (request.name != null || request.phoneNumber != null || request.birthDate != null) {
         final userUpdateData = <String, dynamic>{};
         if (request.name != null) {
           userUpdateData['displayName'] = request.name;
         }
-        if (request.department != null || request.phoneNumber != null) {
+        if (request.phoneNumber != null || request.birthDate != null) {
           final profileUpdates = <String, dynamic>{};
-          if (request.department != null) profileUpdates['department'] = request.department;
           if (request.phoneNumber != null) profileUpdates['phoneNumber'] = request.phoneNumber;
+          if (request.birthDate != null) profileUpdates['birthDate'] = Timestamp.fromDate(request.birthDate!);
           userUpdateData['profile'] = profileUpdates;
         }
         userUpdateData['updatedAt'] = FieldValue.serverTimestamp();
@@ -491,7 +606,10 @@ class StaffManagementRepository {
       }
 
       // Create Firebase Auth user
-      final tempPassword = _generateTemporaryPassword();
+      final tempPassword = _generateTemporaryPassword(
+        email: request.email,
+        phoneNumber: request.phoneNumber ?? '0000000000',
+      );
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: request.email,
         password: tempPassword,
@@ -514,9 +632,9 @@ class StaffManagementRepository {
         createdBy: adminUserId,
         profile: UserProfile(
           phoneNumber: request.phoneNumber,
-          department: request.department,
           designation: request.designation,
           joiningDate: request.joiningDate,
+          birthDate: request.birthDate,
         ),
         permissions: UserPermissions.forRole(UserRole.ADMIN),
       );
@@ -531,10 +649,10 @@ class StaffManagementRepository {
         name: request.name,
         employeeId: employeeId,
         email: request.email,
-        department: request.department,
         staffType: request.staffType,
         status: UserStatus.ACTIVE,
         joiningDate: request.joiningDate,
+        birthDate: request.birthDate,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         createdBy: adminUserId,
@@ -614,7 +732,10 @@ class StaffManagementRepository {
         isNewAuthUser = false;
         print('✅ [STAFF_REPO] Using existing user: ${existingUser.uid}');
       } else {
-        tempPassword = _generateTemporaryPassword();
+        tempPassword = _generateTemporaryPassword(
+          email: request.email,
+          phoneNumber: request.phoneNumber ?? '0000000000',
+        );
         final secondaryAuth = await _getSecondaryAuth();
         final userCredential =
             await secondaryAuth.createUserWithEmailAndPassword(
@@ -640,9 +761,9 @@ class StaffManagementRepository {
           createdBy: adminUserId,
           profile: UserProfile(
             phoneNumber: request.phoneNumber,
-            department: request.department,
             designation: request.designation,
             joiningDate: request.joiningDate,
+            birthDate: request.birthDate,
           ),
           permissions: UserPermissions.forRole(UserRole.FINANCE),
         );
@@ -672,10 +793,10 @@ class StaffManagementRepository {
         name: request.name,
         employeeId: employeeId,
         email: request.email,
-        department: request.department,
         staffType: request.staffType,
         status: UserStatus.ACTIVE,
         joiningDate: request.joiningDate,
+        birthDate: request.birthDate,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         createdBy: adminUserId,
@@ -788,11 +909,37 @@ class StaffManagementRepository {
     }
   }
 
-  /// Generate temporary password
-  String _generateTemporaryPassword() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    final random = DateTime.now().millisecondsSinceEpoch;
-    return 'Temp${random.toString().substring(8)}!';
+  /// Generate random password for initial user creation (will be reset immediately)
+  String _generateRandomPassword() {
+    final random = Random.secure();
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*';
+    return List.generate(16, (index) => chars[random.nextInt(chars.length)]).join();
+  }
+
+  /// Generate temporary password based on email and phone number
+  String _generateTemporaryPassword({required String email, required String phoneNumber}) {
+    // Extract email without domain (remove @ and everything after)
+    final emailPart = email.split('@').first;
+    // Extract last 5 digits of phone number (remove non-digits first)
+    final phoneDigits = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+    final last5Digits = phoneDigits.length >= 5 ? phoneDigits.substring(phoneDigits.length - 5) : phoneDigits.padLeft(5, '0');
+    final password = '$emailPart$last5Digits';
+    print('🔐 [PASSWORD GEN] Email: $email -> Email part: $emailPart');
+    print('🔐 [PASSWORD GEN] Phone: $phoneNumber -> Digits: $phoneDigits -> Last 5: $last5Digits');
+    print('🔐 [PASSWORD GEN] Generated password: $password (length: ${password.length})');
+    return password;
+  }
+
+  /// Send password reset email for new user activation
+  Future<void> _sendPasswordResetEmail(String email, String name) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      print('✅ [STAFF_REPO] Password reset email sent to $email');
+      print('📧 [STAFF_REPO] User $name can now set their password and activate their account');
+    } catch (e) {
+      print('❌ [STAFF_REPO] Failed to send password reset email to $email: $e');
+      throw Exception('Failed to send password reset email: $e');
+    }
   }
 
   /// Send welcome email using Firebase Auth password reset

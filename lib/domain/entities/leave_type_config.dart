@@ -38,21 +38,24 @@ class LeaveTypeConfig {
 
   factory LeaveTypeConfig.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    // Seeded docs (casual, sick, earned) have no 'code' field — derive from doc ID
+    final rawCode = data['code'] as String? ?? '';
+    final code = rawCode.isNotEmpty ? rawCode.toUpperCase() : doc.id.toUpperCase();
     return LeaveTypeConfig(
       id: doc.id,
-      schoolId: data['schoolId'] as String,
-      name: data['name'] as String,
-      code: data['code'] as String,
+      schoolId: data['schoolId'] as String? ?? '',
+      name: data['name'] as String? ?? '',
+      code: code,
       description: data['description'] as String? ?? '',
-      annualQuota: (data['annualQuota'] as num).toInt(),
+      annualQuota: (data['annualQuota'] as num?)?.toInt() ?? 0,
       carryForwardAllowed: data['carryForwardAllowed'] as bool? ?? false,
       maxCarryForwardDays: (data['maxCarryForwardDays'] as num?)?.toInt() ?? 0,
-      maxDaysPerRequest: (data['maxDaysPerRequest'] as num).toInt(),
+      maxDaysPerRequest: (data['maxDaysPerRequest'] as num?)?.toInt() ?? 1,
       isPaid: data['isPaid'] as bool? ?? true,
       isActive: data['isActive'] as bool? ?? true,
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      updatedAt: (data['updatedAt'] as Timestamp).toDate(),
-      createdBy: data['createdBy'] as String,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdBy: data['createdBy'] as String? ?? 'system',
       customRules: data['customRules'] as Map<String, dynamic>?,
     );
   }

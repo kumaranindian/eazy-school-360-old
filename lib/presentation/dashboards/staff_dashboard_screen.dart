@@ -5,6 +5,7 @@ import 'package:eazy_school_360/core/routing/app_router.dart';
 import 'package:eazy_school_360/presentation/staff/screens/staff_profile_screen.dart';
 import 'package:eazy_school_360/presentation/staff/screens/apply_leave_screen.dart';
 import 'package:eazy_school_360/presentation/staff/screens/request_permission_screen.dart';
+import 'package:eazy_school_360/presentation/staff/screens/staff_student_ledger_screen.dart';
 
 class StaffDashboardScreen extends ConsumerStatefulWidget {
   const StaffDashboardScreen({super.key});
@@ -334,7 +335,7 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
       children: [
         _buildActionCard('Apply Leave', Icons.event_note_rounded, Colors.blue, () => _navigateToApplyLeave(context)),
         _buildActionCard('Request Permission', Icons.access_time_rounded, Colors.orange, () => _navigateToRequestPermission(context)),
-        _buildActionCard('My Requests', Icons.history_rounded, Colors.purple, () => _showComingSoon(context)),
+        _buildActionCard('Student Ledgers', Icons.account_balance_wallet_rounded, Colors.green, () => _navigateToStudentLedgers(context)),
         _buildActionCard('My Profile', Icons.person_rounded, Colors.teal, () => _navigateToProfile(context)),
       ],
     );
@@ -573,21 +574,10 @@ class _StaffDashboardScreenState extends ConsumerState<StaffDashboardScreen> {
     );
   }
 
-  void _showComingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.info_outline, color: Colors.white),
-            SizedBox(width: 12),
-            Text('Feature coming soon!'),
-          ],
-        ),
-        backgroundColor: const Color(0xFF388E3C),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(16),
-      ),
+  void _navigateToStudentLedgers(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const StaffStudentLedgerScreen()),
     );
   }
 }

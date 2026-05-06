@@ -8,10 +8,10 @@ class StaffProfile {
   final String name;
   final String employeeId; // Unique per school
   final String email;
-  final String department;
   final StaffType staffType;
   final UserStatus status;
   final DateTime joiningDate;
+  final DateTime? birthDate;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String createdBy;
@@ -19,9 +19,6 @@ class StaffProfile {
   final String? address;
   final String? emergencyContact;
   final String? designation;
-  final bool isClassTeacher;
-  final String? assignedClass;
-  final String? assignedSection;
 
   const StaffProfile({
     required this.id,
@@ -30,10 +27,10 @@ class StaffProfile {
     required this.name,
     required this.employeeId,
     required this.email,
-    required this.department,
     required this.staffType,
     required this.status,
     required this.joiningDate,
+    this.birthDate,
     required this.createdAt,
     required this.updatedAt,
     required this.createdBy,
@@ -41,9 +38,6 @@ class StaffProfile {
     this.address,
     this.emergencyContact,
     this.designation,
-    this.isClassTeacher = false,
-    this.assignedClass,
-    this.assignedSection,
   });
 
   factory StaffProfile.fromFirestore(DocumentSnapshot doc) {
@@ -56,26 +50,25 @@ class StaffProfile {
       name: data['name'] as String? ?? 'Unknown',
       employeeId: data['employeeId'] as String? ?? '',
       email: data['email'] as String? ?? '',
-      department: data['department'] as String? ?? 'General',
       staffType: _parseStaffType(data['staffType']),
       status: _parseStatus(data['status']),
-      joiningDate: data['joiningDate'] != null 
-          ? (data['joiningDate'] as Timestamp).toDate() 
+      joiningDate: data['joiningDate'] != null
+          ? (data['joiningDate'] as Timestamp).toDate()
           : now,
-      createdAt: data['createdAt'] != null 
-          ? (data['createdAt'] as Timestamp).toDate() 
+      birthDate: data['birthDate'] != null
+          ? (data['birthDate'] as Timestamp).toDate()
+          : null,
+      createdAt: data['createdAt'] != null
+          ? (data['createdAt'] as Timestamp).toDate()
           : now,
-      updatedAt: data['updatedAt'] != null 
-          ? (data['updatedAt'] as Timestamp).toDate() 
+      updatedAt: data['updatedAt'] != null
+          ? (data['updatedAt'] as Timestamp).toDate()
           : now,
       createdBy: data['createdBy'] as String? ?? 'system',
       phoneNumber: data['phoneNumber'] as String?,
       address: data['address'] as String?,
       emergencyContact: data['emergencyContact'] as String?,
       designation: data['designation'] as String?,
-      isClassTeacher: data['isClassTeacher'] as bool? ?? false,
-      assignedClass: data['assignedClass'] as String?,
-      assignedSection: data['assignedSection'] as String?,
     );
   }
 
@@ -110,10 +103,10 @@ class StaffProfile {
       'name': name,
       'employeeId': employeeId,
       'email': email,
-      'department': department,
       'staffType': staffType.name,
       'status': status.name,
       'joiningDate': Timestamp.fromDate(joiningDate),
+      'birthDate': birthDate != null ? Timestamp.fromDate(birthDate!) : null,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'createdBy': createdBy,
@@ -121,9 +114,6 @@ class StaffProfile {
       'address': address,
       'emergencyContact': emergencyContact,
       'designation': designation,
-      'isClassTeacher': isClassTeacher,
-      'assignedClass': assignedClass,
-      'assignedSection': assignedSection,
     };
   }
 
@@ -134,10 +124,10 @@ class StaffProfile {
     String? name,
     String? employeeId,
     String? email,
-    String? department,
     StaffType? staffType,
     UserStatus? status,
     DateTime? joiningDate,
+    DateTime? birthDate,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? createdBy,
@@ -145,9 +135,6 @@ class StaffProfile {
     String? address,
     String? emergencyContact,
     String? designation,
-    bool? isClassTeacher,
-    String? assignedClass,
-    String? assignedSection,
   }) {
     return StaffProfile(
       id: id ?? this.id,
@@ -156,10 +143,10 @@ class StaffProfile {
       name: name ?? this.name,
       employeeId: employeeId ?? this.employeeId,
       email: email ?? this.email,
-      department: department ?? this.department,
       staffType: staffType ?? this.staffType,
       status: status ?? this.status,
       joiningDate: joiningDate ?? this.joiningDate,
+      birthDate: birthDate ?? this.birthDate,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy ?? this.createdBy,
@@ -167,9 +154,6 @@ class StaffProfile {
       address: address ?? this.address,
       emergencyContact: emergencyContact ?? this.emergencyContact,
       designation: designation ?? this.designation,
-      isClassTeacher: isClassTeacher ?? this.isClassTeacher,
-      assignedClass: assignedClass ?? this.assignedClass,
-      assignedSection: assignedSection ?? this.assignedSection,
     );
   }
 
@@ -197,9 +181,9 @@ class CreateStaffRequest {
   final String name;
   final String employeeId;
   final String email;
-  final String department;
   final StaffType staffType;
   final DateTime joiningDate;
+  final DateTime? birthDate;
   final String? phoneNumber;
   final String? address;
   final String? emergencyContact;
@@ -209,9 +193,9 @@ class CreateStaffRequest {
     required this.name,
     required this.employeeId,
     required this.email,
-    required this.department,
     required this.staffType,
     required this.joiningDate,
+    this.birthDate,
     this.phoneNumber,
     this.address,
     this.emergencyContact,
@@ -223,9 +207,9 @@ class CreateStaffRequest {
       'name': name,
       'employeeId': employeeId,
       'email': email,
-      'department': department,
       'staffType': staffType.name,
       'joiningDate': joiningDate.toIso8601String(),
+      'birthDate': birthDate?.toIso8601String(),
       'phoneNumber': phoneNumber,
       'address': address,
       'emergencyContact': emergencyContact,
@@ -237,10 +221,10 @@ class CreateStaffRequest {
 /// Request model for updating staff
 class UpdateStaffRequest {
   final String? name;
-  final String? department;
   final StaffType? staffType;
   final UserStatus? status;
   final DateTime? joiningDate;
+  final DateTime? birthDate;
   final String? phoneNumber;
   final String? address;
   final String? emergencyContact;
@@ -248,10 +232,10 @@ class UpdateStaffRequest {
 
   const UpdateStaffRequest({
     this.name,
-    this.department,
     this.staffType,
     this.status,
     this.joiningDate,
+    this.birthDate,
     this.phoneNumber,
     this.address,
     this.emergencyContact,
@@ -261,10 +245,10 @@ class UpdateStaffRequest {
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{};
     if (name != null) map['name'] = name;
-    if (department != null) map['department'] = department;
     if (staffType != null) map['staffType'] = staffType!.name;
     if (status != null) map['status'] = status!.name;
     if (joiningDate != null) map['joiningDate'] = Timestamp.fromDate(joiningDate!);
+    if (birthDate != null) map['birthDate'] = Timestamp.fromDate(birthDate!);
     if (phoneNumber != null) map['phoneNumber'] = phoneNumber;
     if (address != null) map['address'] = address;
     if (emergencyContact != null) map['emergencyContact'] = emergencyContact;
@@ -273,14 +257,14 @@ class UpdateStaffRequest {
     return map;
   }
 
-  bool get hasChanges => 
-    name != null || 
-    department != null || 
-    staffType != null || 
-    status != null || 
-    joiningDate != null || 
-    phoneNumber != null || 
-    address != null || 
-    emergencyContact != null || 
+  bool get hasChanges =>
+    name != null ||
+    staffType != null ||
+    status != null ||
+    joiningDate != null ||
+    birthDate != null ||
+    phoneNumber != null ||
+    address != null ||
+    emergencyContact != null ||
     designation != null;
 }

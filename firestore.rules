@@ -1,4 +1,5 @@
 rules_version = '2';
+// Version: 1.0.1 - Added userMemberships collection rules
 service cloud.firestore {
   match /databases/{database}/documents {
     
@@ -104,7 +105,12 @@ service cloud.firestore {
       
       // DELETE: Only super admin
       allow delete: if isSignedIn() && isSuperAdmin();
-      
+    }
+    
+    // ============================================================
+    // SCHOOLS COLLECTION - SUBCOLLECTIONS
+    // ============================================================
+    match /schools/{schoolId} {
       // ADMIN USERS SUBCOLLECTION
       match /adminUsers/{adminId} {
         allow create: if isSignedIn() && request.auth.uid == adminId;
@@ -149,21 +155,21 @@ service cloud.firestore {
           isSuperAdmin() || 
           (isTenantAdmin() && belongsToSchool(schoolId)) ||
           (isAdmin() && belongsToSchool(schoolId)) ||
-          // Staff can read their own leaves (applicantId is the primary field used by the app)
-          (isTeacher() && belongsToSchool(schoolId) && (
+          // Staff/Teachers can read their own leaves (applicantId is the primary field used by the app)
+          (isStaff() && belongsToSchool(schoolId) && (
             resource.data.applicantId == request.auth.uid ||
             resource.data.teacherId == request.auth.uid
           )) ||
-          // Allow teachers to list leaves collection for their school (more permissive without isActive)
-          (isTeacher() && belongsToSchool(schoolId))
+          // Allow staff/teachers to list leaves collection for their school (more permissive without isActive)
+          (isStaff() && belongsToSchool(schoolId))
         );
-        allow create: if isSignedIn() && isActive() && belongsToSchool(schoolId);
+        allow create: if isSignedIn() && belongsToSchool(schoolId);
         allow update: if isSignedIn() && isActive() && (
           isSuperAdmin() || 
           (isTenantAdmin() && belongsToSchool(schoolId)) ||
           (isAdmin() && belongsToSchool(schoolId)) ||
-          // Staff can update their own leaves (cancel/request cancellation)
-          (isTeacher() && belongsToSchool(schoolId) && (
+          // Staff/Teachers can update their own leaves (cancel/request cancellation)
+          (isStaff() && belongsToSchool(schoolId) && (
             resource.data.applicantId == request.auth.uid ||
             resource.data.teacherId == request.auth.uid
           ) && 
@@ -176,9 +182,17 @@ service cloud.firestore {
       }
       
       // LEAVE BALANCES SUBCOLLECTION
+      // 🔒 SECURE: Only backend (Cloud Functions) can write
       match /leaveBalances/{leaveBalanceId} {
-        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
-        allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        // READ: Staff can read their own balances, admins can read all
+        allow read: if isSignedIn() && (
+          isSuperAdmin() || 
+          belongsToSchool(schoolId)
+        );
+        
+        // WRITE: ONLY backend (Cloud Functions) can update balances
+        // Staff CANNOT update balances directly - prevents tampering
+        allow write: if false; // No client-side writes allowed
       }
       
       // SALARY STRUCTURES SUBCOLLECTION
@@ -286,43 +300,33 @@ service cloud.firestore {
         );
       }
       // STAFF PERMISSION BALANCES SUBCOLLECTION
+      // 🔒 SECURE: Only backend (Cloud Functions) can write
       match /staffPermissionBalances/{balanceId} {
+        // READ: Staff can read their own balances, admins can read all
         allow read: if isSignedIn() && (
           isSuperAdmin() || 
-          (isTenantAdmin() && belongsToSchool(schoolId)) ||
-          (isAdmin() && belongsToSchool(schoolId)) ||
-          (isTeacher() && belongsToSchool(schoolId) && (
-            resource.data.userId == request.auth.uid ||
-            resource.data.staffId == request.auth.uid
-          )) ||
-          // Allow teachers to list staffPermissionBalances collection for their school
-          (isTeacher() && belongsToSchool(schoolId))
+          belongsToSchool(schoolId)
         );
         
-        allow create: if isSignedIn() && isActive() && (
-          isSuperAdmin() ||
-          (isTenantAdmin() && belongsToSchool(schoolId)) ||
-          (isAdmin() && belongsToSchool(schoolId)) ||
-          (isTeacher() && belongsToSchool(schoolId) && (
-            request.resource.data.userId == request.auth.uid ||
-            request.resource.data.staffId == request.auth.uid
-          ))
-        );
-        
-        allow update: if isSignedIn() && isActive() && (
-          isSuperAdmin() || 
-          (isTenantAdmin() && belongsToSchool(schoolId)) ||
-          (isAdmin() && belongsToSchool(schoolId)) ||
-          (isTeacher() && belongsToSchool(schoolId) && (
-            resource.data.userId == request.auth.uid ||
-            resource.data.staffId == request.auth.uid
-          ))
-        );
-        
-        allow delete: if isSignedIn() && isActive() && (
+        // WRITE: ONLY backend (Cloud Functions) can update balances
+        // Staff CANNOT update balances directly - prevents tampering
+        allow write: if false; // No client-side writes allowed
+      }
+      
+      // PERMISSION MUTATIONS SUBCOLLECTION (audit trail)
+      // 🔒 SECURE: Only backend (Cloud Functions) can write
+      match /permissionMutations/{mutationId} {
+        // READ: Only admins can read audit trail
+        allow read: if isSignedIn() && isActive() && (
           isSuperAdmin() || 
           (isTenantAdmin() && belongsToSchool(schoolId))
         );
+        
+        // WRITE: ONLY backend (Cloud Functions) can create mutations
+        // Immutable audit trail - no client-side writes, no updates, no deletes
+        allow create: if false; // No client-side creates allowed
+        allow update: if false; // Immutable - no updates
+        allow delete: if false; // Immutable - no deletes
       }
       
       // STAFF ENTITLEMENTS SUBCOLLECTION
@@ -393,7 +397,7 @@ service cloud.firestore {
       
       // HOLIDAYS SUBCOLLECTION
       match /holidays/{holidayId} {
-        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
         allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
         allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
       }
@@ -484,6 +488,39 @@ service cloud.firestore {
         allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
         allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
       }
+
+      // PAYMENT TRANSACTIONS (Razorpay & Manual payments)
+      match /payment_transactions/{transactionId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isAdminOrFinance());
+        allow create: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+
+      // WHATSAPP NOTIFICATIONS (audit trail)
+      match /whatsappNotifications/{notificationId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isAdminOrFinance());
+        allow create: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+
+      // RAZORPAY SETTINGS
+      match /settings/razorpay {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow write: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+
+      // WHATSAPP SETTINGS
+      match /settings/whatsapp {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow write: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+
+      // UPI SETTINGS
+      match /settings/upi {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow write: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
       
       // BILLS SUBCOLLECTION (Fee Payments & Expenses)
       match /bills/{billId} {
@@ -506,7 +543,7 @@ service cloud.firestore {
       
       // PERMISSION TYPES SUBCOLLECTION
       match /permissionTypes/{permissionTypeId} {
-        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || (isTeacher() && belongsToSchool(schoolId)));
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
         allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
         allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
       }
@@ -557,43 +594,93 @@ service cloud.firestore {
       }
       
       // MONTHLY PERMISSION USAGE SUBCOLLECTION
-      // NOTE: Updated via Dart transactions (no Cloud Functions)
+      // 🔒 SECURE: Only backend (Cloud Functions) can write
       match /monthlyPermissionUsage/{usageId} {
+        // READ: Staff can read their own usage, admins can read all
+        allow read: if isSignedIn() && (
+          isSuperAdmin() || 
+          belongsToSchool(schoolId)
+        );
+        
+        // WRITE: ONLY backend (Cloud Functions) can update usage
+        // Staff CANNOT update usage directly - prevents tampering
+        allow write: if false; // No client-side writes allowed
+      }
+      
+      // ============================================================
+      // RFID ATTENDANCE SYSTEM COLLECTIONS
+      // ============================================================
+      
+      // DEVICES SUBCOLLECTION (RFID scanners)
+      // 🔒 SECURE: Only backend (Cloud Functions) can write
+      match /devices/{deviceId} {
+        // READ: Only admins can read device info
         allow read: if isSignedIn() && isActive() && (
           isSuperAdmin() || 
           (isTenantAdmin() && belongsToSchool(schoolId)) ||
-          (isAdmin() && belongsToSchool(schoolId)) ||
-          (isTeacher() && belongsToSchool(schoolId) && (
-            resource.data.staffId == request.auth.uid ||
-            resource.data.userId == request.auth.uid
-          ))
+          (isAdmin() && belongsToSchool(schoolId))
         );
-        // Admins and teachers can write (teachers update their own usage)
-        allow write: if isSignedIn() && isActive() && (
+        
+        // WRITE: ONLY backend (Cloud Functions) can register devices
+        allow write: if false; // No client-side writes allowed
+      }
+      
+      // RFID CARDS SUBCOLLECTION (RFID to user mapping)
+      // 🔒 SECURE: Only backend (Cloud Functions) can write
+      match /rfid_cards/{uid} {
+        // READ: Only admins can read RFID mappings
+        allow read: if isSignedIn() && isActive() && (
           isSuperAdmin() || 
           (isTenantAdmin() && belongsToSchool(schoolId)) ||
-          (isAdmin() && belongsToSchool(schoolId)) ||
-          (isTeacher() && belongsToSchool(schoolId) && (
-            request.resource.data.staffId == request.auth.uid ||
-            request.resource.data.userId == request.auth.uid
-          ))
+          (isAdmin() && belongsToSchool(schoolId))
         );
+        
+        // WRITE: ONLY backend (Cloud Functions) can register RFID cards
+        allow write: if false; // No client-side writes allowed
+      }
+      
+      // ATTENDANCE SUBCOLLECTION (Attendance records)
+      // 🔒 SECURE: Only backend (Cloud Functions) can write
+      match /attendance/{attendanceId} {
+        // READ: Staff can read their own attendance, admins can read all
+        allow read: if isSignedIn() && (
+          isSuperAdmin() || 
+          belongsToSchool(schoolId)
+        );
+        
+        // WRITE: ONLY backend (Cloud Functions) can create attendance records
+        allow create: if false; // No client-side creates allowed
+        allow update: if false; // Immutable - no updates
+        allow delete: if false; // Immutable - no deletes
+      }
+      
+      // DAILY ATTENDANCE SUMMARY SUBCOLLECTION
+      // 🔒 SECURE: Only backend (Cloud Functions) can write
+      match /dailyAttendanceSummary/{summaryId} {
+        // READ: Staff can read their own summary, admins can read all
+        allow read: if isSignedIn() && (
+          isSuperAdmin() || 
+          belongsToSchool(schoolId)
+        );
+        
+        // WRITE: ONLY backend (Cloud Functions) can create/update summaries
+        allow write: if false; // No client-side writes allowed
       }
       
       // BALANCE MUTATIONS SUBCOLLECTION (audit trail)
-      // NOTE: Updated via Dart transactions (no Cloud Functions)
+      // 🔒 SECURE: Only backend (Cloud Functions) can write
       match /balanceMutations/{mutationId} {
+        // READ: Only admins can read audit trail
         allow read: if isSignedIn() && isActive() && (
           isSuperAdmin() || 
           (isTenantAdmin() && belongsToSchool(schoolId))
         );
-        // Admins can create audit entries
-        allow create: if isSignedIn() && isActive() && (
-          isSuperAdmin() || 
-          (isTenantAdmin() && belongsToSchool(schoolId))
-        );
-        // No updates or deletes allowed (immutable audit trail)
-        allow update, delete: if false;
+        
+        // WRITE: ONLY backend (Cloud Functions) can create mutations
+        // Immutable audit trail - no client-side writes, no updates, no deletes
+        allow create: if false; // No client-side creates allowed
+        allow update: if false; // Immutable - no updates
+        allow delete: if false; // Immutable - no deletes
       }
       
       // AUDIT LOG SUBCOLLECTION
@@ -878,7 +965,62 @@ service cloud.firestore {
     }
     
     // ============================================================
-    // MEMBERSHIPS COLLECTION
+    // RFID CARDS COLLECTION
+    // ============================================================
+    match /schools/{schoolId}/rfid_cards/{cardId} {
+      // READ: Admin and finance users from the same school can read
+      allow read: if isSignedIn() && belongsToSchool(schoolId) && isAdminOrFinance();
+      
+      // CREATE: Admin users from the same school can create
+      // Additional validation: UUID must be unique within the school
+      allow create: if isSignedIn() && belongsToSchool(schoolId) && isAdmin() &&
+        request.resource.data.schoolId == schoolId &&
+        request.resource.data.uuid is string &&
+        request.resource.data.staffId is string &&
+        request.resource.data.cardType in ['primary', 'backup'];
+      
+      // UPDATE: Admin users from the same school can update
+      allow update: if isSignedIn() && belongsToSchool(schoolId) && isAdmin() &&
+        resource.data.schoolId == schoolId;
+      
+      // DELETE: Admin users from the same school can delete
+      allow delete: if isSignedIn() && belongsToSchool(schoolId) && isAdmin() &&
+        resource.data.schoolId == schoolId;
+    }
+    
+    // ============================================================
+    // USER MEMBERSHIPS COLLECTION (Multi-tenant)
+    // ============================================================
+    match /userMemberships/{uid}/schools/{schoolId} {
+      // CREATE: Admin can create memberships for users in their school
+      // Admin must belong to the school they're creating membership for
+      allow create: if isSignedIn() && (
+        isSuperAdmin() ||
+        (isActive() && isAdmin() && belongsToSchool(schoolId))
+      );
+
+      // READ: User can read their own memberships, super admin can read all, tenant admin can read from their school
+      allow read: if isSignedIn() && (
+        request.auth.uid == uid ||
+        isSuperAdmin() ||
+        (isAdmin() && schoolId == getUserData().schoolId)
+      );
+
+      // UPDATE: Super admin or tenant admin can update memberships
+      allow update: if isSignedIn() && isActive() && (
+        isSuperAdmin() ||
+        (isAdmin() && belongsToSchool(schoolId))
+      );
+
+      // DELETE: Super admin or tenant admin can delete memberships
+      allow delete: if isSignedIn() && isActive() && (
+        isSuperAdmin() ||
+        (isAdmin() && belongsToSchool(schoolId))
+      );
+    }
+
+    // ============================================================
+    // MEMBERSHIPS COLLECTION (Legacy)
     // ============================================================
     match /memberships/{membershipId} {
       // CREATE: Admin can create memberships for finance/staff users

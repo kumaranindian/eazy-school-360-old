@@ -86,6 +86,7 @@ class _StudentFeeHistoryScreenState
               StudentYearlyHistory(
                 id: widget.currentAcademicYear,
                 schoolId: schoolId,
+                studentId: widget.studentDocId,
                 studentDocId: widget.studentDocId,
                 studentNumericId: widget.studentNumericId,
                 studentName: widget.studentName,

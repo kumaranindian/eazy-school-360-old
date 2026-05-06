@@ -21,9 +21,9 @@ import '../../domain/entities/fee_term.dart';
 /// Each data sheet shares the same column layout so any of them can be
 /// uploaded back in isolation:
 ///  1. ClassNames        — comma-separated class names (e.g. "I,II,III" or "LKG,UKG")
-///  2. StructureName     — display name (e.g. "Class V Termly 2026-27")
+///  2. StructureName     — display name (e.g. "Class V Termly 2026-2027")
 ///  3. Type              — MONTHLY | TERM_WISE | YEARLY | CUSTOM
-///  4. AcademicYear      — e.g. "2026-27"
+///  4. AcademicYear      — e.g. "2026-2027"
 ///  5. TermName          — e.g. "Term 1" / "April" / "Annual Fee"
 ///  6. TermSequence      — 1, 2, 3 …
 ///  7. Amount            — number (₹)
@@ -86,7 +86,7 @@ class FeeStructureExcelService {
   /// The template contains four data sheets — one per fee-frequency type —
   /// each pre-populated with rows for **every class from LKG to XII** so
   /// admins can simply edit amounts/dates and re-upload the relevant tab.
-  Uint8List buildTemplate({String academicYear = '2026-27'}) {
+  Uint8List buildTemplate({String academicYear = '2026-2027'}) {
     final xl = Excel.createExcel();
     // Drop default Sheet1.
     if (xl.sheets.containsKey('Sheet1') && xl.sheets.length > 0) {
@@ -343,7 +343,7 @@ class FeeStructureExcelService {
       '   ClassNames     — comma-separated (e.g. "I,II,III"). Multiple classes share one structure.',
       '   StructureName  — display name for the structure (must be unique per AY).',
       '   Type           — YEARLY | MONTHLY | TERM_WISE | CUSTOM.',
-      '   AcademicYear   — e.g. 2026-27.',
+      '   AcademicYear   — e.g. 2026-2027.',
       '   TermName       — "Annual Fee" / "April" / "Term 1" / "Installment 1" etc.',
       '   TermSequence   — 1, 2, 3 …  (terms are auto-renumbered after import).',
       '   Amount         — number, > 0.',

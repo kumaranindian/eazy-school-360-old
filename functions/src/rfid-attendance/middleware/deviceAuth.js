@@ -19,22 +19,48 @@ const validateDeviceKey = async (req, res, next) => {
       });
     }
 
-    // Check for required fields
-    if (!schoolId || !deviceId) {
+    // Check for schoolId (deviceId is optional for some endpoints like register-rfid)
+    if (!schoolId) {
       return res.status(400).json({
         success: false,
         error: 'BAD_REQUEST',
-        message: 'schoolId and deviceId are required'
+        message: 'schoolId is required'
       });
     }
 
-    // Fetch device from Firestore
-    const deviceDoc = await db
-      .collection('schools')
-      .doc(schoolId)
-      .collection('devices')
-      .doc(deviceId)
-      .get();
+    // If deviceId is provided in body, use it. Otherwise, fetch device by device key
+    let targetDeviceId = deviceId;
+    let deviceDoc;
+
+    if (targetDeviceId) {
+      // Fetch specific device by ID
+      deviceDoc = await db
+        .collection('schools')
+        .doc(schoolId)
+        .collection('devices')
+        .doc(targetDeviceId)
+        .get();
+    } else {
+      // Find device by device key (for endpoints where deviceId is optional)
+      const devicesSnapshot = await db
+        .collection('schools')
+        .doc(schoolId)
+        .collection('devices')
+        .where('deviceKey', '==', deviceKey)
+        .limit(1)
+        .get();
+
+      if (devicesSnapshot.empty) {
+        return res.status(403).json({
+          success: false,
+          error: 'FORBIDDEN',
+          message: 'Invalid device key'
+        });
+      }
+
+      deviceDoc = devicesSnapshot.docs[0];
+      targetDeviceId = deviceDoc.id;
+    }
 
     if (!deviceDoc.exists) {
       return res.status(404).json({
@@ -66,7 +92,7 @@ const validateDeviceKey = async (req, res, next) => {
 
     // Attach device info to request for use in controllers
     req.deviceInfo = {
-      deviceId,
+      deviceId: targetDeviceId,
       deviceName: deviceData.deviceName,
       schoolId
     };

@@ -113,8 +113,8 @@ class StudentPromotionService {
       //
       // We also persist `previousAcademicYear` and `previousClass` so the
       // fee-payment screen can tag arrears bills with the correct origin
-      // (e.g. student is now in Class IV (2026-27) but paying arrears for
-      //  Class III (2025-26) — the bill keeps that attribution).
+      // (e.g. student is now in Class IV (2026-2027) but paying arrears for
+      //  Class III (2025-2026) — the bill keeps that attribution).
       final targetSection = toSection ?? student.section;
       await _firestore
           .collection('schools')

@@ -1,7 +1,10 @@
 {
   "projects": {
-    "dev": "eazy-school-360",
-    "default": "eazy-school-360"
+    "dev": "eazyschool-360-dev",
+    "test": "eazyschool-360-test",
+    "uat": "eazyschool-360-uat",
+    "prod": "eazy-school-360",
+    "default": "eazyschool-360-dev"
   },
   "targets": {},
   "etags": {}

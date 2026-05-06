@@ -1,0 +1,75 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "🔵 DEV (eazyschool-360-dev)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_dev.dart",
+      "args": [
+        "--dart-define-from-file=.env.dev"
+      ],
+      "env": {
+        "FLUTTER_WEB_AUTO_DETECT": "true"
+      }
+    },
+    {
+      "name": "🟡 TEST (eazyschool-360-test)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_test.dart",
+      "args": [
+        "--dart-define-from-file=.env.test"
+      ],
+      "env": {
+        "FLUTTER_WEB_AUTO_DETECT": "true"
+      }
+    },
+    {
+      "name": "🟠 UAT (eazyschool-360-uat)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_uat.dart",
+      "args": [
+        "--dart-define-from-file=.env.uat"
+      ],
+      "env": {
+        "FLUTTER_WEB_AUTO_DETECT": "true"
+      }
+    },
+    {
+      "name": "🔴 PROD (eazy-school-360)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_prod.dart",
+      "args": [
+        "--dart-define-from-file=.env.prod"
+      ],
+      "env": {
+        "FLUTTER_WEB_AUTO_DETECT": "true"
+      }
+    },
+    {
+      "name": "🔵 DEV - Chrome",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_dev.dart",
+      "args": [
+        "-d",
+        "chrome",
+        "--dart-define-from-file=.env.dev"
+      ]
+    },
+    {
+      "name": "🔴 PROD - Chrome",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_prod.dart",
+      "args": [
+        "-d",
+        "chrome",
+        "--dart-define-from-file=.env.prod"
+      ]
+    }
+  ]
+}

@@ -127,7 +127,9 @@ exports.generateLeaveBalancesOnStaffCreation = functions.firestore
  * Cloud Function: Academic Year Reset (Cron Job)
  * Scheduled to run on June 1st at 00:00 UTC every year
  * Resets all leave balances and applies carry forward logic
+ * DISABLED TO REDUCE COSTS - Can be re-enabled if needed
  */
+/*
 exports.academicYearReset = functions.pubsub
   .schedule('0 0 1 6 *') // June 1st at 00:00 UTC
   .timeZone('UTC')

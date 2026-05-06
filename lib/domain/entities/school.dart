@@ -110,7 +110,7 @@ class School {
 
   factory School.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    final schoolName = (data['schoolName'] as String?) ?? '';
+    final schoolName = (data['schoolName'] as String?) ?? (data['name'] as String?) ?? '';
     return School(
       schoolId: doc.id,
       schoolName: schoolName,

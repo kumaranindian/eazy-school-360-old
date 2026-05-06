@@ -9,8 +9,11 @@ import 'package:eazy_school_360/presentation/admin/screens/permission_type_manag
 import 'package:eazy_school_360/presentation/admin/screens/student_attendance_screen.dart';
 import 'package:eazy_school_360/presentation/admin/screens/student_leave_approval_screen.dart';
 import 'package:eazy_school_360/presentation/admin/screens/student_directory_screen.dart';
+import 'package:eazy_school_360/presentation/admin/screens/student_directory_with_ledger_screen.dart';
 import 'package:eazy_school_360/presentation/admin/screens/permission_approval_screen.dart';
 import 'package:eazy_school_360/presentation/admin/screens/holiday_management_screen.dart';
+import 'package:eazy_school_360/presentation/admin/auth_token_screen.dart';
+import 'package:eazy_school_360/presentation/admin/rfid_management_screen.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -151,6 +154,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   child: Text('STUDENT MANAGEMENT', style: TextStyle(color: _textSecondary.withOpacity(0.6), fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1)),
                 ),
                 _buildNavItem(Icons.school_rounded, 'Student Directory', 10, colorScheme),
+                _buildNavItem(Icons.account_balance_wallet_rounded, 'Student Ledgers', 11, colorScheme),
                 _buildNavItem(Icons.fact_check_rounded, 'Student Attendance', 8, colorScheme),
                 _buildNavItem(Icons.pending_actions_rounded, 'Student Leaves', 9, colorScheme),
                 const Divider(height: 32),
@@ -245,6 +249,19 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
               child: const Icon(Icons.notifications_outlined, color: _textSecondary),
             ),
             onPressed: () {},
+          ),
+          const SizedBox(width: 8),
+          
+          // Get Auth Token Button (TEMPORARY)
+          IconButton(
+            icon: const Icon(Icons.key, color: Colors.orange),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AuthTokenScreen()),
+              );
+            },
+            tooltip: 'Get Auth Token',
           ),
           const SizedBox(width: 8),
           
@@ -444,6 +461,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             _buildActionCard('Permission Types', Icons.rule_rounded, Colors.indigo, () => _handleNavigation(5)),
             _buildActionCard('Student Directory', Icons.school_rounded, Colors.cyan, () => _handleNavigation(10)),
             _buildActionCard('Student Attendance', Icons.fact_check_rounded, Colors.deepOrange, () => _handleNavigation(8)),
+            _buildActionCard('RFID Cards', Icons.credit_card_rounded, Colors.green, () => _navigateToRfidManagement()),
             _buildActionCard('Reports', Icons.analytics_rounded, Colors.pink, () => _showComingSoon(context)),
             _buildActionCard('Settings', Icons.settings_rounded, Colors.grey, () => _showComingSoon(context)),
           ],
@@ -679,6 +697,18 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           body: const StudentDirectoryScreen(),
         )));
         break;
+      case 11:
+        Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
+          backgroundColor: const Color(0xFF0D1117),
+          appBar: AppBar(
+            title: const Text('Student Ledgers & Payments', style: TextStyle(color: Color(0xFFE6EDF3), fontWeight: FontWeight.bold, fontSize: 18)),
+            backgroundColor: const Color(0xFF161B22),
+            foregroundColor: const Color(0xFFE6EDF3),
+            elevation: 0,
+          ),
+          body: const StudentDirectoryWithLedgerScreen(),
+        )));
+        break;
     }
   }
 
@@ -696,6 +726,25 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _navigateToRfidManagement() {
+    final session = ref.read(currentSessionProvider);
+    final schoolId = session?.schoolId;
+    
+    if (schoolId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('School ID not found')),
+      );
+      return;
+    }
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RfidManagementScreen(schoolId: schoolId),
       ),
     );
   }

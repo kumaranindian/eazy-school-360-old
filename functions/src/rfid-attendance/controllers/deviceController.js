@@ -18,7 +18,7 @@ const generateDeviceKey = () => {
 const registerDevice = async (req, res) => {
   try {
     const { schoolId, deviceId, deviceName } = req.body;
-    const { deviceId: authDeviceId } = req.deviceInfo;
+    const { deviceId: authDeviceId } = req.deviceInfo || {};
 
     console.log('🔌 [REGISTER_DEVICE] Registering device');
     console.log(`   School: ${schoolId}`);

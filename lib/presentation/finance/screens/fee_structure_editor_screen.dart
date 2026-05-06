@@ -276,7 +276,7 @@ class _FeeStructureEditorScreenState
           TextField(
             controller: _nameCtrl,
             style: const TextStyle(color: _textPrimary),
-            decoration: _input('e.g. Standard Yearly 2026-27'),
+            decoration: _input('e.g. Standard Yearly 2026-2027'),
           ),
           const SizedBox(height: 12),
           Row(children: [
@@ -291,7 +291,7 @@ class _FeeStructureEditorScreenState
                   TextField(
                     controller: _yearCtrl,
                     style: const TextStyle(color: _textPrimary),
-                    decoration: _input('2026-27'),
+                    decoration: _input('2026-2027'),
                   ),
                 ],
               ),

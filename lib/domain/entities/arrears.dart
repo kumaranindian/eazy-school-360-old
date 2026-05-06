@@ -11,8 +11,8 @@ class Arrears {
   final int studentNumericId;
   final String className;
   final String section;
-  final String fromAcademicYear; // e.g., "2023-24"
-  final String toAcademicYear; // e.g., "2024-25"
+  final String fromAcademicYear; // e.g., "2023-2024"
+  final String toAcademicYear; // e.g., "2024-2025"
   final double totalFeesForYear; // Total fees for the from year
   final double totalPaidForYear; // Total paid in the from year
   final double arrearsAmount; // Pending amount = totalFees - totalPaid

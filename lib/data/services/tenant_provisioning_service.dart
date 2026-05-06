@@ -157,11 +157,6 @@ class TenantProvisioningService {
       return snap.exists;
     }
 
-    Future<bool> _collectionHasDoc(Query query) async {
-      final snap = await query.limit(1).get();
-      return snap.docs.isNotEmpty;
-    }
-
     return [
       // ----- School settings ------------------------------------------------
       _Step(
@@ -201,52 +196,6 @@ class TenantProvisioningService {
             ...seededBy,
           });
         },
-      ),
-
-      // ----- Leave types ----------------------------------------------------
-      _Step(
-        id: 'leaveTypes.seed',
-        title: 'Seed default leave types',
-        exists: () => _collectionHasDoc(
-          schoolRef.collection(AppConstants.leaveTypesCollection),
-        ),
-        apply: () async {
-          final col = schoolRef.collection(AppConstants.leaveTypesCollection);
-          const defaults = [
-            {'id': 'sick', 'name': 'Sick Leave', 'annualQuota': 12},
-            {'id': 'casual', 'name': 'Casual Leave', 'annualQuota': 12},
-            {'id': 'earned', 'name': 'Earned Leave', 'annualQuota': 15},
-          ];
-          final batch = _firestore.batch();
-          for (final d in defaults) {
-            batch.set(col.doc(d['id'] as String), {
-              ...d,
-              'isActive': true,
-              ...seededBy,
-            });
-          }
-          await batch.commit();
-        },
-      ),
-
-      // ----- Permission settings -------------------------------------------
-      _Step(
-        id: 'permissionSettings.default',
-        title: 'Create default permission policy',
-        exists: () => _docExists(
-          schoolRef
-              .collection(AppConstants.permissionSettingsCollection)
-              .doc('default'),
-        ),
-        apply: () => schoolRef
-            .collection(AppConstants.permissionSettingsCollection)
-            .doc('default')
-            .set({
-          'requireApproval': true,
-          'maxHoursPerMonth': 8,
-          'approverRole': AppConstants.adminRoleTenantAdmin,
-          ...seededBy,
-        }),
       ),
 
       // ----- Holidays placeholder ------------------------------------------

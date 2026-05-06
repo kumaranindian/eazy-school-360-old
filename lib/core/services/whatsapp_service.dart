@@ -106,15 +106,20 @@ class WhatsAppService {
     }
   }
 
-  /// Send payment confirmation to parent
+  /// Send payment confirmation notification to a specific phone number
   ///
-  /// [schoolId] - School identifier
-  /// [phoneNumber] - Parent's phone number
+  /// Parameters:
+  /// [schoolId] - School identifier for configuration lookup
+  /// [phoneNumber] - Recipient phone number
   /// [studentName] - Name of the student
-  /// [paidAmount] - Amount paid
-  /// [receiptNumber] - Receipt/bill number
+  /// [paidAmount] - Amount paid in this transaction
+  /// [receiptNumber] - Receipt number for reference
   /// [paymentDate] - Date of payment
   /// [balanceAmount] - Remaining balance
+  /// [schoolName] - Name of the school (for admin notifications)
+  /// [feeDescription] - Description of the fee (for admin notifications)
+  /// [feeType] - Type of fee (for admin notifications)
+  /// [isAdmin] - Whether this is an admin notification
   Future<bool> sendPaymentConfirmation({
     required String schoolId,
     required String phoneNumber,
@@ -123,13 +128,17 @@ class WhatsAppService {
     required String receiptNumber,
     required DateTime paymentDate,
     required double balanceAmount,
+    String? schoolName,
+    String? feeDescription,
+    String? feeType,
+    bool isAdmin = false,
   }) async {
     try {
       final formattedPhone = _formatPhoneNumber(phoneNumber);
       final paymentDateStr =
           '${paymentDate.day}/${paymentDate.month}/${paymentDate.year}';
 
-      print('[WhatsApp] Sending payment notification via Cloud Function to: $formattedPhone');
+      print('[WhatsApp] Sending ${isAdmin ? "ADMIN" : "parent/student"} payment notification via Cloud Function to: $formattedPhone');
 
       // Call Cloud Function to avoid CORS issues on web
       final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
@@ -143,11 +152,15 @@ class WhatsAppService {
         'receiptNumber': receiptNumber,
         'paymentDate': paymentDateStr,
         'balanceAmount': balanceAmount,
+        'schoolName': schoolName,
+        'feeDescription': feeDescription,
+        'feeType': feeType,
+        'isAdmin': isAdmin,
       });
 
       final data = result.data as Map<String, dynamic>;
       if (data['success'] == true) {
-        print('[WhatsApp] ✅ Payment notification sent successfully to $formattedPhone');
+        print('[WhatsApp] Payment notification sent successfully to $formattedPhone');
         return true;
       } else {
         print('[WhatsApp] ⚠️ Cloud Function returned error: ${data['error']}');

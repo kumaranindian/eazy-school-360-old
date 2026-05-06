@@ -1,24 +1,148 @@
 {
   "version": "1.0.0",
-  "deploymentId": "indexes-deploy-1766428142787",
-  "timestamp": "2025-12-22T18:29:02.787Z",
+  "deploymentId": "indexes-deploy-1778097843442",
+  "timestamp": "2026-05-06T20:04:03.442Z",
   "indexesFile": "firestore.indexes.json",
   "deployedIndexes": [
     {
-      "collectionGroup": "permissions",
+      "collectionGroup": "adminUsers",
+      "fields": "schoolId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "auditLog",
+      "fields": "action:ASCENDING,timestamp:DESCENDING"
+    },
+    {
+      "collectionGroup": "balanceMutations",
+      "fields": "leaveTypeId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "balanceMutations",
+      "fields": "staffId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "rfid_cards",
+      "fields": "schoolId:ASCENDING,assignedAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "rfid_cards",
+      "fields": "schoolId:ASCENDING,staffId:ASCENDING"
+    },
+    {
+      "collectionGroup": "rfid_cards",
+      "fields": "schoolId:ASCENDING,uuid:ASCENDING"
+    },
+    {
+      "collectionGroup": "balanceMutations",
+      "fields": "staffId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "bills",
+      "fields": "billType:ASCENDING,billDate:ASCENDING"
+    },
+    {
+      "collectionGroup": "bills",
+      "fields": "billType:ASCENDING,billDate:DESCENDING"
+    },
+    {
+      "collectionGroup": "bills",
+      "fields": "billType:ASCENDING,billDate:DESCENDING,__name__:ASCENDING"
+    },
+    {
+      "collectionGroup": "bills",
+      "fields": "billType:ASCENDING,isDeleted:ASCENDING,billDate:ASCENDING"
+    },
+    {
+      "collectionGroup": "bills",
+      "fields": "billType:ASCENDING,isDeleted:ASCENDING,billDate:DESCENDING"
+    },
+    {
+      "collectionGroup": "bills",
+      "fields": "billType:ASCENDING,isDeleted:ASCENDING,stuId:ASCENDING,billDate:DESCENDING"
+    },
+    {
+      "collectionGroup": "bills",
+      "fields": "billType:ASCENDING,stuId:ASCENDING,isDeleted:ASCENDING,billDate:DESCENDING"
+    },
+    {
+      "collectionGroup": "bills",
+      "fields": "isDeleted:ASCENDING,billDate:DESCENDING"
+    },
+    {
+      "collectionGroup": "bills",
+      "fields": "isDeleted:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "bills",
+      "fields": "stuId:ASCENDING,isDeleted:ASCENDING,billDate:DESCENDING"
+    },
+    {
+      "collectionGroup": "concessionCategories",
+      "fields": "isActive:ASCENDING,sortOrder:ASCENDING"
+    },
+    {
+      "collectionGroup": "fee_structures",
+      "fields": "className:ASCENDING,academicYear:ASCENDING,isActive:ASCENDING"
+    },
+    {
+      "collectionGroup": "fee_structures",
+      "fields": "isActive:ASCENDING,className:ASCENDING"
+    },
+    {
+      "collectionGroup": "feeStructuresV2",
+      "fields": "academicYear:ASCENDING,isActive:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "feeStructuresV2",
+      "fields": "isActive:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "holidays",
+      "fields": "academicYear:ASCENDING,date:ASCENDING"
+    },
+    {
+      "collectionGroup": "holidays",
+      "fields": "academicYear:ASCENDING,isActive:ASCENDING,date:ASCENDING"
+    },
+    {
+      "collectionGroup": "holidays",
+      "fields": "isActive:ASCENDING,date:ASCENDING"
+    },
+    {
+      "collectionGroup": "holidays",
+      "fields": "type:ASCENDING,date:ASCENDING"
+    },
+    {
+      "collectionGroup": "leaveBalances",
+      "fields": "leaveTypeId:ASCENDING,academicYear:ASCENDING"
+    },
+    {
+      "collectionGroup": "leaveBalances",
+      "fields": "staffId:ASCENDING,academicYear:ASCENDING"
+    },
+    {
+      "collectionGroup": "leaveBalances",
+      "fields": "staffId:ASCENDING,leaveTypeId:ASCENDING,academicYear:ASCENDING"
+    },
+    {
+      "collectionGroup": "leaveCancellations",
+      "fields": "staffId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "leaveCancellations",
       "fields": "status:ASCENDING,createdAt:DESCENDING"
     },
     {
-      "collectionGroup": "permissions",
+      "collectionGroup": "leaves",
       "fields": "applicantId:ASCENDING,createdAt:DESCENDING"
     },
     {
       "collectionGroup": "leaves",
-      "fields": "status:ASCENDING,createdAt:DESCENDING"
+      "fields": "staffId:ASCENDING,createdAt:DESCENDING,__name__:DESCENDING"
     },
     {
       "collectionGroup": "leaves",
-      "fields": "applicantId:ASCENDING,createdAt:DESCENDING"
+      "fields": "applicantId:ASCENDING,leaveTypeId:ASCENDING,academicYear:ASCENDING"
     },
     {
       "collectionGroup": "leaves",
@@ -26,39 +150,267 @@
     },
     {
       "collectionGroup": "leaves",
-      "fields": "leaveTypeId:ASCENDING,status:ASCENDING"
+      "fields": "staffId:ASCENDING,leaveTypeId:ASCENDING,academicYear:ASCENDING"
     },
     {
       "collectionGroup": "leaves",
-      "fields": "applicantId:ASCENDING,status:ASCENDING,startDate:ASCENDING"
+      "fields": "status:ASCENDING,approvedAt:DESCENDING"
     },
     {
-      "collectionGroup": "leaveCancellations",
-      "fields": "status:ASCENDING,requestedAt:DESCENDING"
+      "collectionGroup": "leaves",
+      "fields": "status:ASCENDING,createdAt:ASCENDING"
     },
     {
-      "collectionGroup": "leaveCancellations",
-      "fields": "applicantId:ASCENDING,requestedAt:DESCENDING"
+      "collectionGroup": "leaves",
+      "fields": "status:ASCENDING,createdAt:DESCENDING"
     },
     {
-      "collectionGroup": "leaveCancellations",
-      "fields": "leaveApplicationId:ASCENDING,status:ASCENDING"
+      "collectionGroup": "leaves",
+      "fields": "status:ASCENDING,startDate:ASCENDING"
     },
     {
-      "collectionGroup": "holidays",
-      "fields": "isActive:ASCENDING,date:ASCENDING"
+      "collectionGroup": "leaves",
+      "fields": "teacherId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "leaveTypes",
+      "fields": "isActive:ASCENDING,name:ASCENDING"
+    },
+    {
+      "collectionGroup": "monthlyPermissionUsage",
+      "fields": "month:ASCENDING,totalMinutesUsed:DESCENDING"
+    },
+    {
+      "collectionGroup": "monthlyPermissionUsage",
+      "fields": "staffId:ASCENDING,month:DESCENDING"
+    },
+    {
+      "collectionGroup": "payrollRecords",
+      "fields": "month:ASCENDING,year:ASCENDING,staffName:ASCENDING"
+    },
+    {
+      "collectionGroup": "payrollRecords",
+      "fields": "staffId:ASCENDING,month:ASCENDING,year:ASCENDING"
+    },
+    {
+      "collectionGroup": "payrollRecords",
+      "fields": "userId:ASCENDING,status:ASCENDING,year:DESCENDING,month:DESCENDING"
+    },
+    {
+      "collectionGroup": "permission_types",
+      "fields": "schoolId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "permission_types",
+      "fields": "schoolId:ASCENDING,isActive:ASCENDING,name:ASCENDING"
+    },
+    {
+      "collectionGroup": "permissionCancellations",
+      "fields": "staffId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "permissionCancellations",
+      "fields": "status:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "permissionRequests",
+      "fields": "schoolId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "permissionRequests",
+      "fields": "schoolId:ASCENDING,status:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "permissionRequests",
+      "fields": "staffId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "permissionRequests",
+      "fields": "staffId:ASCENDING,date:ASCENDING,status:ASCENDING"
+    },
+    {
+      "collectionGroup": "permissionRequests",
+      "fields": "staffId:ASCENDING,status:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "permissionRequests",
+      "fields": "status:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "permissions",
+      "fields": "applicantId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "permissions",
+      "fields": "staffId:ASCENDING,createdAt:DESCENDING,__name__:DESCENDING"
+    },
+    {
+      "collectionGroup": "permissions",
+      "fields": "applicantId:ASCENDING,requestDate:ASCENDING"
+    },
+    {
+      "collectionGroup": "permissions",
+      "fields": "staffId:ASCENDING,permissionTypeId:ASCENDING,requestDate:ASCENDING"
+    },
+    {
+      "collectionGroup": "permissions",
+      "fields": "staffId:ASCENDING,requestDate:ASCENDING"
+    },
+    {
+      "collectionGroup": "permissions",
+      "fields": "status:ASCENDING,createdAt:ASCENDING"
+    },
+    {
+      "collectionGroup": "permissions",
+      "fields": "status:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "permissionTypes",
+      "fields": "isActive:ASCENDING,name:ASCENDING"
+    },
+    {
+      "collectionGroup": "schools",
+      "fields": "isActive:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "schools",
+      "fields": "subscription.status:ASCENDING,createdAt:DESCENDING"
     },
     {
       "collectionGroup": "staff",
-      "fields": "userId:ASCENDING"
+      "fields": "schoolId:ASCENDING,createdAt:DESCENDING"
     },
     {
-      "collectionGroup": "staff",
-      "fields": "employeeId:ASCENDING"
+      "collectionGroup": "staffEntitlements",
+      "fields": "isActive:ASCENDING,staffName:ASCENDING"
+    },
+    {
+      "collectionGroup": "staffEntitlements",
+      "fields": "schoolId:ASCENDING,isActive:ASCENDING,staffName:ASCENDING"
+    },
+    {
+      "collectionGroup": "staffEntitlements",
+      "fields": "staffId:ASCENDING,isActive:ASCENDING"
+    },
+    {
+      "collectionGroup": "staffLeaveBalances",
+      "fields": "staffId:ASCENDING,leaveTypeId:ASCENDING,year:ASCENDING"
+    },
+    {
+      "collectionGroup": "staffLeaveBalances",
+      "fields": "staffId:ASCENDING,year:ASCENDING,leaveTypeName:ASCENDING"
+    },
+    {
+      "collectionGroup": "staffLeaveBalances",
+      "fields": "userId:ASCENDING,year:ASCENDING"
+    },
+    {
+      "collectionGroup": "staffLeaveBalances",
+      "fields": "year:ASCENDING,staffName:ASCENDING,leaveTypeName:ASCENDING"
+    },
+    {
+      "collectionGroup": "staffPermissionBalances",
+      "fields": "month:ASCENDING,year:ASCENDING,staffName:ASCENDING"
+    },
+    {
+      "collectionGroup": "staffPermissionBalances",
+      "fields": "staffId:ASCENDING,month:ASCENDING,year:ASCENDING"
+    },
+    {
+      "collectionGroup": "staffPermissionBalances",
+      "fields": "userId:ASCENDING,month:ASCENDING,year:ASCENDING"
+    },
+    {
+      "collectionGroup": "student_fee_details",
+      "fields": "className:ASCENDING,studentName:ASCENDING"
+    },
+    {
+      "collectionGroup": "student_fee_details",
+      "fields": "stuClass:ASCENDING,stuName:ASCENDING"
+    },
+    {
+      "collectionGroup": "student_fee_details",
+      "fields": "stuClass:ASCENDING,stuSection:ASCENDING,stuName:ASCENDING"
+    },
+    {
+      "collectionGroup": "studentFeeItems",
+      "fields": "academicYear:ASCENDING,isActive:ASCENDING,studentId:ASCENDING,dueDate:ASCENDING"
+    },
+    {
+      "collectionGroup": "studentFeeItems",
+      "fields": "isActive:ASCENDING,paidAmount:ASCENDING"
+    },
+    {
+      "collectionGroup": "studentFeeItems",
+      "fields": "isActive:ASCENDING,paidAmount:ASCENDING,updatedAt:ASCENDING"
+    },
+    {
+      "collectionGroup": "studentFeeItems",
+      "fields": "isActive:ASCENDING,paidAmount:ASCENDING,updatedAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "studentFeeItems",
+      "fields": "isActive:ASCENDING,paidAmount:ASCENDING,__name__:ASCENDING"
+    },
+    {
+      "collectionGroup": "studentFeeItems",
+      "fields": "isActive:ASCENDING,updatedAt:ASCENDING"
+    },
+    {
+      "collectionGroup": "studentFeeLedgers",
+      "fields": "academicYear:ASCENDING,className:ASCENDING"
+    },
+    {
+      "collectionGroup": "studentFeeLedgers",
+      "fields": "academicYear:ASCENDING,className:ASCENDING,section:ASCENDING"
+    },
+    {
+      "collectionGroup": "studentFeeLedgers",
+      "fields": "feeStructureId:ASCENDING,updatedAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "studentFeeLedgers",
+      "fields": "studentId:ASCENDING,academicYear:ASCENDING"
+    },
+    {
+      "collectionGroup": "students",
+      "fields": "academicYearCode:ASCENDING,status:ASCENDING"
+    },
+    {
+      "collectionGroup": "students",
+      "fields": "className:ASCENDING,section:ASCENDING,academicYearCode:ASCENDING,status:ASCENDING"
+    },
+    {
+      "collectionGroup": "students",
+      "fields": "className:ASCENDING,section:ASCENDING,status:ASCENDING"
+    },
+    {
+      "collectionGroup": "students",
+      "fields": "status:ASCENDING,className:ASCENDING,name:ASCENDING"
+    },
+    {
+      "collectionGroup": "teachers",
+      "fields": "schoolId:ASCENDING,createdAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "termFeePayments",
+      "fields": "academicYear:ASCENDING,isDeleted:ASCENDING,paidAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "termFeePayments",
+      "fields": "ledgerId:ASCENDING,isDeleted:ASCENDING,paidAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "termFeePayments",
+      "fields": "studentId:ASCENDING,isDeleted:ASCENDING,paidAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "termFeePayments",
+      "fields": "termId:ASCENDING,isDeleted:ASCENDING,paidAt:DESCENDING"
     },
     {
       "collectionGroup": "users",
-      "fields": "email:ASCENDING"
+      "fields": "role:ASCENDING,createdAt:DESCENDING"
     },
     {
       "collectionGroup": "users",
@@ -66,7 +418,107 @@
     },
     {
       "collectionGroup": "users",
+      "fields": "schoolId:ASCENDING,role:ASCENDING,isActive:ASCENDING"
+    },
+    {
+      "collectionGroup": "users",
       "fields": "schoolId:ASCENDING,status:ASCENDING"
+    },
+    {
+      "collectionGroup": "rfid_cards",
+      "fields": "schoolId:ASCENDING,isActive:ASCENDING,registeredAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "rfid_cards",
+      "fields": "schoolId:ASCENDING,isAssigned:ASCENDING"
+    },
+    {
+      "collectionGroup": "rfid_cards",
+      "fields": "schoolId:ASCENDING,staffId:ASCENDING"
+    },
+    {
+      "collectionGroup": "rfid_cards",
+      "fields": "schoolId:ASCENDING,studentId:ASCENDING"
+    },
+    {
+      "collectionGroup": "devices",
+      "fields": "schoolId:ASCENDING,isActive:ASCENDING"
+    },
+    {
+      "collectionGroup": "devices",
+      "fields": "schoolId:ASCENDING,deviceKey:ASCENDING"
+    },
+    {
+      "collectionGroup": "attendance",
+      "fields": "schoolId:ASCENDING,rfidTag:ASCENDING,scannedAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "attendance",
+      "fields": "schoolId:ASCENDING,staffId:ASCENDING,scannedAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "attendance",
+      "fields": "schoolId:ASCENDING,studentId:ASCENDING,scannedAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "attendance",
+      "fields": "rfidTag:ASCENDING,scannedAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "studentFeeItems",
+      "fields": "isActive:ASCENDING,updatedAt:DESCENDING,__name__:ASCENDING"
+    },
+    {
+      "collectionGroup": "staff",
+      "fields": "schoolId:ASCENDING,assignedClass:ASCENDING"
+    },
+    {
+      "collectionGroup": "staff",
+      "fields": "status:ASCENDING,name:ASCENDING,__name__:ASCENDING"
+    },
+    {
+      "collectionGroup": "students",
+      "fields": "status:ASCENDING,className:ASCENDING"
+    },
+    {
+      "collectionGroup": "rfid_cards",
+      "fields": "isActive:ASCENDING,staffId:ASCENDING,assignedAt:DESCENDING,__name__:DESCENDING"
+    },
+    {
+      "collectionGroup": "rfid_cards",
+      "fields": "isActive:ASCENDING,assignedAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "rfid_cards",
+      "fields": "staffId:ASCENDING,isActive:ASCENDING"
+    },
+    {
+      "collectionGroup": "rfid_cards",
+      "fields": "staffId:ASCENDING,assignedAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "communicationLogs",
+      "fields": "status:ASCENDING,sentAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "communicationLogs",
+      "fields": "purpose:ASCENDING,sentAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "communicationLogs",
+      "fields": "channel:ASCENDING,sentAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "communicationLogs",
+      "fields": "recipientType:ASCENDING,sentAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "communicationLogs",
+      "fields": "recipientId:ASCENDING,sentAt:DESCENDING"
+    },
+    {
+      "collectionGroup": "communicationLogs",
+      "fields": "sentByUserId:ASCENDING,sentAt:DESCENDING"
     }
   ]
 }

@@ -221,7 +221,7 @@ class FeeRepository {
     }).toList();
     if (activeDocs.isEmpty) return null;
     // Prefer the structure with the lexicographically largest academic
-    // year (e.g. "2026-27" > "2025-26"); good enough for school year
+    // year (e.g. "2026-2027" > "2025-2026"); good enough for school year
     // codes which are monotonic.
     activeDocs.sort((a, b) {
       final ay = (a.data()['academicYear'] ?? '').toString();
@@ -384,20 +384,23 @@ class FeeRepository {
     }
 
     // Query student fee items (ad-hoc fees with payments)
+    // Note: Only one range filter allowed per query, so filter paidAmount in memory
     final feeItemsSnap = await _studentFeeItemsCollection(schoolId)
         .where('isActive', isEqualTo: true)
-        .where('paidAmount', isGreaterThan: 0)
         .where('updatedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
         .where('updatedAt', isLessThan: Timestamp.fromDate(endDate))
         .get();
 
     for (final doc in feeItemsSnap.docs) {
       final data = doc.data();
-      final updatedAt = (data['updatedAt'] as Timestamp?)?.toDate();
-      if (updatedAt != null) {
-        final key = '${updatedAt.year}-${updatedAt.month.toString().padLeft(2, '0')}';
-        final amount = (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
-        monthly[key] = (monthly[key] ?? 0.0) + amount;
+      final paidAmount = (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
+      // Filter paidAmount in memory (Firestore doesn't allow range on multiple fields)
+      if (paidAmount > 0) {
+        final updatedAt = (data['updatedAt'] as Timestamp?)?.toDate();
+        if (updatedAt != null) {
+          final key = '${updatedAt.year}-${updatedAt.month.toString().padLeft(2, '0')}';
+          monthly[key] = (monthly[key] ?? 0.0) + paidAmount;
+        }
       }
     }
 
@@ -422,15 +425,19 @@ class FeeRepository {
     }
 
     // Query student fee items (ad-hoc fees with payments today)
+    // Note: Only one range filter allowed per query, so filter paidAmount in memory
     final feeItemsSnap = await _studentFeeItemsCollection(schoolId)
         .where('isActive', isEqualTo: true)
-        .where('paidAmount', isGreaterThan: 0)
         .where('updatedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
         .where('updatedAt', isLessThan: Timestamp.fromDate(endOfDay))
         .get();
 
     for (final doc in feeItemsSnap.docs) {
-      total += (doc.data()['paidAmount'] as num?)?.toDouble() ?? 0.0;
+      final paidAmount = (doc.data()['paidAmount'] as num?)?.toDouble() ?? 0.0;
+      // Filter paidAmount in memory (Firestore doesn't allow range on multiple fields)
+      if (paidAmount > 0) {
+        total += paidAmount;
+      }
     }
 
     return total;

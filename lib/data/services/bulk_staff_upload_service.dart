@@ -15,7 +15,7 @@ class BulkStaffUploadService {
   BulkStaffUploadService(this._staffRepository);
 
   /// Generate Excel template for bulk staff upload with dropdowns
-  Uint8List generateExcelTemplate() {
+  Uint8List generateExcelTemplate({int sampleCount = 50}) {
     final excel = Excel.createExcel();
     
     // Remove default sheet and create Staff Data sheet
@@ -26,13 +26,13 @@ class BulkStaffUploadService {
     final headers = [
       'Name*',
       'Email*',
-      'Department*',
       'Staff Type*',
       'Designation',
       'Phone Number',
       'Address',
       'Emergency Contact',
       'Joining Date (DD/MM/YYYY)',
+      'Birth Date (DD/MM/YYYY)',
     ];
 
     // Header style
@@ -57,22 +57,32 @@ class BulkStaffUploadService {
       cell.cellStyle = headers[i].endsWith('*') ? mandatoryStyle : headerStyle;
     }
 
-    // Add example row
-    final exampleData = [
-      'John Doe',
-      'john.doe@school.com',
-      'Mathematics',
-      'TEACHING',
-      'Senior Teacher',
-      '9876543210',
-      '123 Main Street, City',
-      '9876543211',
-      '01/01/2024',
+    // Add sample teachers with phone number +918508196981
+    final designations = [
+      'Senior Teacher', 'Teacher', 'Associate Teacher', 'Assistant Teacher',
+      'Subject Teacher', 'Class Teacher', 'HOD', 'Vice Principal', 'Principal'
     ];
+    final staffTypes = ['TEACHING', 'TEACHING', 'TEACHING', 'TEACHING', 'TEACHING', 'TEACHING', 'TEACHING', 'TEACHING', 'TEACHING'];
 
-    for (int i = 0; i < exampleData.length; i++) {
-      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 1));
-      cell.value = TextCellValue(exampleData[i]);
+    for (int row = 0; row < sampleCount; row++) {
+      final designation = designations[row % designations.length];
+      final staffType = staffTypes[row % staffTypes.length];
+      final exampleData = [
+        'Teacher ${row + 1}',
+        'teacher${row + 1}@school.com',
+        staffType,
+        designation,
+        '+918508196981',
+        'Address ${row + 1}, City',
+        '+918508196981',
+        '${(row % 28 + 1).toString().padLeft(2, '0')}/01/2024',
+        '${(row % 28 + 1).toString().padLeft(2, '0')}/${(row % 12 + 1).toString().padLeft(2, '0')}/1980',
+      ];
+
+      for (int i = 0; i < exampleData.length; i++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: row + 1));
+        cell.value = TextCellValue(exampleData[i]);
+      }
     }
 
     // Create a separate sheet for dropdown values (Staff Types)
@@ -97,13 +107,13 @@ class BulkStaffUploadService {
       'COLUMN DESCRIPTIONS:',
       '- Name*: Full name of the staff member',
       '- Email*: Valid email address (used for login)',
-      '- Department*: Department name (e.g., Mathematics, Science)',
       '- Staff Type*: TEACHING or NON_TEACHING',
       '- Designation: Job title (e.g., Senior Teacher, Lab Assistant)',
       '- Phone Number: Contact number',
       '- Address: Residential address',
       '- Emergency Contact: Emergency contact number',
       '- Joining Date: Date of joining in DD/MM/YYYY format',
+      '- Birth Date: Date of birth in DD/MM/YYYY format',
     ];
 
     for (int i = 0; i < instructions.length; i++) {
@@ -117,13 +127,13 @@ class BulkStaffUploadService {
     // Set column widths for Staff Data sheet
     sheet.setColumnWidth(0, 25); // Name
     sheet.setColumnWidth(1, 30); // Email
-    sheet.setColumnWidth(2, 20); // Department
-    sheet.setColumnWidth(3, 15); // Staff Type
-    sheet.setColumnWidth(4, 20); // Designation
-    sheet.setColumnWidth(5, 15); // Phone
-    sheet.setColumnWidth(6, 35); // Address
-    sheet.setColumnWidth(7, 18); // Emergency Contact
-    sheet.setColumnWidth(8, 20); // Joining Date
+    sheet.setColumnWidth(2, 15); // Staff Type
+    sheet.setColumnWidth(3, 20); // Designation
+    sheet.setColumnWidth(4, 18); // Phone
+    sheet.setColumnWidth(5, 35); // Address
+    sheet.setColumnWidth(6, 18); // Emergency Contact
+    sheet.setColumnWidth(7, 20); // Joining Date
+    sheet.setColumnWidth(8, 20); // Birth Date
 
     // Set default sheet
     excel.setDefaultSheet('Staff Data');
@@ -136,25 +146,25 @@ class BulkStaffUploadService {
     final headers = [
       'Name*',
       'Email*',
-      'Department*',
       'Staff Type* (TEACHING/NON_TEACHING)',
       'Designation',
       'Phone Number',
       'Address',
       'Emergency Contact',
       'Joining Date (DD/MM/YYYY)',
+      'Birth Date (DD/MM/YYYY)',
     ];
 
     final exampleRow = [
       'John Doe',
       'john.doe@school.com',
-      'Mathematics',
       'TEACHING',
       'Senior Teacher',
-      '9876543210',
+      '+918508196981',
       '123 Main Street, City',
-      '9876543211',
+      '+918508196981',
       '01/01/2024',
+      '15/06/1985',
     ];
 
     final instructions = [
@@ -327,7 +337,6 @@ class BulkStaffUploadService {
 
       final name = getValue('name');
       final email = getValue('email');
-      final department = getValue('department');
       final staffTypeStr = getValue('staff type');
 
       // Validate mandatory fields
@@ -336,9 +345,6 @@ class BulkStaffUploadService {
       }
       if (email.isEmpty) {
         throw Exception('Email is required');
-      }
-      if (department.isEmpty) {
-        throw Exception('Department is required');
       }
 
       // Parse staff type
@@ -372,16 +378,34 @@ class BulkStaffUploadService {
         }
       }
 
+      // Parse birth date
+      DateTime? birthDate;
+      final birthDateStr = getValue('birth date');
+      if (birthDateStr.isNotEmpty) {
+        try {
+          final parts = birthDateStr.split('/');
+          if (parts.length == 3) {
+            birthDate = DateTime(
+              int.parse(parts[2]),
+              int.parse(parts[1]),
+              int.parse(parts[0]),
+            );
+          }
+        } catch (_) {
+          // Birth date is optional, ignore if parsing fails
+        }
+      }
+
       return {
         'name': name,
         'email': email,
-        'department': department,
         'staffType': staffType,
         'designation': getValue('designation'),
         'phoneNumber': getValue('phone'),
         'address': getValue('address'),
         'emergencyContact': getValue('emergency'),
         'joiningDate': joiningDate,
+        'birthDate': birthDate,
         'rowNumber': rowNumber,
       };
     } catch (e) {
@@ -390,32 +414,146 @@ class BulkStaffUploadService {
     }
   }
 
-  /// Process bulk upload - create staff members
+  /// Generate password for staff (same logic as repository)
+  String _generatePasswordForStaff({required String email, required String phoneNumber}) {
+    final emailPart = email.split('@').first;
+    final phoneDigits = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+    final last5Digits = phoneDigits.length >= 5 ? phoneDigits.substring(phoneDigits.length - 5) : phoneDigits.padLeft(5, '0');
+    return '$emailPart$last5Digits';
+  }
+
+  /// Generate Excel file with staff credentials
+  List<int> generateCredentialsExcel(BulkUploadResult result) {
+    final excel = Excel.createExcel();
+    final sheet = excel['Staff Credentials'];
+
+    // Headers
+    final headers = ['Email', 'Name', 'Employee ID', 'Password'];
+    for (int i = 0; i < headers.length; i++) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = TextCellValue(headers[i]);
+      cell.cellStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#1E3A5F'),
+        fontColorHex: ExcelColor.white,
+        horizontalAlign: HorizontalAlign.Center,
+      );
+    }
+
+    // Add created staff with passwords
+    int row = 1;
+    for (final staffEntry in result.successfulUploads) {
+      // Parse the entry: "email|name|employeeId|password"
+      final parts = staffEntry.split('|');
+      if (parts.length == 4) {
+        final email = parts[0];
+        final name = parts[1];
+        final employeeId = parts[2];
+        final password = parts[3];
+        
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = TextCellValue(email);
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value = TextCellValue(name);
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row)).value = TextCellValue(employeeId);
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = TextCellValue(password);
+        row++;
+      }
+    }
+
+    // Add updated staff with passwords
+    for (final staffEntry in result.updatedStaff) {
+      // Parse the entry: "email|name|employeeId|password"
+      final parts = staffEntry.split('|');
+      if (parts.length == 4) {
+        final email = parts[0];
+        final name = parts[1];
+        final employeeId = parts[2];
+        final password = parts[3];
+        
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = TextCellValue(email);
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value = TextCellValue(name);
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row)).value = TextCellValue(employeeId);
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = TextCellValue(password);
+        row++;
+      }
+    }
+
+    return excel.encode() ?? [];
+  }
+
+  /// Process bulk upload - create or update staff members
   Future<BulkUploadResult> processBulkUpload({
     required String schoolId,
     required String adminUserId,
     required List<Map<String, dynamic>> staffDataList,
+    Function(int current, int total, String staffName)? onProgress,
   }) async {
     final List<String> successfulUploads = [];
     final List<Map<String, dynamic>> failedUploads = [];
+    final List<String> updatedStaff = [];
 
-    for (final staffData in staffDataList) {
+    // Process sequentially with delays to avoid Firebase Auth rate limits
+    for (int i = 0; i < staffDataList.length; i++) {
+      final staffData = staffDataList[i];
+
+      // Report progress
+      if (onProgress != null) {
+        onProgress(i + 1, staffDataList.length, staffData['name'] as String);
+      }
+
       try {
-        final request = CreateStaffRequest(
-          name: staffData['name'] as String,
-          email: staffData['email'] as String,
-          department: staffData['department'] as String,
-          staffType: staffData['staffType'] as StaffType,
-          designation: staffData['designation'] as String? ?? '',
-          phoneNumber: staffData['phoneNumber'] as String? ?? '',
-          address: staffData['address'] as String? ?? '',
-          emergencyContact: staffData['emergencyContact'] as String? ?? '',
-          joiningDate: staffData['joiningDate'] as DateTime,
-          employeeId: '', // Auto-generate
-        );
+        // Check if staff already exists by email
+        final existingStaff = await _staffRepository.getStaffByEmail(schoolId, staffData['email'] as String);
 
-        final result = await _staffRepository.createStaff(schoolId, adminUserId, request);
-        successfulUploads.add('${staffData['name']} (${result['employeeId']})');
+        if (existingStaff != null) {
+          // Update existing staff
+          final updateRequest = UpdateStaffRequest(
+            name: staffData['name'] as String,
+            designation: staffData['designation'] as String? ?? '',
+            phoneNumber: staffData['phoneNumber'] as String? ?? '',
+            address: staffData['address'] as String? ?? '',
+            emergencyContact: staffData['emergencyContact'] as String? ?? '',
+            birthDate: staffData['birthDate'] as DateTime?,
+          );
+
+          await _staffRepository.updateStaff(schoolId, existingStaff.id, adminUserId, updateRequest);
+          // Generate password for updated staff based on current phone
+          final password = _generatePasswordForStaff(
+            email: staffData['email'] as String,
+            phoneNumber: staffData['phoneNumber'] as String? ?? '0000000000',
+          );
+          updatedStaff.add('${staffData['email']}|${staffData['name']}|${existingStaff.employeeId}|$password');
+        } else {
+          // Create new staff
+          final request = CreateStaffRequest(
+            name: staffData['name'] as String,
+            email: staffData['email'] as String,
+            staffType: staffData['staffType'] as StaffType,
+            designation: staffData['designation'] as String? ?? '',
+            phoneNumber: staffData['phoneNumber'] as String? ?? '',
+            address: staffData['address'] as String? ?? '',
+            emergencyContact: staffData['emergencyContact'] as String? ?? '',
+            joiningDate: staffData['joiningDate'] as DateTime,
+            birthDate: staffData['birthDate'] as DateTime?,
+            employeeId: '', // Auto-generate
+          );
+
+          final result = await _staffRepository.createStaff(
+            schoolId,
+            adminUserId,
+            request,
+            sendWelcomeEmail: false, // Disable welcome email for bulk upload
+          );
+          final password = _generatePasswordForStaff(
+            email: staffData['email'] as String,
+            phoneNumber: staffData['phoneNumber'] as String? ?? '0000000000',
+          );
+          successfulUploads.add('${staffData['email']}|${staffData['name']}|${result['employeeId']}|$password');
+        }
+
+        // Add delay between requests to avoid rate limits
+        if (i < staffDataList.length - 1) {
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
       } catch (e) {
         failedUploads.add({
           'row': staffData['rowNumber'],
@@ -431,6 +569,7 @@ class BulkStaffUploadService {
       failedCount: failedUploads.length,
       successfulUploads: successfulUploads,
       failedUploads: failedUploads,
+      updatedStaff: updatedStaff,
     );
   }
 
@@ -442,6 +581,7 @@ class BulkUploadResult {
   final int failedCount;
   final List<String> successfulUploads;
   final List<Map<String, dynamic>> failedUploads;
+  final List<String> updatedStaff;
 
   BulkUploadResult({
     required this.totalProcessed,
@@ -449,6 +589,7 @@ class BulkUploadResult {
     required this.failedCount,
     required this.successfulUploads,
     required this.failedUploads,
+    this.updatedStaff = const [],
   });
 
   bool get hasFailures => failedCount > 0;

@@ -1,0 +1,655 @@
+{
+	"info": {
+		"name": "Eazy School 360 - Firebase Cloud Functions",
+		"_postman_id": "eazy-school-360-cloud-functions",
+		"description": "Collection to test Firebase Cloud Functions for Eazy School 360",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://us-central1-eazyschool-360-dev.cloudfunctions.net",
+			"type": "string"
+		},
+		{
+			"key": "rfidBaseUrl",
+			"value": "https://asia-south1-eazyschool-360-dev.cloudfunctions.net",
+			"type": "string"
+		},
+		{
+			"key": "schoolId",
+			"value": "YOUR_SCHOOL_ID",
+			"type": "string",
+			"description": "Your school ID from Firestore"
+		},
+		{
+			"key": "phoneNumber",
+			"value": "+918508196981",
+			"type": "string",
+			"description": "Default phone number for updates"
+		},
+		{
+			"key": "authToken",
+			"value": "",
+			"type": "string",
+			"description": "Firebase Auth ID token - Get this from the 'Get Auth Token' request"
+		},
+		{
+			"key": "apiKey",
+			"value": "YOUR_FIREBASE_API_KEY",
+			"type": "string",
+			"description": "Firebase API Key from Project Settings"
+		},
+		{
+			"key": "adminEmail",
+			"value": "admin@example.com",
+			"type": "string",
+			"description": "Admin email for authentication"
+		},
+		{
+			"key": "adminPassword",
+			"value": "YOUR_PASSWORD",
+			"type": "string",
+			"description": "Admin password for authentication"
+		},
+		{
+			"key": "deviceKey",
+			"value": "YOUR_DEVICE_KEY",
+			"type": "string",
+			"description": "Device key for RFID authentication"
+		},
+		{
+			"key": "deviceId",
+			"value": "YOUR_DEVICE_ID",
+			"type": "string",
+			"description": "Device ID for RFID authentication"
+		}
+	],
+	"item": [
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Get Firebase Auth Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Extract and save the idToken to collection variables",
+									"if (pm.response.json().idToken) {",
+									"    pm.collectionVariables.set(\"authToken\", pm.response.json().idToken);",
+									"    console.log(\"Auth token saved successfully\");",
+									"} else {",
+									"    console.log(\"Failed to extract auth token\");",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\",\n  \"returnSecureToken\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={{apiKey}}",
+							"protocol": "https",
+							"host": ["identitytoolkit", "googleapis", "com"],
+							"path": ["v1", "accounts:signInWithPassword"],
+							"query": [
+								{
+									"key": "key",
+									"value": "{{apiKey}}"
+								}
+							]
+						},
+						"description": "Sign in to Firebase and get ID token. Update the adminEmail and adminPassword variables, then run this first. The token will be automatically saved to the authToken variable."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. RFID & Attendance Functions",
+			"item": [
+				{
+					"name": "Register Device",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "x-device-key",
+								"value": "{{deviceKey}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"schoolId\": \"{{schoolId}}\",\n  \"deviceId\": \"{{deviceId}}\",\n  \"deviceName\": \"RFID Reader 1\",\n  \"deviceType\": \"RFID_READER\",\n  \"location\": \"Main Gate\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{rfidBaseUrl}}/rfidApi/register-device",
+							"host": ["{{rfidBaseUrl}}"],
+							"path": ["rfidApi", "register-device"]
+						},
+						"description": "Register a new RFID device for attendance"
+					},
+					"response": []
+				},
+				{
+					"name": "Register RFID Card",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "x-device-key",
+								"value": "{{deviceKey}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"schoolId\": \"{{schoolId}}\",\n  \"rfidTag\": \"TAG1234567890\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{rfidBaseUrl}}/rfidApi/register-rfid",
+							"host": ["{{rfidBaseUrl}}"],
+							"path": ["rfidApi", "register-rfid"]
+						},
+						"description": "Register an RFID card to a device (unassigned). Staff/student mapping is done separately in Flutter UI."
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Attendance",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "x-device-key",
+								"value": "{{deviceKey}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"schoolId\": \"{{schoolId}}\",\n  \"rfidTag\": \"TAG1234567890\",\n  \"timestamp\": \"2025-05-06T12:00:00Z\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{rfidBaseUrl}}/rfidApi/mark-attendance",
+							"host": ["{{rfidBaseUrl}}"],
+							"path": ["rfidApi", "mark-attendance"]
+						},
+						"description": "Mark attendance for a staff/student based on RFID tag mapping (requires device key auth)"
+					},
+					"response": []
+				},
+				{
+					"name": "Process RFID Swipe (Callable)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"schoolId\": \"{{schoolId}}\",\n    \"rfidTag\": \"TAG1234567890\",\n    \"timestamp\": \"2025-05-06T12:00:00Z\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{rfidBaseUrl}}/processRfidSwipe",
+							"host": ["{{rfidBaseUrl}}"],
+							"path": ["processRfidSwipe"]
+						},
+						"description": "Process RFID swipe (callable function)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. RFID Mapping Functions (Admin)",
+			"item": [
+				{
+					"name": "List RFID Cards",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"schoolId\": \"{{schoolId}}\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/listRfidCards",
+							"host": ["{{baseUrl}}"],
+							"path": ["listRfidCards"]
+						},
+						"description": "List all RFID cards and their assignments (Requires admin auth)"
+					},
+					"response": []
+				},
+				{
+					"name": "Map RFID to Staff",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"schoolId\": \"{{schoolId}}\",\n    \"rfidTag\": \"TAG1234567890\",\n    \"staffId\": \"1234\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/mapRfidToStaff",
+							"host": ["{{baseUrl}}"],
+							"path": ["mapRfidToStaff"]
+						},
+						"description": "Map an RFID card to a staff member (Requires admin auth)"
+					},
+					"response": []
+				},
+				{
+					"name": "Map RFID to Student",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"schoolId\": \"{{schoolId}}\",\n    \"rfidTag\": \"TAG1234567890\",\n    \"studentId\": \"5678\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/mapRfidToStaff",
+							"host": ["{{baseUrl}}"],
+							"path": ["mapRfidToStaff"]
+						},
+						"description": "Map an RFID card to a student (Requires admin auth)"
+					},
+					"response": []
+				},
+				{
+					"name": "Unmap RFID Card",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"schoolId\": \"{{schoolId}}\",\n    \"rfidTag\": \"TAG1234567890\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/unmapRfidCard",
+							"host": ["{{baseUrl}}"],
+							"path": ["unmapRfidCard"]
+						},
+						"description": "Remove mapping from an RFID card (Requires admin auth)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "4. Student Phone Update Functions",
+			"item": [
+				{
+					"name": "Preview Phone Number Update",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"schoolId\": \"{{schoolId}}\",\n    \"phoneNumber\": \"{{phoneNumber}}\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/previewPhoneNumberUpdate",
+							"host": ["{{baseUrl}}"],
+							"path": ["previewPhoneNumberUpdate"]
+						},
+						"description": "Preview what phone numbers would be updated without making changes (Requires auth)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update All Student Phone Numbers",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"schoolId\": \"{{schoolId}}\",\n    \"phoneNumber\": \"{{phoneNumber}}\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/updateAllStudentPhoneNumbers",
+							"host": ["{{baseUrl}}"],
+							"path": ["updateAllStudentPhoneNumbers"]
+						},
+						"description": "Update all student phone numbers to the specified number (WARNING: This will update all records) (Requires auth)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "5. Data Cleanup Functions",
+			"item": [
+				{
+					"name": "Preview Academic Year Cleanup",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"schoolId\": \"{{schoolId}}\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/previewAcademicYearCleanup",
+							"host": ["{{baseUrl}}"],
+							"path": ["previewAcademicYearCleanup"]
+						},
+						"description": "Preview what academic years would be standardized without making changes (Requires auth)"
+					},
+					"response": []
+				},
+				{
+					"name": "Standardize Academic Years",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"schoolId\": \"{{schoolId}}\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/standardizeAcademicYears",
+							"host": ["{{baseUrl}}"],
+							"path": ["standardizeAcademicYears"]
+						},
+						"description": "Standardize all academic year formats to full format (e.g., 2025-2026) (Requires auth)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "6. WhatsApp Notification Functions",
+			"item": [
+				{
+					"name": "Test WhatsApp Configuration",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"schoolId\": \"{{schoolId}}\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/testWhatsAppConfiguration",
+							"host": ["{{baseUrl}}"],
+							"path": ["testWhatsAppConfiguration"]
+						},
+						"description": "Test WhatsApp API configuration and credentials (Requires auth)"
+					},
+					"response": []
+				},
+				{
+					"name": "Send Payment Notification",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{authToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"schoolId\": \"{{schoolId}}\",\n    \"phoneNumber\": \"+919876543210\",\n    \"studentName\": \"John Doe\",\n    \"paidAmount\": 950,\n    \"receiptNumber\": \"RCP-12345\",\n    \"paymentDate\": \"2025-05-06T12:00:00Z\",\n    \"balanceAmount\": 0,\n    \"schoolName\": \"Eazy School\",\n    \"feeDescription\": \"Term 1 Fees\",\n    \"feeType\": \"Term Fee\",\n    \"isAdmin\": false\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/sendPaymentNotification",
+							"host": ["{{baseUrl}}"],
+							"path": ["sendPaymentNotification"]
+						},
+						"description": "Send WhatsApp payment notification to student/parent (Requires auth)"
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

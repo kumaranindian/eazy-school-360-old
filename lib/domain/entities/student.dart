@@ -21,7 +21,7 @@ class Student {
   final StudentStatus status;
   final bool isVanAvailed;
   final String? parentUserId;
-  final String academicYearCode; // e.g., "2024-25"
+  final String academicYearCode; // e.g., "2024-2025"
   final double arrears; // Pending fees from previous years
   final DateTime createdAt;
   final DateTime updatedAt;

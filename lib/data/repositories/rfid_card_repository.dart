@@ -24,9 +24,9 @@ class RfidCardRepository {
     required RfidCardType cardType,
     Map<String, dynamic>? metadata,
   }) async {
-    // Check if UUID is already assigned
+    // Check if UUID is already assigned to another staff member
     final existing = await getCardByUuid(schoolId, uuid);
-    if (existing != null) {
+    if (existing != null && existing.staffId != null) {
       throw Exception('UUID $uuid is already assigned to another staff member');
     }
 
@@ -42,6 +42,20 @@ class RfidCardRepository {
       );
     }
 
+    // If card exists but is unassigned, update it instead of creating new
+    if (existing != null && existing.staffId == null) {
+      await _getCollection(schoolId).doc(existing.id).update({
+        'staffId': staffId,
+        'staffName': staffName,
+        'cardType': cardType.value,
+        'isActive': true,
+        'assignedAt': FieldValue.serverTimestamp(),
+        if (metadata != null) 'metadata': metadata,
+      });
+      return existing.id;
+    }
+
+    // Create new card if it doesn't exist
     final card = RfidCard(
       id: '', // Will be set by Firestore
       uuid: uuid,

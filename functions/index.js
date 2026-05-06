@@ -30,6 +30,41 @@ const whatsappReminders = require('./src/whatsapp-fee-reminders');
 exports.testWhatsAppConfiguration = whatsappReminders.testWhatsAppConfiguration;
 exports.sendPaymentNotification = whatsappReminders.sendPaymentNotification;
 
+// Export data cleanup functions
+try {
+  const dataCleanup = require('./src/data-cleanup');
+  exports.standardizeAcademicYears = dataCleanup.standardizeAcademicYears;
+  exports.previewAcademicYearCleanup = dataCleanup.previewAcademicYearCleanup;
+  exports.validateAcademicYear = dataCleanup.validateAcademicYear;
+  exports.validateLedgerAcademicYear = dataCleanup.validateLedgerAcademicYear;
+  console.log('[Functions] Data cleanup functions loaded successfully');
+} catch (error) {
+  console.error('[Functions] Error loading data cleanup functions:', error.message);
+}
+
+// Export student phone update functions
+try {
+  const phoneUpdate = require('./src/student-phone-update');
+  exports.updateAllStudentPhoneNumbers = phoneUpdate.updateAllStudentPhoneNumbers;
+  exports.previewPhoneNumberUpdate = phoneUpdate.previewPhoneNumberUpdate;
+  exports.revertStudentPhoneNumbers = phoneUpdate.revertStudentPhoneNumbers;
+  exports.mapRfidToStaff = phoneUpdate.mapRfidToStaff;
+  exports.listRfidCards = phoneUpdate.listRfidCards;
+  exports.unmapRfidCard = phoneUpdate.unmapRfidCard;
+  console.log('[Functions] Student phone update functions loaded successfully');
+} catch (error) {
+  console.error('[Functions] Error loading student phone update functions:', error.message);
+}
+
+// Export weekly due notification scheduler
+try {
+  const weeklyDueNotification = require('./src/weekly-due-notification');
+  exports.sendWeeklyDueNotifications = weeklyDueNotification.sendWeeklyDueNotifications;
+  console.log('[Functions] Weekly due notification scheduler loaded successfully');
+} catch (error) {
+  console.error('[Functions] Error loading weekly due notification scheduler:', error.message);
+}
+
 // Export new TypeScript RFID Attendance & Leave functions
 const {
   processRfidSwipe,

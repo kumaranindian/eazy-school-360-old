@@ -176,8 +176,7 @@ class PermissionRequestRepository {
             .toList());
   }
 
-  /// Get permission configuration for a school
-  /// Auto-creates default config if permission types exist but config doesn't
+  /// Get permission configuration for a school (read-only, safe for staff)
   Future<PermissionConfig?> getPermissionConfig(String schoolId) async {
     try {
       final doc = await _firestore
@@ -190,52 +189,42 @@ class PermissionRequestRepository {
       if (doc.exists) {
         return PermissionConfig.fromFirestore(doc);
       }
-      
-      // Check if permission types exist - if so, create default config
-      final permissionTypesSnapshot = await _firestore
-          .collection('schools')
-          .doc(schoolId)
-          .collection('permissionTypes')
-          .where('isActive', isEqualTo: true)
-          .limit(1)
-          .get();
-      
-      if (permissionTypesSnapshot.docs.isNotEmpty) {
-        // Create default permission config
-        final now = DateTime.now();
-        final defaultConfig = {
-          'schoolId': schoolId,
-          'monthlyLimit': 4, // Default 4 permissions per month
-          'maxDurationMinutes': 120, // Default 2 hours max
-          'requiresApproval': true,
-          'isActive': true,
-          'createdAt': Timestamp.fromDate(now),
-          'updatedAt': Timestamp.fromDate(now),
-          'createdBy': 'system',
-        };
-        
-        await _firestore
-            .collection('schools')
-            .doc(schoolId)
-            .collection('permissionConfig')
-            .doc('default')
-            .set(defaultConfig);
-        
-        // Return the created config
-        final newDoc = await _firestore
-            .collection('schools')
-            .doc(schoolId)
-            .collection('permissionConfig')
-            .doc('default')
-            .get();
-        
-        return PermissionConfig.fromFirestore(newDoc);
-      }
-      
+
       return null;
     } catch (e) {
       throw Exception('Failed to get permission configuration: $e');
     }
+  }
+
+  /// Create or reset default permission config for a school (Admin only)
+  Future<PermissionConfig> createDefaultPermissionConfig(String schoolId, String adminUserId) async {
+    final now = DateTime.now();
+    final defaultConfig = {
+      'schoolId': schoolId,
+      'monthlyLimit': 4,
+      'maxDurationMinutes': 120,
+      'requiresApproval': true,
+      'isActive': true,
+      'createdAt': Timestamp.fromDate(now),
+      'updatedAt': Timestamp.fromDate(now),
+      'createdBy': adminUserId,
+    };
+
+    await _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('permissionConfig')
+        .doc('default')
+        .set(defaultConfig);
+
+    final newDoc = await _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('permissionConfig')
+        .doc('default')
+        .get();
+
+    return PermissionConfig.fromFirestore(newDoc);
   }
 
   /// Get monthly permission usage for a staff member

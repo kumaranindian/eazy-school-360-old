@@ -56,12 +56,30 @@ class StudentFeeLedgerRepository {
 
   Future<StudentFeeLedger?> getByStudent(
       String schoolId, String studentId, String academicYear) async {
+    print('[StudentFeeLedgerRepository] getByStudent: schoolId=$schoolId, studentId=$studentId (${studentId.runtimeType}), academicYear=$academicYear');
     final snap = await _col(schoolId)
         .where('studentId', isEqualTo: studentId)
         .where('academicYear', isEqualTo: academicYear)
         .limit(1)
         .get();
-    if (snap.docs.isEmpty) return null;
+    print('[StudentFeeLedgerRepository] Query returned ${snap.docs.length} documents');
+    if (snap.docs.isEmpty) {
+      // Try querying with numeric studentId as well
+      final numericId = int.tryParse(studentId);
+      if (numericId != null) {
+        print('[StudentFeeLedgerRepository] Trying numeric studentId: $numericId');
+        final snap2 = await _col(schoolId)
+            .where('studentId', isEqualTo: numericId)
+            .where('academicYear', isEqualTo: academicYear)
+            .limit(1)
+            .get();
+        print('[StudentFeeLedgerRepository] Numeric query returned ${snap2.docs.length} documents');
+        if (snap2.docs.isNotEmpty) {
+          return StudentFeeLedger.fromFirestore(snap2.docs.first);
+        }
+      }
+      return null;
+    }
     return StudentFeeLedger.fromFirestore(snap.docs.first);
   }
 
@@ -222,7 +240,9 @@ class StudentFeeLedgerRepository {
 
     // ── Case 1: brand new ────────────────────────────────────────────────
     if (existing == null) {
+      print('[StudentFeeLedgerRepository] Creating new ledger for studentId=$studentId, academicYear=${structure.academicYear}');
       final ref = await _col(schoolId).add(fresh.toFirestore());
+      print('[StudentFeeLedgerRepository] New ledger created with ID: ${ref.id}');
       return AssignmentResult(
         ledgerId: ref.id,
         outcome: AssignmentOutcome.NEW,
@@ -402,12 +422,12 @@ class StudentFeeLedgerRepository {
     return entries;
   }
 
-  /// Calculates previous academic year from current AY (e.g., 2026-27 → 2025-26)
+  /// Calculates previous academic year from current AY (e.g., 2026-2027 → 2025-2026)
   String _getPreviousAcademicYear(String currentAy) {
     final match = RegExp(r'^(\d{4})').firstMatch(currentAy);
     if (match == null) return currentAy;
     final startYear = int.tryParse(match.group(1)!) ?? DateTime.now().year;
-    return '${startYear - 1}-${startYear}';
+    return '${startYear - 1}-${startYear - 1 + 1}';
   }
 
   /// Bulk-assign with conflict policy + per-student outcome tracking.

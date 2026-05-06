@@ -15,7 +15,7 @@ import 'fee_structure_to_payment_mapper.dart';
 ///  2. StudentName      — display name
 ///  3. ClassName        — e.g. "IX"
 ///  4. Section          — e.g. "A"
-///  5. AcademicYear     — e.g. "2026-27"
+///  5. AcademicYear     — e.g. "2026-2027"
 ///  6. TermName         — e.g. "June" / "Term 1" / "Annual"
 ///   7. DueDate         — yyyy-MM-dd
 ///  8. AdmissionFee     — optional, defaults 0

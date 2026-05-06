@@ -8,33 +8,25 @@ const DUPLICATE_SCAN_WINDOW = 5 * 60 * 1000; // 5 minutes
 /**
  * Mark Attendance
  * POST /mark-attendance
- * Body: { schoolId, uid, deviceId, timestamp }
+ * Body: { schoolId, rfidTag, timestamp }
+ * Device is authenticated via x-device-key header
  */
 const markAttendance = async (req, res) => {
   try {
-    const { schoolId, uid, deviceId, timestamp } = req.body;
-    const { deviceId: authDeviceId, deviceName } = req.deviceInfo;
+    const { schoolId, rfidTag, timestamp } = req.body;
+    const { deviceId, deviceName } = req.deviceInfo;
 
     console.log('📍 [MARK_ATTENDANCE] Marking attendance');
     console.log(`   School: ${schoolId}`);
-    console.log(`   UID: ${uid}`);
+    console.log(`   RFID Tag: ${rfidTag}`);
     console.log(`   Device: ${deviceName} (${deviceId})`);
 
     // Validate required fields
-    if (!schoolId || !uid || !deviceId) {
+    if (!schoolId || !rfidTag) {
       return res.status(400).json({
         success: false,
         error: 'BAD_REQUEST',
-        message: 'schoolId, uid, and deviceId are required'
-      });
-    }
-
-    // Validate deviceId matches authenticated device
-    if (deviceId !== authDeviceId) {
-      return res.status(403).json({
-        success: false,
-        error: 'FORBIDDEN',
-        message: 'Device ID mismatch'
+        message: 'schoolId and rfidTag are required'
       });
     }
 
@@ -43,14 +35,14 @@ const markAttendance = async (req, res) => {
       .collection('schools')
       .doc(schoolId)
       .collection('rfid_cards')
-      .doc(uid)
+      .doc(rfidTag)
       .get();
 
     if (!rfidDoc.exists) {
       return res.status(404).json({
         success: false,
         error: 'RFID_NOT_FOUND',
-        message: 'RFID card not registered'
+        message: 'RFID card not registered. Please register the card first.'
       });
     }
 
@@ -65,7 +57,30 @@ const markAttendance = async (req, res) => {
       });
     }
 
-    const userId = rfidData.userId;
+    // Check if RFID card is assigned to a staff/student
+    if (!rfidData.isAssigned) {
+      return res.status(400).json({
+        success: false,
+        error: 'RFID_UNASSIGNED',
+        message: 'RFID card is not assigned to any staff or student. Please assign it in the admin panel.'
+      });
+    }
+
+    // Get the staffId or studentId from the mapping
+    const staffId = rfidData.staffId;
+    const studentId = rfidData.studentId;
+
+    if (!staffId && !studentId) {
+      return res.status(400).json({
+        success: false,
+        error: 'INVALID_MAPPING',
+        message: 'RFID card mapping is invalid. Please re-assign the card.'
+      });
+    }
+
+    // Determine which collection to use
+    const targetCollection = staffId ? 'staff' : 'students';
+    const targetId = staffId || studentId;
 
     // Check for duplicate scan within window
     const duplicateWindowStart = admin.firestore.Timestamp.fromDate(
@@ -76,7 +91,7 @@ const markAttendance = async (req, res) => {
       .collection('schools')
       .doc(schoolId)
       .collection('attendance')
-      .where('userId', '==', userId)
+      .where('rfidTag', '==', rfidTag)
       .where('scannedAt', '>=', duplicateWindowStart)
       .orderBy('scannedAt', 'desc')
       .limit(1)
@@ -88,7 +103,7 @@ const markAttendance = async (req, res) => {
       const timeSinceLastScan = Date.now() - lastScanTime.getTime();
       const minutesSince = Math.floor(timeSinceLastScan / 1000 / 60);
 
-      logWarning('MARK_ATTENDANCE', `Duplicate scan detected for user ${userId}. Last scan was ${minutesSince} minutes ago`);
+      logWarning('MARK_ATTENDANCE', `Duplicate scan detected for RFID ${rfidTag}. Last scan was ${minutesSince} minutes ago`);
 
       return res.status(409).json({
         success: false,
@@ -109,8 +124,9 @@ const markAttendance = async (req, res) => {
     // Create attendance record
     const attendanceRecord = {
       schoolId,
-      userId,
-      uid,
+      rfidTag,
+      staffId: staffId || null,
+      studentId: studentId || null,
       deviceId,
       deviceName,
       scannedAt: scanTime,
@@ -135,25 +151,29 @@ const markAttendance = async (req, res) => {
     const userDoc = await db
       .collection('schools')
       .doc(schoolId)
-      .collection('users')
-      .doc(userId)
+      .collection(targetCollection)
+      .doc(targetId)
       .get();
 
     let userDetails = null;
     if (userDoc.exists) {
       const userData = userDoc.data();
       userDetails = {
-        userId,
-        name: userData.name || userData.displayName || 'Unknown',
-        email: userData.email || null,
-        role: userData.role || 'STAFF'
+        id: targetId,
+        type: staffId ? 'staff' : 'student',
+        name: staffId 
+          ? (userData.name || userData.displayName || 'Unknown')
+          : (userData.studentName || userData.name || 'Unknown'),
+        email: userData.email || null
       };
     }
 
     logSuccess('MARK_ATTENDANCE', {
       attendanceId: attendanceRef.id,
-      userId,
+      rfidTag,
       schoolId,
+      staffId,
+      studentId,
       scannedAt: scanTime
     });
 
@@ -163,8 +183,9 @@ const markAttendance = async (req, res) => {
       data: {
         attendanceId: attendanceRef.id,
         schoolId,
-        userId,
-        uid,
+        rfidTag,
+        staffId,
+        studentId,
         scannedAt: scanTime,
         userDetails,
         deviceId,

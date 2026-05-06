@@ -72,6 +72,11 @@ class UserSession {
     List<Membership> memberships = const [],
     String? activeSchoolId,
   }) {
+    print('🔍 [SESSION] Creating session for user: ${user.email}');
+    print('🔍 [SESSION] User role: ${user.role}');
+    print('🔍 [SESSION] Memberships count: ${memberships.length}');
+    print('🔍 [SESSION] Active school ID: $activeSchoolId');
+
     // Pick the active membership (if any).
     Membership? active;
     if (activeSchoolId != null) {
@@ -87,11 +92,18 @@ class UserSession {
       active = memberships.first;
     }
 
+    print('🔍 [SESSION] Active membership: ${active?.schoolId}');
+    print('🔍 [SESSION] Active membership primaryRole: ${active?.primaryRole}');
+    print('🔍 [SESSION] Active membership roles: ${active?.roles}');
+
     final effRoles = active?.roles ?? const <UserRole>[];
     final effRole = active?.primaryRole ?? user.role;
     final effSchoolId = active?.schoolId ?? user.schoolId;
     final effPermissions =
         active?.effectivePermissions ?? user.permissions;
+
+    print('🔍 [SESSION] Effective role: $effRole');
+    print('🔍 [SESSION] Effective school ID: $effSchoolId');
 
     return UserSession(
       uid: user.uid,

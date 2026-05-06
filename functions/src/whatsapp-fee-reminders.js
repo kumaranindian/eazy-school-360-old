@@ -116,7 +116,7 @@ exports.sendPaymentNotification = functions.https.onCall(async (data, context) =
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
-  const { schoolId, phoneNumber, studentName, paidAmount, receiptNumber, paymentDate, balanceAmount } = data;
+  const { schoolId, phoneNumber, studentName, paidAmount, receiptNumber, paymentDate, balanceAmount, schoolName, feeDescription, feeType, isAdmin } = data;
 
   if (!schoolId || !phoneNumber) {
     throw new functions.https.HttpsError('invalid-argument', 'schoolId and phoneNumber are required');
@@ -137,8 +137,12 @@ exports.sendPaymentNotification = functions.https.onCall(async (data, context) =
       return { success: false, error: 'WhatsApp not configured or disabled' };
     }
 
-    const { accessToken, phoneNumberId, paymentConfirmationTemplate } = whatsappConfig.data();
-    const templateName = paymentConfirmationTemplate || 'payment_confirmation';
+    const { accessToken, phoneNumberId, paymentConfirmationTemplate, adminPaymentNotificationTemplate } = whatsappConfig.data();
+    
+    // Use different template for admin notifications
+    const templateName = isAdmin === true 
+      ? (adminPaymentNotificationTemplate || 'admin_payment_notification')
+      : (paymentConfirmationTemplate || 'payment_confirmation');
 
     if (!accessToken || !phoneNumberId) {
       return { success: false, error: 'Missing access token or phone number ID' };
@@ -153,7 +157,32 @@ exports.sendPaymentNotification = functions.https.onCall(async (data, context) =
       formattedPhone = '91' + formattedPhone;
     }
 
-    console.log(`[WhatsApp Payment] Phone: ${formattedPhone}, Template: ${templateName}, PhoneNumberId: ${phoneNumberId}`);
+    console.log(`[WhatsApp Payment] Phone: ${formattedPhone}, Template: ${templateName}, PhoneNumberId: ${phoneNumberId}, IsAdmin: ${isAdmin}`);
+
+    // Build template parameters based on notification type
+    let parameters;
+    if (isAdmin === true) {
+      // Admin notification parameters: school, student, amount, receipt, date, feeDesc, feeType, balance
+      parameters = [
+        { type: 'text', text: schoolName || 'School' },
+        { type: 'text', text: studentName || '' },
+        { type: 'text', text: `₹${parseFloat(paidAmount || 0).toFixed(2)}` },
+        { type: 'text', text: receiptNumber || '' },
+        { type: 'text', text: paymentDate || '' },
+        { type: 'text', text: feeDescription || 'Fee Payment' },
+        { type: 'text', text: feeType || 'Term Fee' },
+        { type: 'text', text: `₹${parseFloat(balanceAmount || 0).toFixed(2)}` },
+      ];
+    } else {
+      // Student/Parent notification parameters: student, amount, receipt, date, balance
+      parameters = [
+        { type: 'text', text: studentName || '' },
+        { type: 'text', text: `₹${parseFloat(paidAmount || 0).toFixed(2)}` },
+        { type: 'text', text: receiptNumber || '' },
+        { type: 'text', text: paymentDate || '' },
+        { type: 'text', text: `₹${parseFloat(balanceAmount || 0).toFixed(2)}` },
+      ];
+    }
 
     const response = await axios.post(
       `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
@@ -167,13 +196,7 @@ exports.sendPaymentNotification = functions.https.onCall(async (data, context) =
           components: [
             {
               type: 'body',
-              parameters: [
-                { type: 'text', text: studentName || '' },
-                { type: 'text', text: `₹${parseFloat(paidAmount || 0).toFixed(2)}` },
-                { type: 'text', text: receiptNumber || '' },
-                { type: 'text', text: paymentDate || '' },
-                { type: 'text', text: `₹${parseFloat(balanceAmount || 0).toFixed(2)}` },
-              ]
+              parameters: parameters
             }
           ]
         }
@@ -189,7 +212,7 @@ exports.sendPaymentNotification = functions.https.onCall(async (data, context) =
 
     console.log(`[WhatsApp Payment] Response: ${response.status}`, response.data);
 
-    // Log notification
+    // Log notification to whatsappNotifications collection
     await db
       .collection('schools')
       .doc(schoolId)
@@ -203,12 +226,42 @@ exports.sendPaymentNotification = functions.https.onCall(async (data, context) =
         sentAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+    // Log notification to communicationLogs collection
+    await db
+      .collection('schools')
+      .doc(schoolId)
+      .collection('communicationLogs')
+      .add({
+        channel: 'whatsapp',
+        status: 'sent',
+        purpose: isAdmin === true ? 'adminNotification' : 'paymentConfirmation',
+        recipientType: isAdmin === true ? 'admin' : 'parent',
+        recipientId: formattedPhone,
+        recipientName: isAdmin === true ? 'Admin' : studentName,
+        subject: isAdmin === true ? 'Payment Received - Admin Notification' : 'Payment Confirmation',
+        message: isAdmin === true 
+          ? `Payment of ₹${parseFloat(paidAmount || 0).toFixed(2)} received from ${studentName}. Receipt: ${receiptNumber}. Balance: ₹${parseFloat(balanceAmount || 0).toFixed(2)}`
+          : `Payment of ₹${parseFloat(paidAmount || 0).toFixed(2)} received for ${studentName}. Receipt: ${receiptNumber}. Balance: ₹${parseFloat(balanceAmount || 0).toFixed(2)}`,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        sentByUserId: 'system',
+        sentByUserName: 'Payment System',
+        metadata: {
+          receiptNumber,
+          paidAmount,
+          balanceAmount,
+          paymentDate,
+          feeDescription,
+          feeType,
+          isAdmin
+        }
+      });
+
     return { success: true, message: 'Notification sent successfully' };
   } catch (error) {
     console.error('[WhatsApp Payment] Error:', error.message);
     console.error('[WhatsApp Payment] Response:', error.response?.data);
 
-    // Log failed notification
+    // Log failed notification to whatsappNotifications collection
     await db
       .collection('schools')
       .doc(schoolId)
@@ -220,6 +273,38 @@ exports.sendPaymentNotification = functions.https.onCall(async (data, context) =
         metadata: { error: error.message, responseData: JSON.stringify(error.response?.data) },
         status: 'failed',
         sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    // Log failed notification to communicationLogs collection
+    await db
+      .collection('schools')
+      .doc(schoolId)
+      .collection('communicationLogs')
+      .add({
+        channel: 'whatsapp',
+        status: 'failed',
+        purpose: isAdmin === true ? 'adminNotification' : 'paymentConfirmation',
+        recipientType: isAdmin === true ? 'admin' : 'parent',
+        recipientId: phoneNumber,
+        recipientName: isAdmin === true ? 'Admin' : studentName,
+        subject: isAdmin === true ? 'Payment Received - Admin Notification' : 'Payment Confirmation',
+        message: isAdmin === true 
+          ? `Payment of ₹${parseFloat(paidAmount || 0).toFixed(2)} received from ${studentName}. Receipt: ${receiptNumber}. Balance: ₹${parseFloat(balanceAmount || 0).toFixed(2)}`
+          : `Payment of ₹${parseFloat(paidAmount || 0).toFixed(2)} received for ${studentName}. Receipt: ${receiptNumber}. Balance: ₹${parseFloat(balanceAmount || 0).toFixed(2)}`,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        sentByUserId: 'system',
+        sentByUserName: 'Payment System',
+        errorMessage: error.message,
+        metadata: {
+          receiptNumber,
+          paidAmount,
+          balanceAmount,
+          paymentDate,
+          feeDescription,
+          feeType,
+          isAdmin,
+          errorDetails: error.response?.data
+        }
       });
 
     return { success: false, error: error.message, details: error.response?.data };

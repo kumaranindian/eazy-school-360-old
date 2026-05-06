@@ -25,7 +25,7 @@ class StudentFeeItem {
   /// Fee category code (e.g., 'TUITION', 'EXAM', 'VAN', 'SPORTS_DAY')
   final String categoryCode;
 
-  /// Display name for this fee item (e.g., 'June Tuition', 'Exam Fee 2026-27', 'Sports Day Fee')
+  /// Display name for this fee item (e.g., 'June Tuition', 'Exam Fee 2026-2027', 'Sports Day Fee')
   final String itemName;
 
   /// Total amount for this fee item

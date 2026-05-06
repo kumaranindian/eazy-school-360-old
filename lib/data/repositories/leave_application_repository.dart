@@ -254,12 +254,33 @@ class LeaveApplicationRepository {
       final leaveCode = await idGenerator.generateLeaveId(schoolId);
       print('✅ [LEAVE_REPO] Auto-generated leave code: $leaveCode');
 
+      // Fetch staff name for display
+      String? staffName;
+      try {
+        final staffDoc = await _firestore
+            .collection('schools')
+            .doc(schoolId)
+            .collection('staff')
+            .doc(staffId)
+            .get();
+        if (staffDoc.exists) {
+          staffName = staffDoc.data()?['firstName'] as String?;
+          final lastName = staffDoc.data()?['lastName'] as String?;
+          if (staffName != null && lastName != null) {
+            staffName = '$staffName $lastName';
+          }
+        }
+      } catch (e) {
+        print('⚠️ [LEAVE_REPO] Could not fetch staff name: $e');
+      }
+
       // Create leave application
       final leaveApplication = LeaveApplication(
         id: '',
         schoolId: schoolId,
         applicantId: applicantId,
         staffId: staffId,
+        staffName: staffName,
         leaveTypeId: request.leaveTypeId,
         leaveTypeCode: leaveTypeConfig.code,
         academicYear: currentAcademicYear,
@@ -290,8 +311,10 @@ class LeaveApplicationRepository {
           .collection('leaves')
           .add(leaveApplication.toFirestore());
 
-      // Reserve balance (mark as pending) - this will be handled by Cloud Function
-      await _reserveLeaveBalance(schoolId, balanceId, leaveDates.length, docRef.id);
+      // ✅ Balance reservation is handled by Cloud Function (handleLeaveApplicationCreate)
+      // No client-side balance updates - prevents tampering
+      print('✅ [LEAVE_REPO] Leave application created: ${docRef.id}');
+      print('⏳ [LEAVE_REPO] Cloud Function will reserve balance automatically');
 
       return docRef.id;
     } catch (e) {
@@ -432,66 +455,13 @@ class LeaveApplicationRepository {
     }
   }
 
-  /// Reserve leave balance (mark as pending)
-  Future<void> _reserveLeaveBalance(String schoolId, String balanceId, int days, String leaveId) async {
-    try {
-      final balanceRef = _firestore
-          .collection('schools')
-          .doc(schoolId)
-          .collection('leaveBalances')
-          .doc(balanceId);
-
-      await _firestore.runTransaction((transaction) async {
-        final balanceDoc = await transaction.get(balanceRef);
-        if (!balanceDoc.exists) {
-          throw Exception('Leave balance not found');
-        }
-
-        final balance = LeaveBalance.fromFirestore(balanceDoc);
-        if (balance.available < days) {
-          throw Exception('Insufficient leave balance');
-        }
-
-        final newPending = balance.pending + days;
-        final newAvailable = balance.available - days;
-
-        transaction.update(balanceRef, {
-          'pending': newPending,
-          'available': newAvailable,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        // Create mutation record
-        final mutationRef = _firestore
-            .collection('schools')
-            .doc(schoolId)
-            .collection('balanceMutations')
-            .doc();
-
-        transaction.set(mutationRef, {
-          'schoolId': schoolId,
-          'staffId': balance.staffId,
-          'userId': balance.userId,
-          'leaveTypeId': balance.leaveTypeId,
-          'academicYear': balance.academicYear,
-          'mutationType': 'PENDING_ADDED',
-          'previousValue': balance.pending,
-          'newValue': newPending,
-          'delta': days,
-          'referenceId': leaveId,
-          'reason': 'Leave application submitted - days reserved',
-          'createdAt': FieldValue.serverTimestamp(),
-          'createdBy': 'system_leave_application',
-          'metadata': {
-            'leaveApplicationId': leaveId,
-            'functionName': 'reserveLeaveBalance',
-          },
-        });
-      });
-    } catch (e) {
-      throw Exception('Failed to reserve leave balance: $e');
-    }
-  }
+  // ❌ REMOVED: _reserveLeaveBalance method
+  // Balance reservation is now handled by Cloud Function (handleLeaveApplicationCreate)
+  // This ensures:
+  // - No client-side tampering
+  // - Atomic server-side transactions
+  // - Complete audit trail
+  // - Better security and reliability
 
   /// Count weekends in date range
   int _countWeekends(DateTime startDate, DateTime endDate) {
