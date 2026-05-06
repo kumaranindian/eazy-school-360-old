@@ -30,6 +30,7 @@ class _RfidCardManagementScreenState
   Map<String, dynamic>? _selectedStaff;
   List<Map<String, dynamic>> _staffList = [];
   List<RfidCard> _staffCards = [];
+  List<RfidCard> _availableCards = [];
   bool _isLoading = false;
   bool _isAssigning = false;
   String? get _schoolId => ref.read(currentSessionProvider)?.schoolId;
@@ -40,11 +41,18 @@ class _RfidCardManagementScreenState
   // Form controllers
   final _primaryUuidController = TextEditingController();
   final _backupUuidController = TextEditingController();
+  
+  // Selected card UIDs from dropdown
+  String? _selectedPrimaryCardUuid;
+  String? _selectedBackupCardUuid;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadStaffList());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadStaffList();
+      _loadAvailableCards();
+    });
   }
 
   @override
@@ -99,6 +107,36 @@ class _RfidCardManagementScreenState
     }
   }
 
+  Future<void> _loadAvailableCards() async {
+    if (_schoolId == null) return;
+    try {
+      // Load all active cards and filter client-side for unassigned ones
+      // Note: Firestore doesn't support querying for null values directly
+      final snap = await _firestore
+          .collection('schools')
+          .doc(_schoolId)
+          .collection('rfid_cards')
+          .where('isActive', isEqualTo: true)
+          .orderBy('assignedAt', descending: true)
+          .get();
+      
+      if (mounted) {
+        setState(() {
+          // Filter for cards without staffId (unassigned)
+          // staffId is null when unassigned
+          _availableCards = snap.docs
+              .map((doc) => RfidCard.fromFirestore(doc.data(), doc.id))
+              .where((card) => card.staffId == null)
+              .toList();
+        });
+        
+        print('[RfidCardManagement] Loaded ${_availableCards.length} available cards');
+      }
+    } catch (e) {
+      print('[RfidCardManagement] Error loading available cards: $e');
+    }
+  }
+
   Future<void> _assignCard(RfidCardType cardType, String uuid) async {
     if (_selectedStaffId == null || _schoolId == null) return;
     
@@ -148,6 +186,7 @@ class _RfidCardManagementScreenState
           ),
         );
         await _loadStaffCards(_selectedStaffId!);
+        await _loadAvailableCards();
       }
     } catch (e) {
       if (mounted) {
@@ -478,24 +517,91 @@ class _RfidCardManagementScreenState
               ),
             ]),
           ] else ...[
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: 'Enter RFID Card UUID',
-                hintStyle: TextStyle(color: _textSecondary),
-                filled: true,
-                fillColor: _bgDark,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: _borderColor),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: _borderColor),
+            // Show available cards count
+            if (_availableCards.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(bottom: isMobile ? 8 : 12),
+                child: Text(
+                  '${_availableCards.length} available card(s)',
+                  style: TextStyle(
+                    color: _accentGreen,
+                    fontSize: isMobile ? 11 : 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-              style: TextStyle(color: _textPrimary),
-            ),
+            
+            // Dropdown to select from available cards
+            if (_availableCards.isNotEmpty)
+              DropdownButtonFormField<String>(
+                value: cardType == RfidCardType.primary
+                    ? _selectedPrimaryCardUuid
+                    : _selectedBackupCardUuid,
+                decoration: InputDecoration(
+                  hintText: 'Select Available Card',
+                  hintStyle: TextStyle(color: _textSecondary),
+                  filled: true,
+                  fillColor: _bgDark,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: _borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: _borderColor),
+                  ),
+                  prefixIcon: Icon(Icons.credit_card, color: _accentBlue, size: 20),
+                ),
+                dropdownColor: _cardDark,
+                style: TextStyle(color: _textPrimary, fontSize: isMobile ? 12 : 14),
+                items: _availableCards.map((card) {
+                  // Safely truncate UUID and ID
+                  final uuidDisplay = card.uuid.length > 12 
+                      ? '${card.uuid.substring(0, 12)}...' 
+                      : card.uuid;
+                  final idDisplay = card.id.length > 8 
+                      ? card.id.substring(0, 8) 
+                      : card.id;
+                  
+                  return DropdownMenuItem<String>(
+                    value: card.uuid,
+                    child: Text(
+                      '$uuidDisplay (ID: $idDisplay)',
+                      style: TextStyle(fontSize: isMobile ? 11 : 13),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    if (cardType == RfidCardType.primary) {
+                      _selectedPrimaryCardUuid = value;
+                    } else {
+                      _selectedBackupCardUuid = value;
+                    }
+                  });
+                },
+              )
+            else
+              // Fallback to manual entry if no available cards
+              TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  hintText: 'Enter RFID Card UUID (No available cards)',
+                  hintStyle: TextStyle(color: _textSecondary),
+                  filled: true,
+                  fillColor: _bgDark,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: _borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: _borderColor),
+                  ),
+                  prefixIcon: Icon(Icons.edit, color: _textSecondary, size: 20),
+                ),
+                style: TextStyle(color: _textPrimary),
+              ),
             SizedBox(height: isMobile ? 12 : 16),
             Row(children: [
               Expanded(
@@ -513,17 +619,48 @@ class _RfidCardManagementScreenState
                   onPressed: _isAssigning
                       ? null
                       : () {
-                          if (controller.text.trim().isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Please enter a UUID'),
-                                backgroundColor: _accentRed,
-                              ),
-                            );
-                            return;
+                          String? uuidToAssign;
+                          
+                          if (_availableCards.isNotEmpty) {
+                            // Use selected card from dropdown
+                            uuidToAssign = cardType == RfidCardType.primary
+                                ? _selectedPrimaryCardUuid
+                                : _selectedBackupCardUuid;
+                            
+                            if (uuidToAssign == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Please select a card from the list'),
+                                  backgroundColor: _accentRed,
+                                ),
+                              );
+                              return;
+                            }
+                          } else {
+                            // Use manual entry
+                            uuidToAssign = controller.text.trim();
+                            if (uuidToAssign.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Please enter a UUID'),
+                                  backgroundColor: _accentRed,
+                                ),
+                              );
+                              return;
+                            }
                           }
-                          _assignCard(cardType, controller.text);
+                          
+                          _assignCard(cardType, uuidToAssign);
+                          
+                          // Clear selections
                           controller.clear();
+                          setState(() {
+                            if (cardType == RfidCardType.primary) {
+                              _selectedPrimaryCardUuid = null;
+                            } else {
+                              _selectedBackupCardUuid = null;
+                            }
+                          });
                         },
                 ),
               ),

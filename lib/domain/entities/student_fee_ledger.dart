@@ -27,7 +27,7 @@ class TermLedgerEntry {
   final bool isArrear;
 
   /// For arrears entries: the academic year the original unpaid balance
-  /// came from (e.g. "2024-25"). Empty for regular entries.
+  /// came from (e.g. "2024-2025"). Empty for regular entries.
   final String sourceAcademicYear;
 
   /// For arrears entries: the class the student was in when the original
