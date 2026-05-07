@@ -15,11 +15,12 @@ const db = admin.firestore();
  * 2. Daily Collection Summary (WhatsApp)
  * 3. Daily Attendance Finalizer
  * 
+ * Schedule: 11:59 PM IST to capture all RFID attendance for the day
  * This reduces Cloud Scheduler costs from ~$9/month to ~$2.70/month
  */
 exports.runDailyJobs = functions
   .region('asia-south1')
-  .pubsub.schedule('0 23 * * *') // Run at 11:00 PM IST daily
+  .pubsub.schedule('59 23 * * *') // Run at 11:59 PM IST daily
   .timeZone('Asia/Kolkata')
   .onRun(async (context) => {
     console.log('[Combined Daily Jobs] Starting daily job execution');
@@ -239,6 +240,7 @@ async function runDailyAttendanceFinalizer() {
  */
 async function finalizeSchoolAttendance(schoolId, date) {
   const dateStr = date.toISOString().split('T')[0];
+  console.log(`[Attendance Finalizer] Processing school ${schoolId} for ${dateStr}`);
   
   // Get attendance config
   const config = await getAttendanceConfig(schoolId);
@@ -246,14 +248,176 @@ async function finalizeSchoolAttendance(schoolId, date) {
   // Check if today is a working day
   const dayName = getDayName(date.getDay());
   if (!config.workingDays.includes(dayName)) {
-    console.log(`[Daily Attendance Finalizer] ${dateStr} is not a working day for school ${schoolId}`);
+    console.log(`[Attendance Finalizer] ${dateStr} is not a working day (${dayName})`);
     return;
   }
   
-  // Mark absent students, apply leave/permission, calculate LOP
-  // (Implementation would finalize attendance)
+  // Get all RFID attendance records for the day
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
   
-  console.log(`[Daily Attendance Finalizer] Attendance finalized for school ${schoolId} on ${dateStr}`);
+  const attendanceSnapshot = await db
+    .collection('schools')
+    .doc(schoolId)
+    .collection('rfid_attendance')
+    .where('scannedAt', '>=', admin.firestore.Timestamp.fromDate(startOfDay))
+    .where('scannedAt', '<=', admin.firestore.Timestamp.fromDate(endOfDay))
+    .get();
+  
+  console.log(`[Attendance Finalizer] Found ${attendanceSnapshot.size} RFID scans for ${dateStr}`);
+  
+  // Group attendance by staff/student
+  const attendanceByUser = {};
+  attendanceSnapshot.docs.forEach(doc => {
+    const data = doc.data();
+    const userId = data.staffId || data.studentId;
+    const userType = data.staffId ? 'staff' : 'student';
+    
+    if (!attendanceByUser[userId]) {
+      attendanceByUser[userId] = {
+        userId,
+        userType,
+        scans: [],
+        firstScan: null,
+        lastScan: null
+      };
+    }
+    
+    const scanTime = data.scannedAt.toDate();
+    attendanceByUser[userId].scans.push({
+      time: scanTime,
+      rfidTag: data.rfidTag
+    });
+    
+    if (!attendanceByUser[userId].firstScan || scanTime < attendanceByUser[userId].firstScan) {
+      attendanceByUser[userId].firstScan = scanTime;
+    }
+    if (!attendanceByUser[userId].lastScan || scanTime > attendanceByUser[userId].lastScan) {
+      attendanceByUser[userId].lastScan = scanTime;
+    }
+  });
+  
+  // Get all active staff members
+  const staffSnapshot = await db
+    .collection('schools')
+    .doc(schoolId)
+    .collection('staff')
+    .where('status', '==', 'ACTIVE')
+    .get();
+  
+  console.log(`[Attendance Finalizer] Processing ${staffSnapshot.size} active staff members`);
+  
+  // Process each staff member
+  for (const staffDoc of staffSnapshot.docs) {
+    const staffId = staffDoc.id;
+    const staffData = staffDoc.data();
+    
+    try {
+      await processStaffAttendance(schoolId, staffId, staffData, date, attendanceByUser[staffId], config);
+    } catch (error) {
+      console.error(`[Attendance Finalizer] Error processing staff ${staffId}:`, error);
+    }
+  }
+  
+  console.log(`[Attendance Finalizer] Completed for school ${schoolId} on ${dateStr}`);
+}
+
+/**
+ * Process attendance for a single staff member
+ */
+async function processStaffAttendance(schoolId, staffId, staffData, date, attendanceData, config) {
+  const dateStr = date.toISOString().split('T')[0];
+  const attendanceRef = db
+    .collection('schools')
+    .doc(schoolId)
+    .collection('staff')
+    .doc(staffId)
+    .collection('attendance')
+    .doc(dateStr);
+  
+  // Check if attendance already finalized
+  const existingDoc = await attendanceRef.get();
+  if (existingDoc.exists && existingDoc.data().finalized) {
+    console.log(`[Attendance Finalizer] Attendance already finalized for staff ${staffId} on ${dateStr}`);
+    return;
+  }
+  
+  // Check for approved leaves
+  const leaveSnapshot = await db
+    .collection('schools')
+    .doc(schoolId)
+    .collection('leaves')
+    .where('staffId', '==', staffId)
+    .where('status', '==', 'APPROVED')
+    .where('startDate', '<=', dateStr)
+    .where('endDate', '>=', dateStr)
+    .limit(1)
+    .get();
+  
+  if (!leaveSnapshot.empty) {
+    const leaveData = leaveSnapshot.docs[0].data();
+    await attendanceRef.set({
+      date: dateStr,
+      staffId,
+      staffName: staffData.name,
+      status: 'LEAVE',
+      leaveType: leaveData.leaveType,
+      leaveId: leaveSnapshot.docs[0].id,
+      finalized: true,
+      finalizedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    console.log(`[Attendance Finalizer] Staff ${staffId} on leave (${leaveData.leaveType})`);
+    return;
+  }
+  
+  // Check for approved permissions
+  const permissionSnapshot = await db
+    .collection('schools')
+    .doc(schoolId)
+    .collection('permissions')
+    .where('staffId', '==', staffId)
+    .where('status', '==', 'APPROVED')
+    .where('date', '==', dateStr)
+    .limit(1)
+    .get();
+  
+  // If RFID attendance exists
+  if (attendanceData && attendanceData.firstScan) {
+    const status = permissionSnapshot.empty ? 'PRESENT' : 'PERMISSION';
+    
+    await attendanceRef.set({
+      date: dateStr,
+      staffId,
+      staffName: staffData.name,
+      status,
+      checkIn: admin.firestore.Timestamp.fromDate(attendanceData.firstScan),
+      checkOut: admin.firestore.Timestamp.fromDate(attendanceData.lastScan),
+      totalScans: attendanceData.scans.length,
+      permissionId: permissionSnapshot.empty ? null : permissionSnapshot.docs[0].id,
+      finalized: true,
+      finalizedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    console.log(`[Attendance Finalizer] Staff ${staffId} marked ${status}`);
+  } else {
+    // No RFID scan - mark as LOP (Loss of Pay) if no permission
+    const status = permissionSnapshot.empty ? 'LOP' : 'PERMISSION';
+    
+    await attendanceRef.set({
+      date: dateStr,
+      staffId,
+      staffName: staffData.name,
+      status,
+      permissionId: permissionSnapshot.empty ? null : permissionSnapshot.docs[0].id,
+      autoMarked: true, // Flag to indicate this was auto-marked
+      finalized: true,
+      finalizedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    console.log(`[Attendance Finalizer] Staff ${staffId} marked ${status} (no RFID scan - auto-marked)`);
+  }
 }
 
 /**

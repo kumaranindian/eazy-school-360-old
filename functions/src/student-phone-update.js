@@ -243,11 +243,18 @@ exports.mapRfidToStaff = functions.https.onCall(async (data, context) => {
   
   // Require admin role
   const userDoc = await db.collection('users').doc(context.auth.uid).get();
-  if (!userDoc.exists || userDoc.data().role !== 'admin') {
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User document not found');
+  }
+  
+  const userData = userDoc.data();
+  const isAdmin = ['ADMIN', 'admin', 'TENANT_ADMIN', 'tenant_admin', 'SUPER_ADMIN', 'super_admin'].includes(userData.role);
+  
+  if (!isAdmin) {
     throw new functions.https.HttpsError('permission-denied', 'Only admins can run this function');
   }
   
-  const { schoolId, rfidTag, staffId, studentId } = data;
+  const { schoolId, rfidTag, staffId, studentId, cardType, staffName } = data;
   
   if (!schoolId || !rfidTag) {
     throw new functions.https.HttpsError('invalid-argument', 'schoolId and rfidTag are required');
@@ -258,18 +265,6 @@ exports.mapRfidToStaff = functions.https.onCall(async (data, context) => {
   }
   
   try {
-    // Check if RFID card exists
-    const rfidCardDoc = await db
-      .collection('schools')
-      .doc(schoolId)
-      .collection('rfid_cards')
-      .doc(rfidTag)
-      .get();
-    
-    if (!rfidCardDoc.exists) {
-      throw new functions.https.HttpsError('not-found', 'RFID card not found. Please register the card first.');
-    }
-    
     // Verify staff/student exists
     const targetId = staffId || studentId;
     const targetCollection = staffId ? 'staff' : 'students';
@@ -285,21 +280,49 @@ exports.mapRfidToStaff = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('not-found', `${staffId ? 'Staff' : 'Student'} not found in this school`);
     }
     
-    // Update RFID card with mapping
-    await db
+    // Get staff/student name if not provided
+    const targetData = targetDoc.data();
+    const finalStaffName = staffName || targetData.name || 'Unknown';
+    
+    // Check if RFID card exists
+    const rfidCardRef = db
       .collection('schools')
       .doc(schoolId)
       .collection('rfid_cards')
-      .doc(rfidTag)
-      .update({
-        staffId: staffId || null,
-        studentId: studentId || null,
-        isAssigned: true,
-        assignedAt: admin.firestore.FieldValue.serverTimestamp(),
-        assignedBy: context.auth.uid
-      });
+      .doc(rfidTag);
     
-    console.log(`[MapRfid] Mapped RFID ${rfidTag} to ${staffId ? 'staff' : 'student'} ${targetId}`);
+    const rfidCardDoc = await rfidCardRef.get();
+    
+    const cardData = {
+      staffId: staffId || null,
+      studentId: studentId || null,
+      staffName: staffId ? finalStaffName : null,
+      studentName: studentId ? finalStaffName : null,
+      cardType: cardType || 'primary',
+      isAssigned: true,
+      assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+      assignedBy: context.auth.uid,
+      uuid: rfidTag,
+      schoolId: schoolId,
+      isActive: true
+    };
+    
+    if (!rfidCardDoc.exists) {
+      // Create new RFID card if it doesn't exist
+      await rfidCardRef.set({
+        ...cardData,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      console.log(`[MapRfid] Created and mapped new RFID ${rfidTag} to ${staffId ? 'staff' : 'student'} ${targetId}`);
+    } else {
+      // Update existing RFID card with mapping
+      await rfidCardRef.update({
+        ...cardData,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      console.log(`[MapRfid] Updated and mapped RFID ${rfidTag} to ${staffId ? 'staff' : 'student'} ${targetId}`);
+    }
     
     return {
       success: true,
@@ -332,7 +355,14 @@ exports.listRfidCards = functions.https.onCall(async (data, context) => {
   
   // Require admin role
   const userDoc = await db.collection('users').doc(context.auth.uid).get();
-  if (!userDoc.exists || userDoc.data().role !== 'admin') {
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User document not found');
+  }
+  
+  const userData = userDoc.data();
+  const isAdmin = ['ADMIN', 'admin', 'TENANT_ADMIN', 'tenant_admin', 'SUPER_ADMIN', 'super_admin'].includes(userData.role);
+  
+  if (!isAdmin) {
     throw new functions.https.HttpsError('permission-denied', 'Only admins can run this function');
   }
   
@@ -424,7 +454,14 @@ exports.unmapRfidCard = functions.https.onCall(async (data, context) => {
   
   // Require admin role
   const userDoc = await db.collection('users').doc(context.auth.uid).get();
-  if (!userDoc.exists || userDoc.data().role !== 'admin') {
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User document not found');
+  }
+  
+  const userData = userDoc.data();
+  const isAdmin = ['ADMIN', 'admin', 'TENANT_ADMIN', 'tenant_admin', 'SUPER_ADMIN', 'super_admin'].includes(userData.role);
+  
+  if (!isAdmin) {
     throw new functions.https.HttpsError('permission-denied', 'Only admins can run this function');
   }
   

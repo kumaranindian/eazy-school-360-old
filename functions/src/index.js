@@ -41,3 +41,5 @@ exports.healthCheck = functions.https.onRequest((req, res) => {
 // Import weekly due notification scheduler
 const weeklyDueNotification = require('./weekly-due-notification');
 exports.sendWeeklyDueNotifications = weeklyDueNotification.sendWeeklyDueNotifications;
+
+// RFID card management functions removed - using existing mapRfidToStaff and unmapRfidCard instead

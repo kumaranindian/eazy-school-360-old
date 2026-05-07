@@ -140,6 +140,49 @@ service cloud.firestore {
           (isStaff() && resource.data.userId == request.auth.uid)
         );
         allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        
+        // LEAVE BALANCES SUBCOLLECTION (nested under staff)
+        // 🔒 SECURE: Only backend (Cloud Functions) can write
+        match /leave_balances/{leaveType} {
+          // READ: Staff can read their own balances, admins can read all
+          allow read: if isSignedIn() && (
+            isSuperAdmin() || 
+            (isAdmin() && belongsToSchool(schoolId)) ||
+            (isStaff() && staffId == request.auth.uid && belongsToSchool(schoolId))
+          );
+          
+          // WRITE: ONLY backend (Cloud Functions) can update balances
+          // Staff CANNOT update balances directly - prevents tampering
+          allow write: if false; // No client-side writes allowed
+        }
+        
+        // PERMISSION BALANCES SUBCOLLECTION (nested under staff)
+        // 🔒 SECURE: Only backend (Cloud Functions) can write
+        match /permission_balances/{balanceId} {
+          // READ: Staff can read their own balances, admins can read all
+          allow read: if isSignedIn() && (
+            isSuperAdmin() || 
+            (isAdmin() && belongsToSchool(schoolId)) ||
+            (isStaff() && staffId == request.auth.uid && belongsToSchool(schoolId))
+          );
+          
+          // WRITE: ONLY backend (Cloud Functions) can update balances
+          // Staff CANNOT update balances directly - prevents tampering
+          allow write: if false; // No client-side writes allowed
+        }
+        
+        // ATTENDANCE SUBCOLLECTION (nested under staff)
+        match /attendance/{dateId} {
+          // READ: Staff can read their own attendance, admins can read all
+          allow read: if isSignedIn() && (
+            isSuperAdmin() || 
+            (isAdmin() && belongsToSchool(schoolId)) ||
+            (isStaff() && staffId == request.auth.uid && belongsToSchool(schoolId))
+          );
+          
+          // WRITE: ONLY backend (Cloud Functions) can write attendance
+          allow write: if false; // No client-side writes allowed
+        }
       }
       
       // LEAVE TYPES SUBCOLLECTION
@@ -221,7 +264,12 @@ service cloud.firestore {
       
       // SETTINGS SUBCOLLECTION
       match /settings/{settingId} {
-        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        // Allow staff to read permission settings for applying permissions
+        allow read: if isSignedIn() && (
+          isSuperAdmin() || 
+          belongsToSchool(schoolId) ||
+          (isStaff() && belongsToSchool(schoolId) && settingId == 'permission')
+        );
         allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
       }
       
@@ -543,7 +591,8 @@ service cloud.firestore {
       
       // PERMISSION TYPES SUBCOLLECTION
       match /permissionTypes/{permissionTypeId} {
-        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        // Allow staff to read permission types for requesting permissions
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || (isStaff() && belongsToSchool(schoolId)));
         allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
         allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
       }
@@ -589,7 +638,8 @@ service cloud.firestore {
       
       // PERMISSION CONFIG SUBCOLLECTION
       match /permissionConfig/{configId} {
-        allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
+        // Allow staff to read permission config for requesting permissions
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || (isStaff() && belongsToSchool(schoolId)));
         allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
       }
       
@@ -969,22 +1019,37 @@ service cloud.firestore {
     // ============================================================
     match /schools/{schoolId}/rfid_cards/{cardId} {
       // READ: Admin and finance users from the same school can read
-      allow read: if isSignedIn() && belongsToSchool(schoolId) && isAdminOrFinance();
+      allow read: if isSignedIn() && belongsToSchool(schoolId) && (
+        isAdminOrFinance() || 
+        (request.auth.token.role == 'admin' || request.auth.token.role == 'ADMIN')
+      );
       
       // CREATE: Admin users from the same school can create
       // Additional validation: UUID must be unique within the school
-      allow create: if isSignedIn() && belongsToSchool(schoolId) && isAdmin() &&
+      allow create: if isSignedIn() && belongsToSchool(schoolId) && (
+        isAdmin() || 
+        request.auth.token.role == 'admin' || 
+        request.auth.token.role == 'ADMIN'
+      ) &&
         request.resource.data.schoolId == schoolId &&
         request.resource.data.uuid is string &&
         request.resource.data.staffId is string &&
         request.resource.data.cardType in ['primary', 'backup'];
       
       // UPDATE: Admin users from the same school can update
-      allow update: if isSignedIn() && belongsToSchool(schoolId) && isAdmin() &&
+      allow update: if isSignedIn() && belongsToSchool(schoolId) && (
+        isAdmin() || 
+        request.auth.token.role == 'admin' || 
+        request.auth.token.role == 'ADMIN'
+      ) &&
         resource.data.schoolId == schoolId;
       
       // DELETE: Admin users from the same school can delete
-      allow delete: if isSignedIn() && belongsToSchool(schoolId) && isAdmin() &&
+      allow delete: if isSignedIn() && belongsToSchool(schoolId) && (
+        isAdmin() || 
+        request.auth.token.role == 'admin' || 
+        request.auth.token.role == 'ADMIN'
+      ) &&
         resource.data.schoolId == schoolId;
     }
     

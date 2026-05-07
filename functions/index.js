@@ -65,6 +65,36 @@ try {
   console.error('[Functions] Error loading weekly due notification scheduler:', error.message);
 }
 
+// Export combined daily jobs scheduler (includes attendance finalizer)
+try {
+  const combinedDailyJobs = require('./src/combined-daily-jobs');
+  exports.runDailyJobs = combinedDailyJobs.runDailyJobs;
+  console.log('[Functions] Combined daily jobs scheduler loaded successfully');
+} catch (error) {
+  console.error('[Functions] Error loading combined daily jobs scheduler:', error.message);
+}
+
+// Export leave and permission management functions
+try {
+  const leavePermissionMgmt = require('./src/leave-permission-management');
+  exports.applyLeave = leavePermissionMgmt.applyLeave;
+  exports.approveLeave = leavePermissionMgmt.approveLeave;
+  exports.rejectLeave = leavePermissionMgmt.rejectLeave;
+  exports.cancelLeave = leavePermissionMgmt.cancelLeave;
+  exports.applyPermission = leavePermissionMgmt.applyPermission;
+  exports.approvePermission = leavePermissionMgmt.approvePermission;
+  exports.rejectPermission = leavePermissionMgmt.rejectPermission;
+  exports.adjustLeaveBalance = leavePermissionMgmt.adjustLeaveBalance;
+  exports.adjustPermissionBalance = leavePermissionMgmt.adjustPermissionBalance;
+  exports.getLeaveTypes = leavePermissionMgmt.getLeaveTypes;
+  exports.getPermissionConfig = leavePermissionMgmt.getPermissionConfig;
+  console.log('[Functions] Leave and permission management functions loaded successfully');
+} catch (error) {
+  console.error('[Functions] Error loading leave and permission management functions:', error.message);
+}
+
+// RFID card management functions removed - using existing mapRfidToStaff and unmapRfidCard instead
+
 // Export new TypeScript RFID Attendance & Leave functions
 const {
   processRfidSwipe,

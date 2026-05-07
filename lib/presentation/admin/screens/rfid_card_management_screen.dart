@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -140,15 +141,28 @@ class _RfidCardManagementScreenState
   Future<void> _assignCard(RfidCardType cardType, String uuid) async {
     if (_selectedStaffId == null || _schoolId == null) return;
     
+    print('[RfidCardManagement] Starting card assignment');
+    print('[RfidCardManagement] School ID: $_schoolId');
+    print('[RfidCardManagement] Staff ID: $_selectedStaffId');
+    print('[RfidCardManagement] Staff Name: ${_selectedStaff!['name']}');
+    print('[RfidCardManagement] Card Type: ${cardType.value}');
+    print('[RfidCardManagement] UUID: ${uuid.trim()}');
+    
     setState(() => _isAssigning = true);
     try {
-      await _rfidRepo.assignCard(
-        schoolId: _schoolId!,
-        uuid: uuid.trim(),
-        staffId: _selectedStaffId!,
-        staffName: (_selectedStaff!['name'] as String?) ?? '',
-        cardType: cardType,
-      );
+      // Use existing mapRfidToStaff Cloud Function
+      final callable = FirebaseFunctions.instance.httpsCallable('mapRfidToStaff');
+      
+      print('[RfidCardManagement] Calling Cloud Function: mapRfidToStaff');
+      final result = await callable.call({
+        'schoolId': _schoolId!,
+        'rfidTag': uuid.trim(),
+        'staffId': _selectedStaffId!,
+        'cardType': cardType.value,
+        'staffName': (_selectedStaff!['name'] as String?) ?? '',
+      });
+      
+      print('[RfidCardManagement] Cloud Function response: ${result.data}');
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -158,13 +172,33 @@ class _RfidCardManagementScreenState
           ),
         );
         await _loadStaffCards(_selectedStaffId!);
+        await _loadAvailableCards();
       }
-    } catch (e) {
+    } on FirebaseFunctionsException catch (e) {
+      print('[RfidCardManagement] FirebaseFunctionsException:');
+      print('[RfidCardManagement] Code: ${e.code}');
+      print('[RfidCardManagement] Message: ${e.message}');
+      print('[RfidCardManagement] Details: ${e.details}');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.message ?? e.code}'),
+            backgroundColor: _accentRed,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      print('[RfidCardManagement] Unexpected error: $e');
+      print('[RfidCardManagement] Stack trace: $stackTrace');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error assigning card: $e'),
             backgroundColor: _accentRed,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -177,7 +211,23 @@ class _RfidCardManagementScreenState
     if (_schoolId == null) return;
     
     try {
-      await _rfidRepo.deactivateCard(_schoolId!, cardId);
+      // First get the card to find its UUID
+      final card = await _rfidRepo.getCardById(_schoolId!, cardId);
+      if (card == null) {
+        throw Exception('Card not found');
+      }
+      
+      // Use existing unmapRfidCard Cloud Function
+      final callable = FirebaseFunctions.instance.httpsCallable('unmapRfidCard');
+      
+      print('[RfidCardManagement] Calling Cloud Function: unmapRfidCard');
+      final result = await callable.call({
+        'schoolId': _schoolId!,
+        'rfidTag': card.uuid,
+      });
+      
+      print('[RfidCardManagement] Cloud Function response: ${result.data}');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -188,7 +238,18 @@ class _RfidCardManagementScreenState
         await _loadStaffCards(_selectedStaffId!);
         await _loadAvailableCards();
       }
+    } on FirebaseFunctionsException catch (e) {
+      print('[RfidCardManagement] FirebaseFunctionsException: ${e.code} - ${e.message}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.message ?? e.code}'),
+            backgroundColor: _accentRed,
+          ),
+        );
+      }
     } catch (e) {
+      print('[RfidCardManagement] Error deactivating card: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
