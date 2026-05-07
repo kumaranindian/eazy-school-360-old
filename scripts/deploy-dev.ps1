@@ -78,7 +78,7 @@ Pop-Location
 Log ""
 Log "Step 4/5: Building Flutter web app..." "Yellow"
 Push-Location (Join-Path $PSScriptRoot "..")
-Run-Logged "flutter build web" "Building Flutter web app"
+Run-Logged "flutter build web lib/main_dev.dart" "Building Flutter web app with dev entry point"
 Pop-Location
 
 # Step 5: Deploy Functions and Hosting
