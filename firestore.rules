@@ -675,19 +675,8 @@ service cloud.firestore {
         allow write: if false; // No client-side writes allowed
       }
       
-      // RFID CARDS SUBCOLLECTION (RFID to user mapping)
-      // 🔒 SECURE: Only backend (Cloud Functions) can write
-      match /rfid_cards/{uid} {
-        // READ: Only admins can read RFID mappings
-        allow read: if isSignedIn() && isActive() && (
-          isSuperAdmin() || 
-          (isTenantAdmin() && belongsToSchool(schoolId)) ||
-          (isAdmin() && belongsToSchool(schoolId))
-        );
-        
-        // WRITE: ONLY backend (Cloud Functions) can register RFID cards
-        allow write: if false; // No client-side writes allowed
-      }
+      // RFID CARDS SUBCOLLECTION - Handled by more specific rules below at line 1020
+      // See: match /schools/{schoolId}/rfid_cards/{cardId} for actual rules
       
       // ATTENDANCE SUBCOLLECTION (Attendance records)
       // 🔒 SECURE: Only backend (Cloud Functions) can write
@@ -1025,7 +1014,7 @@ service cloud.firestore {
       );
       
       // CREATE: Admin users from the same school can create
-      // Additional validation: UUID must be unique within the school
+      // Additional validation: Must have either staffId or studentId
       allow create: if isSignedIn() && belongsToSchool(schoolId) && (
         isAdmin() || 
         request.auth.token.role == 'admin' || 
@@ -1033,7 +1022,7 @@ service cloud.firestore {
       ) &&
         request.resource.data.schoolId == schoolId &&
         request.resource.data.uuid is string &&
-        request.resource.data.staffId is string &&
+        (request.resource.data.staffId is string || request.resource.data.studentId is string) &&
         request.resource.data.cardType in ['primary', 'backup'];
       
       // UPDATE: Admin users from the same school can update
