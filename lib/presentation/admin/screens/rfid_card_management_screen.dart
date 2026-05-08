@@ -171,7 +171,20 @@ class _RfidCardManagementScreenState
             backgroundColor: _accentGreen,
           ),
         );
+        
+        // Clear form selections
+        setState(() {
+          _selectedPrimaryCardUuid = null;
+          _selectedBackupCardUuid = null;
+          _primaryUuidController.clear();
+          _backupUuidController.clear();
+        });
+        
+        // Reload staff cards and available cards
         await _loadStaffCards(_selectedStaffId!);
+        
+        // Add small delay to ensure Firestore has propagated
+        await Future.delayed(const Duration(milliseconds: 500));
         await _loadAvailableCards();
       }
     } on FirebaseFunctionsException catch (e) {
@@ -235,7 +248,12 @@ class _RfidCardManagementScreenState
             backgroundColor: _accentGreen,
           ),
         );
+        
+        // Reload staff cards
         await _loadStaffCards(_selectedStaffId!);
+        
+        // Add small delay to ensure Firestore has propagated
+        await Future.delayed(const Duration(milliseconds: 500));
         await _loadAvailableCards();
       }
     } on FirebaseFunctionsException catch (e) {
