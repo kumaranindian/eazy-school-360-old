@@ -85,14 +85,32 @@ class PdfBranding {
           .doc(schoolId)
           .get();
       if (doc.exists) {
+        print('📄 [PDF_BRANDING] School doc exists for ID: $schoolId');
+        final data = doc.data() as Map<String, dynamic>?;
+        print('📄 [PDF_BRANDING] Raw data: ${data?.keys.toList()}');
+        print('📄 [PDF_BRANDING] name field: ${data?['name']}');
+        print('📄 [PDF_BRANDING] schoolName field: ${data?['schoolName']}');
+        print('📄 [PDF_BRANDING] address: ${data?['address']}');
+        print('📄 [PDF_BRANDING] phone: ${data?['phone']}');
+        print('📄 [PDF_BRANDING] email: ${data?['email']}');
+
         final school = School.fromFirestore(doc);
         schoolName = school.schoolName;
         address = school.address;
         phone = school.phone;
         email = school.email;
         website = school.website;
+
+        print('✅ [PDF_BRANDING] Parsed schoolName: $schoolName');
+        print('✅ [PDF_BRANDING] Parsed address: $address');
+        print('✅ [PDF_BRANDING] Parsed phone: $phone');
+        print('✅ [PDF_BRANDING] Parsed email: $email');
+        print('✅ [PDF_BRANDING] Parsed website: $website');
+      } else {
+        print('❌ [PDF_BRANDING] School doc does NOT exist for ID: $schoolId');
       }
-    } catch (_) {
+    } catch (e) {
+      print('❌ [PDF_BRANDING] Error loading school: $e');
       // Swallow — header should never block the export.
     }
 

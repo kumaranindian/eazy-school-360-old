@@ -19,7 +19,8 @@ class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
 
   @override
-  ConsumerState<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+  ConsumerState<AdminDashboardScreen> createState() =>
+      _AdminDashboardScreenState();
 }
 
 class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
@@ -44,16 +45,15 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       body: Row(
         children: [
           // Side Navigation for wide screens
-          if (isWideScreen)
-            _buildSideNavigation(context, colorScheme),
-          
+          if (isWideScreen) _buildSideNavigation(context, colorScheme),
+
           // Main Content
           Expanded(
             child: Column(
               children: [
                 // Top App Bar
                 _buildTopBar(context, session, colorScheme),
-                
+
                 // Dashboard Content
                 Expanded(
                   child: SingleChildScrollView(
@@ -64,22 +64,23 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                         // Welcome Header
                         _buildWelcomeHeader(session, colorScheme),
                         const SizedBox(height: 24),
-                        
+
                         // Stats Cards
                         _buildStatsRow(colorScheme),
                         const SizedBox(height: 24),
-                        
+
                         // Quick Actions Grid
                         Text(
                           'Quick Actions',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                         ),
                         const SizedBox(height: 16),
                         _buildQuickActionsGrid(context, colorScheme),
                         const SizedBox(height: 24),
-                        
+
                         // Recent Activity Section
                         _buildRecentActivitySection(context, colorScheme),
                       ],
@@ -92,7 +93,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         ],
       ),
       // Bottom Navigation for mobile
-      bottomNavigationBar: isWideScreen ? null : _buildBottomNavigation(colorScheme),
+      bottomNavigationBar:
+          isWideScreen ? null : _buildBottomNavigation(colorScheme),
     );
   }
 
@@ -118,7 +120,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     ),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.school, color: Colors.white, size: 28),
+                  child:
+                      const Icon(Icons.school, color: Colors.white, size: 28),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
@@ -135,30 +138,40 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             ),
           ),
           Divider(height: 1, color: _borderColor),
-          
+
           // Navigation Items
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
-                _buildNavItem(Icons.dashboard_rounded, 'Dashboard', 0, colorScheme),
-                _buildNavItem(Icons.people_rounded, 'Staff Management', 1, colorScheme),
-                _buildNavItem(Icons.event_note_rounded, 'Leave Requests', 2, colorScheme),
-                _buildNavItem(Icons.access_time_rounded, 'Permissions', 3, colorScheme),
-                _buildNavItem(Icons.category_rounded, 'Leave Types', 4, colorScheme),
-                _buildNavItem(Icons.rule_rounded, 'Permission Types', 5, colorScheme),
-                _buildNavItem(Icons.calendar_month_rounded, 'Holiday Calendar', 6, colorScheme),
-                const Divider(height: 32),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Text('STUDENT MANAGEMENT', style: TextStyle(color: _textSecondary.withOpacity(0.6), fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1)),
-                ),
-                _buildNavItem(Icons.school_rounded, 'Student Directory', 10, colorScheme),
-                _buildNavItem(Icons.account_balance_wallet_rounded, 'Student Ledgers', 11, colorScheme),
-                _buildNavItem(Icons.fact_check_rounded, 'Student Attendance', 8, colorScheme),
-                _buildNavItem(Icons.pending_actions_rounded, 'Student Leaves', 9, colorScheme),
-                const Divider(height: 32),
-                _buildNavItem(Icons.developer_mode, 'Developer Tools', 7, colorScheme),
+                _buildSectionHeader('Overview'),
+                _buildNavItem(
+                    Icons.dashboard_rounded, 'Dashboard', 0, colorScheme),
+                _buildSectionHeader('Staff'),
+                _buildNavItem(
+                    Icons.people_rounded, 'Staff Management', 1, colorScheme),
+                _buildNavItem(
+                    Icons.event_note_rounded, 'Leave Requests', 2, colorScheme),
+                _buildNavItem(
+                    Icons.access_time_rounded, 'Permissions', 3, colorScheme),
+                _buildNavItem(
+                    Icons.category_rounded, 'Leave Types', 4, colorScheme),
+                _buildNavItem(
+                    Icons.rule_rounded, 'Permission Types', 5, colorScheme),
+                _buildNavItem(Icons.calendar_month_rounded, 'Holiday Calendar',
+                    6, colorScheme),
+                _buildSectionHeader('Students'),
+                _buildNavItem(
+                    Icons.school_rounded, 'Student Directory', 10, colorScheme),
+                _buildNavItem(Icons.account_balance_wallet_rounded,
+                    'Student Ledgers', 11, colorScheme),
+                _buildNavItem(Icons.fact_check_rounded, 'Student Attendance', 8,
+                    colorScheme),
+                _buildNavItem(Icons.pending_actions_rounded, 'Student Leaves',
+                    9, colorScheme),
+                _buildSectionHeader('Tools'),
+                _buildNavItem(
+                    Icons.developer_mode, 'Developer Tools', 7, colorScheme),
               ],
             ),
           ),
@@ -167,7 +180,23 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, int index, ColorScheme colorScheme) {
+  Widget _buildSectionHeader(String label) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          color: _textSecondary.withOpacity(0.6),
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(
+      IconData icon, String label, int index, ColorScheme colorScheme) {
     final isSelected = _selectedNavIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
@@ -202,7 +231,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildTopBar(BuildContext context, dynamic session, ColorScheme colorScheme) {
+  Widget _buildTopBar(
+      BuildContext context, dynamic session, ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: BoxDecoration(
@@ -241,17 +271,18 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             ),
           ),
           const SizedBox(width: 16),
-          
+
           // Notifications
           IconButton(
             icon: Badge(
               label: const Text('3'),
-              child: const Icon(Icons.notifications_outlined, color: _textSecondary),
+              child: const Icon(Icons.notifications_outlined,
+                  color: _textSecondary),
             ),
             onPressed: () {},
           ),
           const SizedBox(width: 8),
-          
+
           // Get Auth Token Button (TEMPORARY)
           IconButton(
             icon: const Icon(Icons.key, color: Colors.orange),
@@ -264,7 +295,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             tooltip: 'Get Auth Token',
           ),
           const SizedBox(width: 8),
-          
+
           // User Menu
           PopupMenuButton<String>(
             offset: const Offset(0, 50),
@@ -276,7 +307,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   radius: 18,
                   child: Text(
                     ((session?.displayName as String?) ?? 'A')[0].toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -286,7 +318,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   children: [
                     Text(
                       (session?.displayName as String?) ?? 'Admin',
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: _textPrimary),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: _textPrimary),
                     ),
                     const Text(
                       'School Admin',
@@ -299,10 +334,18 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
               ],
             ),
             itemBuilder: (context) => [
-              const PopupMenuItem(value: 'profile', child: Text('Profile', style: TextStyle(color: _textPrimary))),
-              const PopupMenuItem(value: 'settings', child: Text('Settings', style: TextStyle(color: _textPrimary))),
+              const PopupMenuItem(
+                  value: 'profile',
+                  child:
+                      Text('Profile', style: TextStyle(color: _textPrimary))),
+              const PopupMenuItem(
+                  value: 'settings',
+                  child:
+                      Text('Settings', style: TextStyle(color: _textPrimary))),
               const PopupMenuDivider(),
-              const PopupMenuItem(value: 'logout', child: Text('Logout', style: TextStyle(color: _textPrimary))),
+              const PopupMenuItem(
+                  value: 'logout',
+                  child: Text('Logout', style: TextStyle(color: _textPrimary))),
             ],
             onSelected: (value) async {
               if (value == 'logout') {
@@ -382,17 +425,22 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           spacing: 16,
           runSpacing: 16,
           children: [
-            _buildStatCard('Total Staff', '35', Icons.people, Colors.blue, isNarrow),
-            _buildStatCard('Pending Leaves', '5', Icons.event_note, Colors.orange, isNarrow),
-            _buildStatCard('Active Today', '28', Icons.check_circle, Colors.green, isNarrow),
-            _buildStatCard('On Leave', '7', Icons.event_busy, Colors.red, isNarrow),
+            _buildStatCard(
+                'Total Staff', '35', Icons.people, Colors.blue, isNarrow),
+            _buildStatCard('Pending Leaves', '5', Icons.event_note,
+                Colors.orange, isNarrow),
+            _buildStatCard('Active Today', '28', Icons.check_circle,
+                Colors.green, isNarrow),
+            _buildStatCard(
+                'On Leave', '7', Icons.event_busy, Colors.red, isNarrow),
           ],
         );
       },
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color, bool isNarrow) {
+  Widget _buildStatCard(
+      String title, String value, IconData icon, Color color, bool isNarrow) {
     return Container(
       width: isNarrow ? double.infinity : 200,
       padding: const EdgeInsets.all(20),
@@ -445,7 +493,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   Widget _buildQuickActionsGrid(BuildContext context, ColorScheme colorScheme) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth > 800 ? 4 : (constraints.maxWidth > 500 ? 3 : 2);
+        final crossAxisCount = constraints.maxWidth > 800
+            ? 4
+            : (constraints.maxWidth > 500 ? 3 : 2);
         return GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -454,23 +504,34 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           crossAxisSpacing: 16,
           childAspectRatio: 1.2,
           children: [
-            _buildActionCard('Manage Staff', Icons.people_rounded, Colors.blue, () => _handleNavigation(1)),
-            _buildActionCard('Leave Requests', Icons.event_note_rounded, Colors.orange, () => _handleNavigation(2)),
-            _buildActionCard('Permissions', Icons.access_time_rounded, Colors.purple, () => _handleNavigation(3)),
-            _buildActionCard('Leave Types', Icons.category_rounded, Colors.teal, () => _handleNavigation(4)),
-            _buildActionCard('Permission Types', Icons.rule_rounded, Colors.indigo, () => _handleNavigation(5)),
-            _buildActionCard('Student Directory', Icons.school_rounded, Colors.cyan, () => _handleNavigation(10)),
-            _buildActionCard('Student Attendance', Icons.fact_check_rounded, Colors.deepOrange, () => _handleNavigation(8)),
-            _buildActionCard('RFID Cards', Icons.credit_card_rounded, Colors.green, () => _navigateToRfidManagement()),
-            _buildActionCard('Reports', Icons.analytics_rounded, Colors.pink, () => _showComingSoon(context)),
-            _buildActionCard('Settings', Icons.settings_rounded, Colors.grey, () => _showComingSoon(context)),
+            _buildActionCard('Manage Staff', Icons.people_rounded, Colors.blue,
+                () => _handleNavigation(1)),
+            _buildActionCard('Leave Requests', Icons.event_note_rounded,
+                Colors.orange, () => _handleNavigation(2)),
+            _buildActionCard('Permissions', Icons.access_time_rounded,
+                Colors.purple, () => _handleNavigation(3)),
+            _buildActionCard('Leave Types', Icons.category_rounded, Colors.teal,
+                () => _handleNavigation(4)),
+            _buildActionCard('Permission Types', Icons.rule_rounded,
+                Colors.indigo, () => _handleNavigation(5)),
+            _buildActionCard('Student Directory', Icons.school_rounded,
+                Colors.cyan, () => _handleNavigation(10)),
+            _buildActionCard('Student Attendance', Icons.fact_check_rounded,
+                Colors.deepOrange, () => _handleNavigation(8)),
+            _buildActionCard('RFID Cards', Icons.credit_card_rounded,
+                Colors.green, () => _navigateToRfidManagement()),
+            _buildActionCard('Reports', Icons.analytics_rounded, Colors.pink,
+                () => _showComingSoon(context)),
+            _buildActionCard('Settings', Icons.settings_rounded, Colors.grey,
+                () => _showComingSoon(context)),
           ],
         );
       },
     );
   }
 
-  Widget _buildActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildActionCard(
+      String title, IconData icon, Color color, VoidCallback onTap) {
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
@@ -516,7 +577,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildRecentActivitySection(BuildContext context, ColorScheme colorScheme) {
+  Widget _buildRecentActivitySection(
+      BuildContext context, ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -576,7 +638,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildActivityItem(String name, String action, String time, IconData icon, Color color) {
+  Widget _buildActivityItem(
+      String name, String action, String time, IconData icon, Color color) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -619,9 +682,18 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       selectedIndex: _selectedNavIndex > 3 ? 0 : _selectedNavIndex,
       onDestinationSelected: _handleNavigation,
       destinations: const [
-        NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-        NavigationDestination(icon: Icon(Icons.people_outlined), selectedIcon: Icon(Icons.people), label: 'Staff'),
-        NavigationDestination(icon: Icon(Icons.event_note_outlined), selectedIcon: Icon(Icons.event_note), label: 'Leaves'),
+        NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard'),
+        NavigationDestination(
+            icon: Icon(Icons.people_outlined),
+            selectedIcon: Icon(Icons.people),
+            label: 'Staff'),
+        NavigationDestination(
+            icon: Icon(Icons.event_note_outlined),
+            selectedIcon: Icon(Icons.event_note),
+            label: 'Leaves'),
         NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
       ],
     );
@@ -629,85 +701,131 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
   void _handleNavigation(int index) {
     setState(() => _selectedNavIndex = index);
-    
+
     switch (index) {
       case 1:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffManagementScreen()));
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const StaffManagementScreen()));
         break;
       case 2:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaveApprovalScreen()));
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const LeaveApprovalScreen()));
         break;
       case 3:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const PermissionApprovalScreen()));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const PermissionApprovalScreen()));
         break;
       case 4:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaveTypeManagementScreen()));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const LeaveTypeManagementScreen()));
         break;
       case 5:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const PermissionTypeManagementScreen()));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const PermissionTypeManagementScreen()));
         break;
       case 6:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
-          backgroundColor: const Color(0xFF0D1117),
-          appBar: AppBar(
-            title: const Text('Holiday Calendar', style: TextStyle(color: Color(0xFFE6EDF3), fontWeight: FontWeight.bold, fontSize: 18)),
-            backgroundColor: const Color(0xFF161B22),
-            foregroundColor: const Color(0xFFE6EDF3),
-            elevation: 0,
-          ),
-          body: const HolidayManagementScreen(),
-        )));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => Scaffold(
+                      backgroundColor: const Color(0xFF0D1117),
+                      appBar: AppBar(
+                        title: const Text('Holiday Calendar',
+                            style: TextStyle(
+                                color: Color(0xFFE6EDF3),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18)),
+                        backgroundColor: const Color(0xFF161B22),
+                        foregroundColor: const Color(0xFFE6EDF3),
+                        elevation: 0,
+                      ),
+                      body: const HolidayManagementScreen(),
+                    )));
         break;
       case 7:
         _showComingSoon(context);
         break;
       case 8:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
-          backgroundColor: const Color(0xFF0D1117),
-          appBar: AppBar(
-            title: const Text('Student Attendance', style: TextStyle(color: Color(0xFFE6EDF3), fontWeight: FontWeight.bold, fontSize: 18)),
-            backgroundColor: const Color(0xFF161B22),
-            foregroundColor: const Color(0xFFE6EDF3),
-            elevation: 0,
-          ),
-          body: const StudentAttendanceScreen(),
-        )));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => Scaffold(
+                      backgroundColor: const Color(0xFF0D1117),
+                      appBar: AppBar(
+                        title: const Text('Student Attendance',
+                            style: TextStyle(
+                                color: Color(0xFFE6EDF3),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18)),
+                        backgroundColor: const Color(0xFF161B22),
+                        foregroundColor: const Color(0xFFE6EDF3),
+                        elevation: 0,
+                      ),
+                      body: const StudentAttendanceScreen(),
+                    )));
         break;
       case 9:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
-          backgroundColor: const Color(0xFF0D1117),
-          appBar: AppBar(
-            title: const Text('Student Leave Requests', style: TextStyle(color: Color(0xFFE6EDF3), fontWeight: FontWeight.bold, fontSize: 18)),
-            backgroundColor: const Color(0xFF161B22),
-            foregroundColor: const Color(0xFFE6EDF3),
-            elevation: 0,
-          ),
-          body: const StudentLeaveApprovalScreen(),
-        )));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => Scaffold(
+                      backgroundColor: const Color(0xFF0D1117),
+                      appBar: AppBar(
+                        title: const Text('Student Leave Requests',
+                            style: TextStyle(
+                                color: Color(0xFFE6EDF3),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18)),
+                        backgroundColor: const Color(0xFF161B22),
+                        foregroundColor: const Color(0xFFE6EDF3),
+                        elevation: 0,
+                      ),
+                      body: const StudentLeaveApprovalScreen(),
+                    )));
         break;
       case 10:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
-          backgroundColor: const Color(0xFF0D1117),
-          appBar: AppBar(
-            title: const Text('Student Directory', style: TextStyle(color: Color(0xFFE6EDF3), fontWeight: FontWeight.bold, fontSize: 18)),
-            backgroundColor: const Color(0xFF161B22),
-            foregroundColor: const Color(0xFFE6EDF3),
-            elevation: 0,
-          ),
-          body: const StudentDirectoryScreen(),
-        )));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => Scaffold(
+                      backgroundColor: const Color(0xFF0D1117),
+                      appBar: AppBar(
+                        title: const Text('Student Directory',
+                            style: TextStyle(
+                                color: Color(0xFFE6EDF3),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18)),
+                        backgroundColor: const Color(0xFF161B22),
+                        foregroundColor: const Color(0xFFE6EDF3),
+                        elevation: 0,
+                      ),
+                      body: const StudentDirectoryScreen(),
+                    )));
         break;
       case 11:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
-          backgroundColor: const Color(0xFF0D1117),
-          appBar: AppBar(
-            title: const Text('Student Ledgers & Payments', style: TextStyle(color: Color(0xFFE6EDF3), fontWeight: FontWeight.bold, fontSize: 18)),
-            backgroundColor: const Color(0xFF161B22),
-            foregroundColor: const Color(0xFFE6EDF3),
-            elevation: 0,
-          ),
-          body: const StudentDirectoryWithLedgerScreen(),
-        )));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => Scaffold(
+                      backgroundColor: const Color(0xFF0D1117),
+                      appBar: AppBar(
+                        title: const Text('Student Ledgers & Payments',
+                            style: TextStyle(
+                                color: Color(0xFFE6EDF3),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18)),
+                        backgroundColor: const Color(0xFF161B22),
+                        foregroundColor: const Color(0xFFE6EDF3),
+                        elevation: 0,
+                      ),
+                      body: const StudentDirectoryWithLedgerScreen(),
+                    )));
         break;
     }
   }
@@ -733,14 +851,14 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   void _navigateToRfidManagement() {
     final session = ref.read(currentSessionProvider);
     final schoolId = session?.schoolId;
-    
+
     if (schoolId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('School ID not found')),
       );
       return;
     }
-    
+
     Navigator.push(
       context,
       MaterialPageRoute(

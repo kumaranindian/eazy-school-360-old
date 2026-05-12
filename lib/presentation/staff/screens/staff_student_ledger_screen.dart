@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/providers/auth_provider.dart';
+import '../../../domain/entities/academic_year.dart';
 import '../../../data/repositories/student_fee_ledger_repository.dart';
 import '../../../domain/entities/student.dart';
-import '../../../domain/entities/student_fee_ledger.dart';
 import '../../finance/screens/student_fee_ledger_detail_screen.dart';
 
 class StaffStudentLedgerScreen extends ConsumerStatefulWidget {
@@ -20,14 +20,12 @@ class _StaffStudentLedgerScreenState
     extends ConsumerState<StaffStudentLedgerScreen> {
   String _searchQuery = '';
   String? _filterSection;
-  String? _filterPaymentStatus;
   final _searchController = TextEditingController();
+  bool _isSendingNotifications = false;
 
   List<Student> _allStudents = [];
-  Map<String, StudentFeeLedger?> _ledgerCache = {};
   List<String> _availableSections = [];
   bool _isLoading = true;
-  bool _isSendingNotifications = false;
   String? _staffClassName;
 
   static const Color _bgDark = Color(0xFF0D1117);
@@ -51,7 +49,7 @@ class _StaffStudentLedgerScreenState
 
   String? get _schoolId => ref.read(currentSessionProvider)?.schoolId;
   String? get _staffId => ref.read(currentSessionProvider)?.uid;
-  String? get _academicYear => '2024-2025';
+  String get _academicYear => AcademicYear.getCurrentYearCode();
 
   Future<void> _loadData() async {
     final schoolId = _schoolId;
@@ -108,30 +106,10 @@ class _StaffStudentLedgerScreenState
           _staffClassName = className;
           _isLoading = false;
         });
-        _loadLedgers();
       }
     } catch (e) {
       debugPrint('Error loading students: $e');
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _loadLedgers() async {
-    final schoolId = _schoolId;
-    final academicYear = _academicYear;
-    if (schoolId == null || academicYear == null) return;
-
-    final repo = ref.read(studentFeeLedgerRepositoryProvider);
-    for (final student in _allStudents) {
-      try {
-        final ledger =
-            await repo.getByStudent(schoolId, student.id, academicYear);
-        if (mounted) {
-          setState(() => _ledgerCache[student.id] = ledger);
-        }
-      } catch (e) {
-        debugPrint('Error loading ledger for ${student.id}: $e');
-      }
     }
   }
 
@@ -149,19 +127,6 @@ class _StaffStudentLedgerScreenState
 
     if (_filterSection != null) {
       filtered = filtered.where((s) => s.section == _filterSection).toList();
-    }
-
-    if (_filterPaymentStatus != null && _filterPaymentStatus != 'all') {
-      filtered = filtered.where((s) {
-        final ledger = _ledgerCache[s.id];
-        if (ledger == null) return false;
-        if (_filterPaymentStatus == 'pending') {
-          return ledger.totalPending > 0;
-        } else if (_filterPaymentStatus == 'paid') {
-          return ledger.totalPending <= 0;
-        }
-        return true;
-      }).toList();
     }
 
     return filtered;
@@ -261,9 +226,8 @@ class _StaffStudentLedgerScreenState
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.notifications_active, size: 18),
-                label: Text(_isSendingNotifications
-                    ? 'Sending...'
-                    : 'Send Due Alerts'),
+                label: Text(
+                    _isSendingNotifications ? 'Sending...' : 'Send Due Alerts'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange,
                   foregroundColor: Colors.white,
@@ -350,28 +314,6 @@ class _StaffStudentLedgerScreenState
               ],
               onChanged: (value) => setState(() => _filterSection = value),
             ),
-          DropdownButton<String?>(
-            value: _filterPaymentStatus,
-            hint: const Text('Payment Status',
-                style: TextStyle(color: _textSecondary)),
-            dropdownColor: _cardDark,
-            style: const TextStyle(color: _textPrimary),
-            items: const [
-              DropdownMenuItem(
-                  value: null,
-                  child:
-                      Text('All Status', style: TextStyle(color: _textPrimary))),
-              DropdownMenuItem(
-                  value: 'pending',
-                  child: Text('Pending Fees',
-                      style: TextStyle(color: Colors.orange))),
-              DropdownMenuItem(
-                  value: 'paid',
-                  child: Text('Fees Cleared',
-                      style: TextStyle(color: Colors.green))),
-            ],
-            onChanged: (value) => setState(() => _filterPaymentStatus = value),
-          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: _accentBlue),
             onPressed: _loadData,
@@ -412,9 +354,6 @@ class _StaffStudentLedgerScreenState
   }
 
   Widget _buildStudentCard(Student student) {
-    final ledger = _ledgerCache[student.id];
-    final hasPending = ledger != null && ledger.totalPending > 0;
-
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -461,136 +400,14 @@ class _StaffStudentLedgerScreenState
             ],
           ),
           const SizedBox(height: 12),
-          _buildFeeStatusCard(ledger),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _viewLedger(student),
-                  icon: const Icon(Icons.account_balance_wallet, size: 16),
-                  label: const Text('View Ledger'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.blue,
-                    side: const BorderSide(color: Colors.blue),
-                  ),
-                ),
-              ),
-              if (hasPending) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () =>
-                        _sendPaymentDueNotification(student, ledger!),
-                    icon: const Icon(Icons.notifications, size: 16),
-                    label: const Text('Send Due'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeeStatusCard(StudentFeeLedger? ledger) {
-    if (ledger == null) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.info_outline, color: Colors.grey, size: 20),
-            SizedBox(width: 10),
-            Text('No fee ledger available',
-                style: TextStyle(color: Colors.grey, fontSize: 13)),
-          ],
-        ),
-      );
-    }
-
-    final hasPending = ledger.totalPending > 0;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: hasPending
-            ? Colors.orange.withValues(alpha: 0.1)
-            : Colors.green.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-            color: hasPending
-                ? Colors.orange.withValues(alpha: 0.3)
-                : Colors.green.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                  hasPending
-                      ? Icons.warning_amber_rounded
-                      : Icons.check_circle_outline,
-                  color: hasPending ? Colors.orange : Colors.green,
-                  size: 20),
-              const SizedBox(width: 10),
-              Text(hasPending ? 'Payment Pending' : 'Fees Cleared',
-                  style: TextStyle(
-                      color: hasPending ? Colors.orange : Colors.green,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Total Assigned',
-                      style: TextStyle(color: _textSecondary, fontSize: 11)),
-                  Text('₹${ledger.totalAssigned.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                          color: _textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600)),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Paid',
-                      style: TextStyle(color: _textSecondary, fontSize: 11)),
-                  Text('₹${ledger.totalPaid.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                          color: Colors.green,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600)),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Pending',
-                      style: TextStyle(color: _textSecondary, fontSize: 11)),
-                  Text('₹${ledger.totalPending.toStringAsFixed(0)}',
-                      style: TextStyle(
-                          color: hasPending ? Colors.orange : Colors.green,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ],
+          OutlinedButton.icon(
+            onPressed: () => _viewLedger(student),
+            icon: const Icon(Icons.account_balance_wallet, size: 16),
+            label: const Text('View Ledger'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.blue,
+              side: const BorderSide(color: Colors.blue),
+            ),
           ),
         ],
       ),
@@ -598,8 +415,15 @@ class _StaffStudentLedgerScreenState
   }
 
   void _viewLedger(Student student) async {
-    final ledger = _ledgerCache[student.id];
+    final schoolId = _schoolId;
+    if (schoolId == null) return;
+
+    final repo = ref.read(studentFeeLedgerRepositoryProvider);
+    final ledger = await repo.getByStudent(
+        schoolId, student.studentId.toString(), _academicYear);
+
     if (ledger == null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No ledger found for this student'),
@@ -609,107 +433,28 @@ class _StaffStudentLedgerScreenState
       return;
     }
 
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => StudentFeeLedgerDetailScreen(
-          schoolId: _schoolId!,
+          schoolId: schoolId,
           ledgerId: ledger.id,
         ),
       ),
-    ).then((_) => _loadData());
-  }
-
-  Future<void> _sendPaymentDueNotification(
-      Student student, StudentFeeLedger ledger) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: _cardDark,
-        title: const Text('Send Payment Due Notification',
-            style: TextStyle(color: _textPrimary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Student: ${student.name}',
-                style: const TextStyle(color: _textPrimary)),
-            const SizedBox(height: 8),
-            Text('Pending Amount: ₹${ledger.totalPending.toStringAsFixed(0)}',
-                style: const TextStyle(color: Colors.orange, fontSize: 16)),
-            const SizedBox(height: 12),
-            if (student.parentPhone != null)
-              Text('Notification will be sent to: ${student.parentPhone!}',
-                  style: const TextStyle(color: _textSecondary, fontSize: 12))
-            else
-              const Text('No parent phone number available',
-                  style: TextStyle(color: Colors.red, fontSize: 12)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child:
-                const Text('Cancel', style: TextStyle(color: _textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: student.parentPhone != null
-                ? () => Navigator.pop(context, true)
-                : null,
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: const Text('Send Notification'),
-          ),
-        ],
-      ),
     );
-
-    if (confirmed == true && student.parentPhone != null) {
-      try {
-        // TODO: Implement WhatsApp/SMS notification
-        await Future.delayed(const Duration(seconds: 1));
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Payment due notification sent to ${student.parentPhone!}'),
-              backgroundColor: Colors.green,
-            ),
-          );
-
-          await FirebaseFirestore.instance
-              .collection('schools')
-              .doc(_schoolId)
-              .collection('studentFeeLedgers')
-              .doc(ledger.id)
-              .update({'lastReminderSentAt': FieldValue.serverTimestamp()});
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to send notification: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
   }
 
   Future<void> _sendBulkPaymentDueNotifications() async {
     final studentsWithDues = _filteredStudents.where((s) {
-      final ledger = _ledgerCache[s.id];
-      return ledger != null &&
-          ledger.totalPending > 0 &&
-          s.parentPhone != null &&
-          s.parentPhone!.isNotEmpty;
+      return s.parentPhone != null && s.parentPhone!.isNotEmpty;
     }).toList();
 
     if (studentsWithDues.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No students with pending fees and valid phone numbers'),
+          content:
+              Text('No students with pending fees and valid phone numbers'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -760,15 +505,7 @@ class _StaffStudentLedgerScreenState
           // TODO: Implement actual WhatsApp/SMS notification
           await Future.delayed(const Duration(milliseconds: 500));
 
-          final ledger = _ledgerCache[student.id];
-          if (ledger != null) {
-            await FirebaseFirestore.instance
-                .collection('schools')
-                .doc(_schoolId)
-                .collection('studentFeeLedgers')
-                .doc(ledger.id)
-                .update({'lastReminderSentAt': FieldValue.serverTimestamp()});
-          }
+          // Ledger reminder timestamp update skipped (on-demand loading)
 
           successCount++;
         } catch (e) {
@@ -782,8 +519,8 @@ class _StaffStudentLedgerScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Sent $successCount notification(s). Failed: $failCount'),
+            content:
+                Text('Sent $successCount notification(s). Failed: $failCount'),
             backgroundColor: failCount > 0 ? Colors.orange : Colors.green,
           ),
         );

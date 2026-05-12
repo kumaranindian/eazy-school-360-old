@@ -127,12 +127,11 @@ class _StudentFeeManagementScreenState
   String _tuitionSource = 'stored';
 
   /// Picks the academic year to use when loading the [StudentFeeLedger].
-  /// Prefers the value stored on the student record (set during sheet
-  /// upload / onboarding) and falls back to the date-derived current AY
-  /// so the screen still renders sensibly when the field is missing.
+  /// Always uses the current AY derived from the system date.
+  /// The `academicYear` field stored in `student_fee_details` is often stale
+  /// (e.g. set during a historical sheet upload) and must not be trusted for
+  /// ledger lookups — ledgers are always assigned for the current active AY.
   String _resolveStudentAcademicYear() {
-    final ay = _studentData?['academicYear']?.toString() ?? '';
-    if (ay.isNotEmpty) return ay;
     return AcademicYear.getCurrentYearCode();
   }
 
@@ -152,7 +151,8 @@ class _StudentFeeManagementScreenState
 
   Future<void> _reloadStudentData({bool skipV2Override = false}) async {
     if (_selectedStudentDocId == null || _schoolId == null) return;
-    print('[StudentFeeManagementScreen] Reloading student data for docId: $_selectedStudentDocId');
+    print(
+        '[StudentFeeManagementScreen] Reloading student data for docId: $_selectedStudentDocId');
     try {
       final snap = await FirebaseFirestore.instance
           .collection('schools')
@@ -162,10 +162,14 @@ class _StudentFeeManagementScreenState
           .get();
       if (snap.exists && mounted) {
         final data = snap.data()!;
-        print('[StudentFeeManagementScreen] Student data reloaded successfully');
-        print('[StudentFeeManagementScreen] Paid Tuition: ${data['stuPaidTutionFees']}');
-        print('[StudentFeeManagementScreen] Balance Tuition: ${data['stuBalTutionFees']}');
-        print('[StudentFeeManagementScreen] Total Tuition: ${data['stuTotalTutionFees']}');
+        print(
+            '[StudentFeeManagementScreen] Student data reloaded successfully');
+        print(
+            '[StudentFeeManagementScreen] Paid Tuition: ${data['stuPaidTutionFees']}');
+        print(
+            '[StudentFeeManagementScreen] Balance Tuition: ${data['stuBalTutionFees']}');
+        print(
+            '[StudentFeeManagementScreen] Total Tuition: ${data['stuTotalTutionFees']}');
         setState(() {
           _studentData = Map<String, dynamic>.from(data);
           _tuitionSource = 'stored';
@@ -241,11 +245,12 @@ class _StudentFeeManagementScreenState
     // Watch for fee refresh signals and reload data when triggered
     final refreshTimestamp = ref.watch(feeRefreshProvider);
     if (refreshTimestamp != _lastRefreshTimestamp && _studentData != null) {
-      print('[StudentFeeManagementScreen] Fee refresh triggered: $refreshTimestamp');
+      print(
+          '[StudentFeeManagementScreen] Fee refresh triggered: $refreshTimestamp');
       _lastRefreshTimestamp = refreshTimestamp;
       _reloadStudentData(skipV2Override: true);
     }
-    
+
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 1024;
     final isMobile = screenWidth <= 600;
@@ -658,7 +663,9 @@ class _StudentFeeManagementScreenState
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
-                                              (_studentData!['stuName'] ?? 'Student').toString(),
+                                              (_studentData!['stuName'] ??
+                                                      'Student')
+                                                  .toString(),
                                               style: const TextStyle(
                                                   color: _textSecondary,
                                                   fontSize: 10),
@@ -786,7 +793,8 @@ class _StudentFeeManagementScreenState
                                     DataCell(
                                       Text(receipt?.toString() ?? '',
                                           style: const TextStyle(
-                                              color: _textPrimary, fontSize: 12)),
+                                              color: _textPrimary,
+                                              fontSize: 12)),
                                     ),
                                     DataCell(
                                       Text(
@@ -795,18 +803,23 @@ class _StudentFeeManagementScreenState
                                                   .format(date)
                                               : 'N/A',
                                           style: const TextStyle(
-                                              color: _textPrimary, fontSize: 12)),
+                                              color: _textPrimary,
+                                              fontSize: 12)),
                                     ),
                                     DataCell(
                                       Text(
-                                          (_studentData!['stuName'] ?? 'Student').toString(),
+                                          (_studentData!['stuName'] ??
+                                                  'Student')
+                                              .toString(),
                                           style: const TextStyle(
-                                              color: _textPrimary, fontSize: 12)),
+                                              color: _textPrimary,
+                                              fontSize: 12)),
                                     ),
                                     DataCell(
                                       Text(description,
                                           style: const TextStyle(
-                                              color: _textSecondary, fontSize: 11),
+                                              color: _textSecondary,
+                                              fontSize: 11),
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis),
                                     ),
@@ -821,24 +834,31 @@ class _StudentFeeManagementScreenState
                                       Row(
                                         children: [
                                           IconButton(
-                                            icon: const Icon(Icons.visibility_rounded,
-                                                color: _accentBlue, size: 16),
+                                            icon: const Icon(
+                                                Icons.visibility_rounded,
+                                                color: _accentBlue,
+                                                size: 16),
                                             tooltip: 'View',
-                                            onPressed: () => _showBillDetails(d),
+                                            onPressed: () =>
+                                                _showBillDetails(d),
                                             padding: EdgeInsets.zero,
                                             constraints: const BoxConstraints(),
                                           ),
                                           IconButton(
-                                            icon: const Icon(Icons.print_rounded,
-                                                color: Color(0xFF3B82F6), size: 16),
+                                            icon: const Icon(
+                                                Icons.print_rounded,
+                                                color: Color(0xFF3B82F6),
+                                                size: 16),
                                             tooltip: 'Print',
                                             onPressed: () => _printBill(d),
                                             padding: EdgeInsets.zero,
                                             constraints: const BoxConstraints(),
                                           ),
                                           IconButton(
-                                            icon: const Icon(Icons.download_rounded,
-                                                color: _accentGreen, size: 16),
+                                            icon: const Icon(
+                                                Icons.download_rounded,
+                                                color: _accentGreen,
+                                                size: 16),
                                             tooltip: 'Download',
                                             onPressed: () => _downloadBill(d),
                                             padding: EdgeInsets.zero,
@@ -1302,7 +1322,7 @@ class _StudentFeeManagementScreenState
 
   Future<void> _generateAndDownloadBill(Map<String, dynamic> billData) async {
     final pdf = await _generateBillPDF(billData);
-    
+
     // Web download
     final blob = html.Blob([pdf], 'application/pdf');
     final url = html.Url.createObjectUrlFromBlob(blob);
@@ -1329,9 +1349,11 @@ class _StudentFeeManagementScreenState
     final date = billData['date'] is DateTime
         ? billData['date'] as DateTime
         : DateTime.now();
-    final description = (billData['description'] ?? '').toString().replaceAll('₹', 'Rs.');
+    final description =
+        (billData['description'] ?? '').toString().replaceAll('₹', 'Rs.');
 
-    final schoolName = branding.schoolName.isNotEmpty ? branding.schoolName : 'School';
+    final schoolName =
+        branding.schoolName.isNotEmpty ? branding.schoolName : 'School';
     final schoolAddr = branding.schoolAddress;
     final schoolPhone = branding.schoolPhone;
     final schoolEmail = branding.schoolEmail;

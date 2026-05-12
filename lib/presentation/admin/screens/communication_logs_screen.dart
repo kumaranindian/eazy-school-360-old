@@ -1,7 +1,13 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:csv/csv.dart';
+import 'package:excel/excel.dart' as excel_pkg;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html show Blob, Url, AnchorElement if (dart.library.io) '';
 
 import '../../../core/providers/auth_provider.dart';
 import '../../../data/repositories/communication_log_repository.dart';
@@ -61,8 +67,8 @@ class _CommunicationLogsScreenState
   @override
   void initState() {
     super.initState();
-    // Default date range: last 30 days
-    _startDate = DateTime.now().subtract(const Duration(days: 30));
+    // Default date range: last 7 days (1 week)
+    _startDate = DateTime.now().subtract(const Duration(days: 7));
     _endDate = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitial());
     _scrollCtrl.addListener(_onScroll);
@@ -96,6 +102,16 @@ class _CommunicationLogsScreenState
 
   Future<void> _loadInitial() async {
     final schoolId = _schoolId;
+    final session = ref.read(currentSessionProvider);
+
+    print('🔍 [COMM_LOGS] Loading communication logs...');
+    print('🔍 [COMM_LOGS] School ID: $schoolId');
+    print('🔍 [COMM_LOGS] User role: ${session?.role}');
+    print('🔍 [COMM_LOGS] User email: ${session?.email}');
+    print('🔍 [COMM_LOGS] User UID: ${session?.uid}');
+    print('🔍 [COMM_LOGS] Session schoolId: ${session?.schoolId}');
+    print('🔍 [COMM_LOGS] Active memberships: ${session?.memberships.length}');
+
     if (schoolId == null) {
       setState(() => _error = 'No active school');
       return;
@@ -133,7 +149,9 @@ class _CommunicationLogsScreenState
         _loading = false;
         _statusCounts = counts;
       });
+      print('✅ [COMM_LOGS] Successfully loaded ${page.logs.length} logs');
     } catch (e) {
+      print('❌ [COMM_LOGS] Error loading logs: $e');
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -227,6 +245,99 @@ class _CommunicationLogsScreenState
     }
   }
 
+  Future<void> _exportToCSV() async {
+    try {
+      final csvData = _generateCSVData();
+      final csv = const ListToCsvConverter().convert(csvData);
+      final bytes = utf8.encode(csv);
+      final blob = html.Blob([bytes]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      (html.AnchorElement(href: url)
+        ..setAttribute('download',
+            'communication_logs_${DateTime.now().millisecondsSinceEpoch}.csv')
+        ..click());
+      html.Url.revokeObjectUrl(url);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Export failed: $e'), backgroundColor: _accentRed),
+      );
+    }
+  }
+
+  Future<void> _exportToExcel() async {
+    try {
+      final excel = excel_pkg.Excel.createExcel();
+      final sheet = excel['Communication Logs'];
+      final headers = [
+        'Date & Time', 'Recipient', 'Phone', 'Type',
+        'Channel', 'Purpose', 'Status', 'Subject', 'Message'
+      ];
+      sheet.appendRow(headers.map((h) => excel_pkg.TextCellValue(h)).toList());
+      for (final log in _logs) {
+        sheet.appendRow([
+          excel_pkg.TextCellValue(DateFormat('dd MMM yyyy, HH:mm').format(log.sentAt)),
+          excel_pkg.TextCellValue(log.recipientName.isEmpty ? '(no name)' : log.recipientName),
+          excel_pkg.TextCellValue(log.recipientPhone),
+          excel_pkg.TextCellValue(log.recipientType.displayName),
+          excel_pkg.TextCellValue(log.channel.displayName),
+          excel_pkg.TextCellValue(log.purpose.displayName),
+          excel_pkg.TextCellValue(log.status.displayName),
+          excel_pkg.TextCellValue(log.subject),
+          excel_pkg.TextCellValue(log.message),
+        ]);
+      }
+      final bytes = excel.encode();
+      if (bytes != null) {
+        final blob = html.Blob([bytes]);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        (html.AnchorElement(href: url)
+          ..setAttribute('download',
+              'communication_logs_${DateTime.now().millisecondsSinceEpoch}.xlsx')
+          ..click());
+        html.Url.revokeObjectUrl(url);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e'), backgroundColor: _accentRed),
+      );
+    }
+  }
+
+  List<List<dynamic>> _generateCSVData() {
+    final data = <List<dynamic>>[
+      [
+        'Date & Time',
+        'Recipient',
+        'Phone',
+        'Type',
+        'Channel',
+        'Purpose',
+        'Status',
+        'Subject',
+        'Message'
+      ],
+    ];
+
+    for (final log in _logs) {
+      data.add([
+        DateFormat('dd MMM yyyy, HH:mm').format(log.sentAt),
+        log.recipientName.isEmpty ? '(no name)' : log.recipientName,
+        log.recipientPhone,
+        log.recipientType.displayName,
+        log.channel.displayName,
+        log.purpose.displayName,
+        log.status.displayName,
+        log.subject,
+        log.message,
+      ]);
+    }
+
+    return data;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 700;
@@ -245,8 +356,8 @@ class _CommunicationLogsScreenState
 
   Widget _buildHeader(bool isMobile) {
     return Container(
-      padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 12 : 20, vertical: 14),
+      padding:
+          EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 14),
       decoration: const BoxDecoration(
         color: _cardDark,
         border: Border(bottom: BorderSide(color: _borderColor)),
@@ -259,8 +370,8 @@ class _CommunicationLogsScreenState
               color: _accentBlue.withOpacity(0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.forum_rounded,
-                color: _accentBlue, size: 20),
+            child:
+                const Icon(Icons.forum_rounded, color: _accentBlue, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -283,11 +394,69 @@ class _CommunicationLogsScreenState
               ],
             ),
           ),
-          IconButton(
-            onPressed: _loading ? null : _loadInitial,
-            tooltip: 'Refresh',
-            icon: const Icon(Icons.refresh, color: _textSecondary),
-          ),
+          if (!isMobile) ...[
+            Tooltip(
+              message: 'Export to Excel',
+              child: IconButton(
+                onPressed: _logs.isEmpty ? null : _exportToExcel,
+                icon: const Icon(Icons.table_chart, color: _accentGreen),
+              ),
+            ),
+            Tooltip(
+              message: 'Export to CSV',
+              child: IconButton(
+                onPressed: _logs.isEmpty ? null : _exportToCSV,
+                icon: const Icon(Icons.download, color: _accentBlue),
+              ),
+            ),
+          ],
+          if (isMobile)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: _textSecondary),
+              onSelected: (value) {
+                if (value == 'excel') _exportToExcel();
+                if (value == 'csv') _exportToCSV();
+                if (value == 'refresh') _loadInitial();
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'excel',
+                  child: Row(
+                    children: [
+                      Icon(Icons.table_chart, color: _accentGreen, size: 20),
+                      SizedBox(width: 12),
+                      Text('Export to Excel'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'csv',
+                  child: Row(
+                    children: [
+                      Icon(Icons.download, color: _accentBlue, size: 20),
+                      SizedBox(width: 12),
+                      Text('Export to CSV'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'refresh',
+                  child: Row(
+                    children: [
+                      Icon(Icons.refresh, color: _textSecondary, size: 20),
+                      SizedBox(width: 12),
+                      Text('Refresh'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          if (!isMobile)
+            IconButton(
+              onPressed: _loading ? null : _loadInitial,
+              tooltip: 'Refresh',
+              icon: const Icon(Icons.refresh, color: _textSecondary),
+            ),
         ],
       ),
     );
@@ -328,8 +497,8 @@ class _CommunicationLogsScreenState
     ];
 
     return Container(
-      padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 8 : 16, vertical: 12),
+      padding:
+          EdgeInsets.symmetric(horizontal: isMobile ? 8 : 16, vertical: 12),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -346,8 +515,8 @@ class _CommunicationLogsScreenState
 
   Widget _buildFilterBar(bool isMobile) {
     return Container(
-      padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 12 : 16, vertical: 8),
+      padding:
+          EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16, vertical: 8),
       decoration: const BoxDecoration(
         color: _cardDark,
         border: Border(bottom: BorderSide(color: _borderColor)),
@@ -367,8 +536,8 @@ class _CommunicationLogsScreenState
                   style: const TextStyle(color: _textPrimary, fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Search by name, phone or message...',
-                    hintStyle: const TextStyle(
-                        color: _textSecondary, fontSize: 12),
+                    hintStyle:
+                        const TextStyle(color: _textSecondary, fontSize: 12),
                     prefixIcon: const Icon(Icons.search,
                         color: _textSecondary, size: 18),
                     suffixIcon: _searchQuery.isNotEmpty
@@ -415,8 +584,8 @@ class _CommunicationLogsScreenState
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _textPrimary,
                   side: const BorderSide(color: _borderColor),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 ),
               ),
             ],
@@ -544,8 +713,7 @@ class _CommunicationLogsScreenState
 
   Widget _buildContent(bool isMobile) {
     if (_loading && _logs.isEmpty) {
-      return const Center(
-          child: CircularProgressIndicator(color: _accentBlue));
+      return const Center(child: CircularProgressIndicator(color: _accentBlue));
     }
     if (_error != null) {
       return Center(
@@ -575,8 +743,7 @@ class _CommunicationLogsScreenState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.inbox_outlined,
-                color: _textSecondary, size: 56),
+            const Icon(Icons.inbox_outlined, color: _textSecondary, size: 56),
             const SizedBox(height: 10),
             const Text('No communication logs found',
                 style: TextStyle(color: _textSecondary, fontSize: 15)),
@@ -592,49 +759,253 @@ class _CommunicationLogsScreenState
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadInitial,
-      color: _accentBlue,
-      child: ListView.separated(
-        controller: _scrollCtrl,
-        padding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 8 : 16, vertical: 12),
-        itemCount: _logs.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (context, i) {
-          if (i == _logs.length) {
-            // Footer: loading more or "end of list"
-            if (_loadingMore) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                    child: CircularProgressIndicator(color: _accentBlue)),
-              );
-            }
-            if (!_hasMore) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: Text('— End of logs (${_logs.length} shown) —',
-                      style: const TextStyle(
-                          color: _textSecondary, fontSize: 11)),
-                ),
-              );
-            }
-            // Manual load more button as fallback
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Center(
-                child: TextButton(
-                  onPressed: _loadMore,
-                  child: const Text('Load more'),
-                ),
-              ),
-            );
-          }
-          return _LogTile(log: _logs[i], isMobile: isMobile);
-        },
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _scrollCtrl,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: _buildTable(),
+            ),
+          ),
+        ),
+        _buildTableFooter(),
+      ],
+    );
+  }
+
+  // -------- Table --------
+
+  static const _cols = [
+    '#', 'Date & Time', 'Recipient', 'Phone', 'Type', 'Channel', 'Purpose', 'Status', 'Message', ''
+  ];
+  static const _colWidths = [
+    40.0, 130.0, 150.0, 120.0, 80.0, 90.0, 110.0, 90.0, 260.0, 44.0
+  ];
+
+  Widget _buildTable() {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minWidth: MediaQuery.of(context).size.width - 32,
       ),
+      child: Table(
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        columnWidths: {
+          for (int i = 0; i < _colWidths.length; i++)
+            i: FixedColumnWidth(_colWidths[i]),
+        },
+        border: TableBorder(
+          horizontalInside: BorderSide(color: _borderColor.withOpacity(0.5)),
+          bottom: const BorderSide(color: _borderColor),
+        ),
+        children: [
+          _buildHeaderRow(),
+          for (int i = 0; i < _logs.length; i++) _buildDataRow(i, _logs[i]),
+        ],
+      ),
+    );
+  }
+
+  TableRow _buildHeaderRow() {
+    return TableRow(
+      decoration: const BoxDecoration(color: Color(0xFF1C2128)),
+      children: [
+        for (int i = 0; i < _cols.length; i++)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: Text(
+              _cols[i],
+              style: const TextStyle(
+                color: _textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  TableRow _buildDataRow(int index, CommunicationLog log) {
+    final isEven = index.isEven;
+    final statusColor = _statusColor(log.status);
+    final purposeColor = _purposeColor(log.purpose);
+
+    return TableRow(
+      decoration: BoxDecoration(
+        color: isEven ? _cardDark : _bgDark,
+      ),
+      children: [
+        // #
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Text('${index + 1}',
+              style: const TextStyle(color: _textSecondary, fontSize: 11)),
+        ),
+        // Date
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Text(
+            DateFormat('dd MMM yy\nHH:mm').format(log.sentAt),
+            style: const TextStyle(color: _textSecondary, fontSize: 11, height: 1.4),
+          ),
+        ),
+        // Recipient
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Text(
+            log.recipientName.isEmpty ? '—' : log.recipientName,
+            style: const TextStyle(color: _textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        // Phone
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Text(log.recipientPhone,
+              style: const TextStyle(color: _textSecondary, fontSize: 11)),
+        ),
+        // Type
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: _Pill(label: log.recipientType.displayName, color: _textSecondary, filled: false),
+        ),
+        // Channel
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_channelIcon(log.channel), color: _accentBlue, size: 13),
+              const SizedBox(width: 4),
+              Text(log.channel.displayName,
+                  style: const TextStyle(color: _accentBlue, fontSize: 11)),
+            ],
+          ),
+        ),
+        // Purpose
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: _Pill(label: log.purpose.displayName, color: purposeColor),
+        ),
+        // Status
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: _Pill(label: log.status.displayName, color: statusColor),
+        ),
+        // Message
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                log.message.isNotEmpty ? log.message : log.subject,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _textSecondary, fontSize: 11, height: 1.4),
+              ),
+              if (log.status == CommStatus.failed && log.errorMessage != null) ...
+                [
+                  const SizedBox(height: 3),
+                  Text(
+                    log.errorMessage!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: _accentRed, fontSize: 10),
+                  ),
+                ],
+            ],
+          ),
+        ),
+        // View button
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () => _showDetails(context, log),
+            child: const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(Icons.open_in_new_rounded, color: _textSecondary, size: 14),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTableFooter() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const BoxDecoration(
+        color: _cardDark,
+        border: Border(top: BorderSide(color: _borderColor)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            '${_logs.length} record${_logs.length == 1 ? '' : 's'} shown',
+            style: const TextStyle(color: _textSecondary, fontSize: 11),
+          ),
+          const Spacer(),
+          if (_loadingMore)
+            const SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(color: _accentBlue, strokeWidth: 2),
+            )
+          else if (_hasMore)
+            TextButton(
+              onPressed: _loadMore,
+              child: const Text('Load more', style: TextStyle(fontSize: 12)),
+            )
+          else
+            const Text('— End of list —',
+                style: TextStyle(color: _textSecondary, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  // -------- Helpers --------
+
+  static Color _statusColor(CommStatus s) {
+    switch (s) {
+      case CommStatus.sent:      return _accentBlue;
+      case CommStatus.delivered: return _accentGreen;
+      case CommStatus.read:      return _accentPurple;
+      case CommStatus.failed:    return _accentRed;
+      case CommStatus.pending:   return _accentAmber;
+    }
+  }
+
+  static IconData _channelIcon(CommChannel c) {
+    switch (c) {
+      case CommChannel.whatsapp: return Icons.chat_bubble_rounded;
+      case CommChannel.sms:      return Icons.sms_rounded;
+      case CommChannel.email:    return Icons.email_rounded;
+      case CommChannel.push:     return Icons.notifications_active_rounded;
+      case CommChannel.inApp:    return Icons.app_registration_rounded;
+    }
+  }
+
+  static Color _purposeColor(CommPurpose p) {
+    switch (p) {
+      case CommPurpose.paymentDue:
+      case CommPurpose.feeReminder:    return _accentAmber;
+      case CommPurpose.paymentReceipt: return _accentGreen;
+      case CommPurpose.attendance:     return _accentBlue;
+      case CommPurpose.leaveUpdate:    return _accentPurple;
+      default:                         return _textSecondary;
+    }
+  }
+
+  void _showDetails(BuildContext context, CommunicationLog log) {
+    showDialog(
+      context: context,
+      builder: (_) => _LogDetailDialog(log: log),
     );
   }
 }
@@ -680,8 +1051,8 @@ class _StatCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(label,
-                    style: const TextStyle(
-                        color: _textSecondary, fontSize: 10)),
+                    style:
+                        const TextStyle(color: _textSecondary, fontSize: 10)),
                 Text('$count',
                     style: TextStyle(
                         color: color,
@@ -696,299 +1067,106 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _LogTile extends StatelessWidget {
+class _LogDetailDialog extends StatelessWidget {
   final CommunicationLog log;
-  final bool isMobile;
+  const _LogDetailDialog({required this.log});
 
-  const _LogTile({required this.log, required this.isMobile});
-
-  Color _statusColor() {
-    switch (log.status) {
-      case CommStatus.sent:
-        return _accentBlue;
-      case CommStatus.delivered:
-        return _accentGreen;
-      case CommStatus.read:
-        return _accentPurple;
-      case CommStatus.failed:
-        return _accentRed;
-      case CommStatus.pending:
-        return _accentAmber;
-    }
-  }
-
-  IconData _channelIcon() {
+  IconData get _channelIcon {
     switch (log.channel) {
-      case CommChannel.whatsapp:
-        return Icons.chat_bubble_rounded;
-      case CommChannel.sms:
-        return Icons.sms_rounded;
-      case CommChannel.email:
-        return Icons.email_rounded;
-      case CommChannel.push:
-        return Icons.notifications_active_rounded;
-      case CommChannel.inApp:
-        return Icons.app_registration_rounded;
+      case CommChannel.whatsapp: return Icons.chat_bubble_rounded;
+      case CommChannel.sms:      return Icons.sms_rounded;
+      case CommChannel.email:    return Icons.email_rounded;
+      case CommChannel.push:     return Icons.notifications_active_rounded;
+      case CommChannel.inApp:    return Icons.app_registration_rounded;
     }
   }
 
-  Color _purposeColor() {
-    switch (log.purpose) {
-      case CommPurpose.paymentDue:
-      case CommPurpose.feeReminder:
-        return _accentAmber;
-      case CommPurpose.paymentReceipt:
-        return _accentGreen;
-      case CommPurpose.attendance:
-        return _accentBlue;
-      case CommPurpose.leaveUpdate:
-        return _accentPurple;
-      case CommPurpose.announcement:
-      case CommPurpose.welcome:
-      case CommPurpose.custom:
-        return _textSecondary;
+  Color get _statusColor {
+    switch (log.status) {
+      case CommStatus.sent:      return _accentBlue;
+      case CommStatus.delivered: return _accentGreen;
+      case CommStatus.read:      return _accentPurple;
+      case CommStatus.failed:    return _accentRed;
+      case CommStatus.pending:   return _accentAmber;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _statusColor();
-    final purposeColor = _purposeColor();
-
-    return InkWell(
-      onTap: () => _showDetails(context),
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: _cardDark,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _borderColor),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top row: channel + purpose + status + time
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: _accentBlue.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
+    return Dialog(
+      backgroundColor: _cardDark,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(_channelIcon, color: _accentBlue, size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text('Message Details',
+                        style: TextStyle(
+                            color: _textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16)),
                   ),
-                  child: Icon(_channelIcon(),
-                      color: _accentBlue, size: 14),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _Pill(
-                        label: log.purpose.displayName,
-                        color: purposeColor,
-                      ),
-                      _Pill(
-                        label: log.status.displayName,
-                        color: statusColor,
-                      ),
-                      _Pill(
-                        label: log.recipientType.displayName,
-                        color: _textSecondary,
-                        filled: false,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  DateFormat('dd MMM, HH:mm').format(log.sentAt),
-                  style: const TextStyle(
-                      color: _textSecondary, fontSize: 10),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Recipient info
-            Row(
-              children: [
-                const Icon(Icons.person_outline,
-                    color: _textSecondary, size: 14),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    log.recipientName.isEmpty
-                        ? '(no name)'
-                        : log.recipientName,
-                    style: const TextStyle(
-                      color: _textPrimary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Icon(Icons.phone_outlined,
-                    color: _textSecondary, size: 14),
-                const SizedBox(width: 4),
-                Text(
-                  log.recipientPhone,
-                  style: const TextStyle(
-                      color: _textSecondary, fontSize: 12),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            // Message preview
-            Text(
-              log.message.isNotEmpty ? log.message : log.subject,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: _textSecondary,
-                fontSize: 12,
-                height: 1.3,
-              ),
-            ),
-            // Error message if failed
-            if (log.status == CommStatus.failed &&
-                log.errorMessage != null) ...[
-              const SizedBox(height: 6),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _accentRed.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: _accentRed.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline,
-                        color: _accentRed, size: 12),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        log.errorMessage!,
-                        style: const TextStyle(
-                            color: _accentRed, fontSize: 11),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showDetails(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: _cardDark,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Icon(_channelIcon(), color: _accentBlue, size: 20),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text('Message Details',
-                          style: TextStyle(
-                              color: _textPrimary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16)),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close,
-                          color: _textSecondary, size: 18),
-                    ),
-                  ],
-                ),
-                const Divider(color: _borderColor),
-                _detailRow('Purpose', log.purpose.displayName),
-                _detailRow('Channel', log.channel.displayName),
-                _detailRow('Status', log.status.displayName,
-                    color: _statusColor()),
-                _detailRow(
-                    'Recipient', '${log.recipientName} (${log.recipientPhone})'),
-                _detailRow('Recipient Type', log.recipientType.displayName),
-                if (log.recipientEmail != null)
-                  _detailRow('Email', log.recipientEmail!),
-                _detailRow('Subject', log.subject),
-                _detailRow('Sent At',
-                    DateFormat('dd MMM yyyy, HH:mm:ss').format(log.sentAt)),
-                if (log.deliveredAt != null)
-                  _detailRow(
-                      'Delivered At',
-                      DateFormat('dd MMM yyyy, HH:mm:ss')
-                          .format(log.deliveredAt!)),
-                if (log.readAt != null)
-                  _detailRow('Read At',
-                      DateFormat('dd MMM yyyy, HH:mm:ss').format(log.readAt!)),
-                if (log.sentByName != null)
-                  _detailRow('Sent By', log.sentByName!),
-                const SizedBox(height: 8),
-                const Text('Message',
-                    style: TextStyle(
-                        color: _textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: _bgDark,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: _borderColor),
-                  ),
-                  child: SelectableText(
-                    log.message,
-                    style: const TextStyle(
-                        color: _textPrimary, fontSize: 12, height: 1.5),
-                  ),
-                ),
-                if (log.errorMessage != null) ...[
-                  const SizedBox(height: 8),
-                  const Text('Error',
-                      style: TextStyle(
-                          color: _accentRed,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _accentRed.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      log.errorMessage!,
-                      style:
-                          const TextStyle(color: _accentRed, fontSize: 12),
-                    ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: _textSecondary, size: 18),
                   ),
                 ],
+              ),
+              const Divider(color: _borderColor),
+              _detailRow('Purpose', log.purpose.displayName),
+              _detailRow('Channel', log.channel.displayName),
+              _detailRow('Status', log.status.displayName, color: _statusColor),
+              _detailRow('Recipient', '${log.recipientName} (${log.recipientPhone})'),
+              _detailRow('Recipient Type', log.recipientType.displayName),
+              if (log.recipientEmail != null) _detailRow('Email', log.recipientEmail!),
+              _detailRow('Subject', log.subject),
+              _detailRow('Sent At', DateFormat('dd MMM yyyy, HH:mm:ss').format(log.sentAt)),
+              if (log.deliveredAt != null)
+                _detailRow('Delivered At', DateFormat('dd MMM yyyy, HH:mm:ss').format(log.deliveredAt!)),
+              if (log.readAt != null)
+                _detailRow('Read At', DateFormat('dd MMM yyyy, HH:mm:ss').format(log.readAt!)),
+              if (log.sentByName != null) _detailRow('Sent By', log.sentByName!),
+              const SizedBox(height: 8),
+              const Text('Message',
+                  style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _bgDark,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: _borderColor),
+                ),
+                child: SelectableText(
+                  log.message,
+                  style: const TextStyle(color: _textPrimary, fontSize: 12, height: 1.5),
+                ),
+              ),
+              if (log.errorMessage != null) ...[
+                const SizedBox(height: 8),
+                const Text('Error',
+                    style: TextStyle(color: _accentRed, fontSize: 11, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _accentRed.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(log.errorMessage!,
+                      style: const TextStyle(color: _accentRed, fontSize: 12)),
+                ),
               ],
-            ),
+            ],
           ),
         ),
       ),
@@ -1004,18 +1182,14 @@ class _LogTile extends StatelessWidget {
           SizedBox(
             width: 110,
             child: Text(label,
-                style: const TextStyle(
-                    color: _textSecondary, fontSize: 12)),
+                style: const TextStyle(color: _textSecondary, fontSize: 12)),
           ),
           Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                color: color ?? _textPrimary,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            child: Text(value,
+                style: TextStyle(
+                    color: color ?? _textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500)),
           ),
         ],
       ),

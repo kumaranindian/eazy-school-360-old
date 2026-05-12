@@ -551,6 +551,22 @@ service cloud.firestore {
         allow create: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
         allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
       }
+      
+      // COMMUNICATION LOGS (audit trail for all outgoing messages)
+      match /communicationLogs/{logId} {
+        // Admin and staff can read all communication logs for their school
+        // Support both legacy (schoolId field) and multi-tenant (membership docs)
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (belongsToSchool(schoolId) && (isAdmin() || isStaff()))
+        );
+        // Any authenticated user from the school can create logs (automated systems)
+        allow create: if isSignedIn() && belongsToSchool(schoolId);
+        // Only admin can update logs (e.g., status updates from webhooks)
+        allow update: if isSignedIn() && (isSuperAdmin() || (isAdmin() && belongsToSchool(schoolId)));
+        // Only admin can delete logs
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isAdmin() && belongsToSchool(schoolId)));
+      }
 
       // RAZORPAY SETTINGS
       match /settings/razorpay {

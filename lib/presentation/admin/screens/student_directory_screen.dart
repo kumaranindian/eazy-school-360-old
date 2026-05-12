@@ -8,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../data/repositories/concession_category_repository.dart';
 import '../../../data/repositories/fee_repository.dart';
+import '../../../data/services/fee_structure_to_payment_mapper.dart';
 import '../../../data/repositories/student_fee_ledger_repository.dart';
 import '../../../data/repositories/student_repository.dart';
 import '../../../domain/entities/academic_year.dart';
@@ -29,10 +30,8 @@ class _StudentDirectoryScreenState
   String _searchQuery = '';
   String? _filterClass;
   String? _filterSection;
-  String? _filterLoginStatus;
   String? _filterAcademicYear;
   final _searchController = TextEditingController();
-  bool _isBulkCreating = false;
 
   // All students loaded from Firestore (including inactive)
   List<Student> _allStudents = [];
@@ -238,20 +237,9 @@ class _StudentDirectoryScreenState
                     (v) {
                   setState(() => _filterSection = v);
                 }),
-              // Login status filter
-              _buildFilterChip(
-                  'Login Status',
-                  _filterLoginStatus,
-                  ['with_login', 'without_login'],
-                  (v) => setState(() => _filterLoginStatus = v),
-                  labelMap: {
-                    'with_login': 'Has Login',
-                    'without_login': 'No Login'
-                  }),
               // Clear all filters
               if (_filterClass != null ||
                   _filterSection != null ||
-                  _filterLoginStatus != null ||
                   _searchQuery.isNotEmpty)
                 ActionChip(
                   label: const Text('Clear Filters',
@@ -262,7 +250,6 @@ class _StudentDirectoryScreenState
                     setState(() {
                       _filterClass = null;
                       _filterSection = null;
-                      _filterLoginStatus = null;
                       _searchQuery = '';
                       _searchController.clear();
                       _availableSections = [];
@@ -282,25 +269,6 @@ class _StudentDirectoryScreenState
                 style: ElevatedButton.styleFrom(
                     backgroundColor: _accentBlue,
                     foregroundColor: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: _isBulkCreating
-                    ? null
-                    : () => _bulkCreateLogins(context, schoolId),
-                icon: _isBulkCreating
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: _accentBlue))
-                    : const Icon(Icons.group_add_rounded, size: 18),
-                label: Text(_isBulkCreating
-                    ? 'Creating...'
-                    : 'Create All Parent Logins'),
-                style: OutlinedButton.styleFrom(
-                    foregroundColor: _accentBlue,
-                    side: const BorderSide(color: _accentBlue)),
               ),
               const Spacer(),
               // Refresh
@@ -364,13 +332,7 @@ class _StudentDirectoryScreenState
           _filterClass == null || student.className == _filterClass;
       final matchesSection =
           _filterSection == null || student.section == _filterSection;
-      final matchesLogin = _filterLoginStatus == null ||
-          (_filterLoginStatus == 'with_login' &&
-              student.parentUserId != null &&
-              student.parentUserId!.isNotEmpty) ||
-          (_filterLoginStatus == 'without_login' &&
-              (student.parentUserId == null || student.parentUserId!.isEmpty));
-      return matchesSearch && matchesClass && matchesSection && matchesLogin;
+      return matchesSearch && matchesClass && matchesSection;
     }).toList();
   }
 
@@ -937,11 +899,16 @@ class _StudentDirectoryScreenState
     // Concession category
     List<ConcessionCategory> concessionCategories = [];
     String? selectedConcessionCategory;
-    bool concessionCategoriesLoading = false;
+    bool concessionCategoriesLoading = true;
 
     // Academic year selection
     String selectedAcademicYear =
         existingStudent?.academicYearCode ?? AcademicYear.getCurrentYearCode();
+
+    // Tracks whether the one-time dialog init has run
+    bool initDone = false;
+    // For edit mode: tracks whether edit-specific data has been loaded
+    bool editDataLoaded = false;
 
     // Helper function to get academic year options
     List<String> _academicYearOptions() {
@@ -977,9 +944,9 @@ class _StudentDirectoryScreenState
               final snap = await FirebaseFirestore.instance
                   .collection('schools')
                   .doc(schoolId)
-                  .collection('fee_structures_v2')
+                  .collection('feeStructuresV2')
                   .where('isActive', isEqualTo: true)
-                  .where('applicableClassIds', arrayContains: className)
+                  .where('applicableToClassIds', arrayContains: className)
                   .where('academicYear', isEqualTo: ay)
                   .limit(1)
                   .get();
@@ -990,17 +957,10 @@ class _StudentDirectoryScreenState
                 final data = snap.docs.first.data();
                 print('✅ V2 Fee structure found');
 
-                // Calculate total tuition from V2 terms
-                final terms = data['terms'] as List? ?? [];
-                double totalTuition = 0;
-                for (final term in terms) {
-                  if (term is Map) {
-                    final termMap = Map<String, dynamic>.from(term);
-                    final amount =
-                        (termMap['totalAmount'] as num?)?.toDouble() ?? 0;
-                    totalTuition += amount;
-                  }
-                }
+                // totalAmount is stored directly on the document;
+                // terms live in a subcollection and are not embedded here.
+                final totalTuition =
+                    (data['totalAmount'] as num?)?.toDouble() ?? 0;
 
                 setDialogState(() {
                   feeStructure = {
@@ -1033,9 +993,91 @@ class _StudentDirectoryScreenState
             }
           }
 
+          // ── Auto-init: runs exactly once on first build ──
+          if (!initDone) {
+            initDone = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              if (!isEditing) {
+                // Add mode: just load concession categories
+                try {
+                  final repo = ref.read(concessionCategoryRepositoryProvider);
+                  final cats = await repo.getAll(schoolId);
+                  setDialogState(() {
+                    concessionCategories = cats;
+                    concessionCategoriesLoading = false;
+                  });
+                } catch (_) {
+                  setDialogState(() => concessionCategoriesLoading = false);
+                }
+              }
+            });
+          }
+
+          // ── Auto-init for edit mode: runs once after first build ──
+          if (isEditing && !editDataLoaded) {
+            editDataLoaded = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              // 1. Load concession categories
+              try {
+                final repo = ref.read(concessionCategoryRepositoryProvider);
+                final cats = await repo.getAll(schoolId);
+                setDialogState(() {
+                  concessionCategories = cats;
+                  concessionCategoriesLoading = false;
+                });
+              } catch (_) {
+                setDialogState(() => concessionCategoriesLoading = false);
+              }
+
+              // 2. Load existing student_fee_details to pre-populate fields
+              try {
+                final stuIdInt = existingStudent.studentId;
+                final snap = await FirebaseFirestore.instance
+                    .collection('schools')
+                    .doc(schoolId)
+                    .collection('student_fee_details')
+                    .where('stuId', isEqualTo: stuIdInt)
+                    .where('academicYear', isEqualTo: selectedAcademicYear)
+                    .limit(1)
+                    .get();
+                if (snap.docs.isNotEmpty) {
+                  final d = snap.docs.first.data();
+                  setDialogState(() {
+                    feeData = d;
+                    feeDocId = snap.docs.first.id;
+                    concessionCtrl.text =
+                        (d['stuConcessionFees'] as num?)?.toStringAsFixed(0) ??
+                            '0';
+                    arrearTuitionCtrl.text =
+                        (d['arrearTuitionFees'] as num?)?.toStringAsFixed(0) ??
+                            '0';
+                    arrearExamCtrl.text =
+                        (d['arrearExamFees'] as num?)?.toStringAsFixed(0) ??
+                            '0';
+                    arrearVanCtrl.text =
+                        (d['arrearVanFees'] as num?)?.toStringAsFixed(0) ?? '0';
+                    vanFeeCtrl.text =
+                        (d['stuTotalVanFees'] as num?)?.toStringAsFixed(0) ??
+                            '0';
+                    final vanVal = (d['isStuAvailVan'] ?? 'n').toString();
+                    vanAvailed =
+                        (vanVal == 'y' || vanVal == 'yes') ? 'Yes' : 'No';
+                  });
+                }
+              } catch (_) {}
+
+              // 3. Load fee structure for existing class
+              await _loadFeeStructure(selectedClass, schoolId, setDialogState);
+            });
+          }
+
           // Helper function to display fee info row
           Widget _feeInfoRow(String label, dynamic value) {
-            final amt = (value as num?)?.toDouble() ?? 0;
+            final isText = value is String;
+            final displayText = isText
+                ? value
+                : '₹${((value as num?)?.toDouble() ?? 0).toStringAsFixed(0)}';
+            final amt = isText ? 1.0 : ((value as num?)?.toDouble() ?? 0);
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(
@@ -1044,7 +1086,7 @@ class _StudentDirectoryScreenState
                   Text(label,
                       style:
                           const TextStyle(color: _textSecondary, fontSize: 12)),
-                  Text('₹${amt.toStringAsFixed(0)}',
+                  Text(displayText,
                       style: TextStyle(
                         color: amt > 0 ? _textPrimary : _textSecondary,
                         fontWeight: FontWeight.w600,
@@ -1071,123 +1113,146 @@ class _StudentDirectoryScreenState
                     _formField(
                         'Student Name *', nameController, Icons.person_outline),
                     const SizedBox(height: 12),
-                    // Academic Year Selection
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8)),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.calendar_today_outlined,
-                                  color: Colors.blue, size: 16),
-                              const SizedBox(width: 6),
-                              const Text('Academic Year',
-                                  style: TextStyle(
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12)),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _academicYearOptions().map((yr) {
-                              final isSelected = selectedAcademicYear == yr;
-                              final isCurrent =
-                                  yr == AcademicYear.getCurrentYearCode();
-                              return ChoiceChip(
-                                label: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(yr,
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            color: isSelected
-                                                ? Colors.white
-                                                : _textPrimary)),
-                                    if (isCurrent) ...[
-                                      const SizedBox(width: 4),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 4, vertical: 1),
-                                        decoration: BoxDecoration(
-                                            color: isSelected
-                                                ? Colors.white
-                                                : Colors.blue,
-                                            borderRadius:
-                                                BorderRadius.circular(8)),
-                                        child: Text('Current',
-                                            style: TextStyle(
-                                                fontSize: 8,
-                                                color: isSelected
-                                                    ? Colors.blue
-                                                    : Colors.white)),
-                                      ),
+                    // Academic Year — locked in edit mode
+                    if (isEditing)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                            color: _bgDark,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: _borderColor)),
+                        child: Row(
+                          children: [
+                            Icon(Icons.calendar_today_outlined,
+                                color: _textSecondary, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                                'AY: $selectedAcademicYear  •  Class: $selectedClass  •  Section: $selectedSection',
+                                style: const TextStyle(
+                                    color: _textSecondary, fontSize: 13)),
+                            const Spacer(),
+                            const Icon(Icons.lock_outline,
+                                color: _textSecondary, size: 14),
+                          ],
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.calendar_today_outlined,
+                                    color: Colors.blue, size: 16),
+                                const SizedBox(width: 6),
+                                const Text('Academic Year',
+                                    style: TextStyle(
+                                        color: Colors.blue,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12)),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _academicYearOptions().map((yr) {
+                                final isSelected = selectedAcademicYear == yr;
+                                final isCurrent =
+                                    yr == AcademicYear.getCurrentYearCode();
+                                return ChoiceChip(
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(yr,
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : _textPrimary)),
+                                      if (isCurrent) ...[
+                                        const SizedBox(width: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : Colors.blue,
+                                              borderRadius:
+                                                  BorderRadius.circular(8)),
+                                          child: Text('Current',
+                                              style: TextStyle(
+                                                  fontSize: 8,
+                                                  color: isSelected
+                                                      ? Colors.blue
+                                                      : Colors.white)),
+                                        ),
+                                      ],
                                     ],
-                                  ],
-                                ),
-                                selected: isSelected,
-                                onSelected: isEditing
-                                    ? null
-                                    : (_) => setDialogState(
-                                        () => selectedAcademicYear = yr),
-                                backgroundColor: _bgDark,
-                                selectedColor: Colors.blue,
-                                side: BorderSide(
-                                    color: isSelected
-                                        ? Colors.blue
-                                        : _borderColor),
-                              );
-                            }).toList(),
-                          ),
+                                  ),
+                                  selected: isSelected,
+                                  onSelected: (_) => setDialogState(
+                                      () => selectedAcademicYear = yr),
+                                  backgroundColor: _bgDark,
+                                  selectedColor: Colors.blue,
+                                  side: BorderSide(
+                                      color: isSelected
+                                          ? Colors.blue
+                                          : _borderColor),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    if (!isEditing)
+                      Row(
+                        children: [
+                          Expanded(
+                              child: _formDropdown('Class *', selectedClass, [
+                            'LKG',
+                            'UKG',
+                            'KG',
+                            'I',
+                            'II',
+                            'III',
+                            'IV',
+                            'V',
+                            'VI',
+                            'VII',
+                            'VIII',
+                            'IX',
+                            'X',
+                            'XI',
+                            'XII'
+                          ], (v) {
+                            setDialogState(() {
+                              selectedClass = v!;
+                              feeStructure = null;
+                              feeStructureLoading = true;
+                            });
+                            if (v!.isNotEmpty) {
+                              _loadFeeStructure(v, schoolId, setDialogState);
+                            }
+                          })),
+                          const SizedBox(width: 12),
+                          Expanded(
+                              child: _formDropdown(
+                                  'Section *',
+                                  selectedSection,
+                                  ['A', 'B', 'C', 'D'],
+                                  (v) => setDialogState(
+                                      () => selectedSection = v!))),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                            child: _formDropdown('Class *', selectedClass, [
-                          'LKG',
-                          'UKG',
-                          'KG',
-                          'I',
-                          'II',
-                          'III',
-                          'IV',
-                          'V',
-                          'VI',
-                          'VII',
-                          'VIII',
-                          'IX',
-                          'X',
-                          'XI',
-                          'XII'
-                        ], (v) {
-                          setDialogState(() {
-                            selectedClass = v!;
-                            feeStructure = null;
-                            feeStructureLoading = true;
-                          });
-                          if (v!.isNotEmpty) {
-                            _loadFeeStructure(v, schoolId, setDialogState);
-                          }
-                        })),
-                        const SizedBox(width: 12),
-                        Expanded(
-                            child: _formDropdown(
-                                'Section *',
-                                selectedSection,
-                                ['A', 'B', 'C', 'D'],
-                                (v) => setDialogState(
-                                    () => selectedSection = v!))),
-                      ],
-                    ),
                     const SizedBox(height: 12),
                     _formField(
                         'Student Phone', phoneController, Icons.phone_outlined),
@@ -1391,7 +1456,7 @@ class _StudentDirectoryScreenState
                                         color: _textSecondary,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w500)),
-                                // Load button
+                                // Refresh button
                                 TextButton.icon(
                                   onPressed: concessionCategoriesLoading
                                       ? null
@@ -1413,13 +1478,6 @@ class _StudentDirectoryScreenState
                                             setDialogState(() =>
                                                 concessionCategoriesLoading =
                                                     false);
-                                            ScaffoldMessenger.of(ctx)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                  content: Text(
-                                                      'Error loading categories: $e'),
-                                                  backgroundColor: Colors.red),
-                                            );
                                           }
                                         },
                                   icon: concessionCategoriesLoading
@@ -1430,7 +1488,7 @@ class _StudentDirectoryScreenState
                                               strokeWidth: 2,
                                               color: Colors.orange))
                                       : const Icon(Icons.refresh, size: 14),
-                                  label: const Text('Load',
+                                  label: const Text('Refresh',
                                       style: TextStyle(fontSize: 11)),
                                   style: TextButton.styleFrom(
                                     foregroundColor: Colors.orange,
@@ -1470,7 +1528,35 @@ class _StudentDirectoryScreenState
                             const SizedBox(height: 8),
 
                             // Concession Category Dropdown
-                            if (concessionCategories.isEmpty)
+                            if (concessionCategoriesLoading)
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: _bgDark,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: _borderColor),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.orange)),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Loading concession categories…',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: 11),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else if (concessionCategories.isEmpty)
                               Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
@@ -1481,11 +1567,11 @@ class _StudentDirectoryScreenState
                                 child: Row(
                                   children: [
                                     Icon(Icons.info_outline,
-                                        color: _textSecondary, size: 16),
+                                        color: _textSecondary, size: 14),
                                     const SizedBox(width: 8),
-                                    Expanded(
+                                    const Expanded(
                                       child: Text(
-                                        'Click "Load" to load concession categories or "Add New" to create one',
+                                        'No categories found. Use \'Add New\' to create one.',
                                         style: TextStyle(
                                             color: _textSecondary,
                                             fontSize: 11),
@@ -1773,10 +1859,9 @@ class _StudentDirectoryScreenState
                     final repo = ref.read(studentRepositoryProvider);
                     final now = DateTime.now();
                     if (isEditing) {
+                      // Only update: name, phone, parent details, van
                       final updated = existingStudent.copyWith(
                         name: nameController.text.trim(),
-                        className: selectedClass,
-                        section: selectedSection,
                         phoneNumber: phoneController.text.trim().isEmpty
                             ? null
                             : phoneController.text.trim(),
@@ -1789,10 +1874,81 @@ class _StudentDirectoryScreenState
                         parentEmail: parentEmailController.text.trim().isEmpty
                             ? null
                             : parentEmailController.text.trim(),
+                        isVanAvailed: vanAvailed == 'Yes',
                         updatedAt: now,
                       );
                       await repo.updateStudent(
                           schoolId, existingStudent.id, updated);
+
+                      // Update student_fee_details: concession, arrears, van
+                      final stuIdInt = existingStudent.studentId;
+                      final concessionAmount =
+                          double.tryParse(concessionCtrl.text) ?? 0;
+                      final arrearTuitionAmount =
+                          double.tryParse(arrearTuitionCtrl.text) ?? 0;
+                      final arrearExamAmount =
+                          double.tryParse(arrearExamCtrl.text) ?? 0;
+                      final arrearVanAmount = vanAvailed == 'Yes'
+                          ? double.tryParse(arrearVanCtrl.text) ?? 0
+                          : 0.0;
+                      final vanFeeAmount = vanAvailed == 'Yes'
+                          ? double.tryParse(vanFeeCtrl.text) ?? 0
+                          : 0.0;
+
+                      final feeSnap = await FirebaseFirestore.instance
+                          .collection('schools')
+                          .doc(schoolId)
+                          .collection('student_fee_details')
+                          .where('stuId', isEqualTo: stuIdInt)
+                          .where('academicYear',
+                              isEqualTo: selectedAcademicYear)
+                          .limit(1)
+                          .get();
+
+                      final feeUpdate = <String, dynamic>{
+                        'stuConcessionFees': concessionAmount,
+                        'arrearTuitionFees': arrearTuitionAmount,
+                        'arrearExamFees': arrearExamAmount,
+                        'arrearVanFees': arrearVanAmount,
+                        'balanceArrearTuitionFees': arrearTuitionAmount,
+                        'balanceArrearExamFees': arrearExamAmount,
+                        'balanceArrearVanFees': arrearVanAmount,
+                        'isStuAvailVan': vanAvailed == 'Yes' ? 'y' : 'n',
+                        'stuTotalVanFees': vanFeeAmount,
+                        'stuBalVanFees': vanFeeAmount - arrearVanAmount,
+                        'updatedAt': FieldValue.serverTimestamp(),
+                      };
+
+                      if (feeSnap.docs.isNotEmpty) {
+                        await feeSnap.docs.first.reference.update(feeUpdate);
+                      }
+
+                      // Keep StudentFeeLedger parent contact in sync
+                      final newParentPhone =
+                          parentPhoneController.text.trim().isEmpty
+                              ? null
+                              : parentPhoneController.text.trim();
+                      final newParentName =
+                          parentNameController.text.trim().isEmpty
+                              ? null
+                              : parentNameController.text.trim();
+                      try {
+                        final ledgerSnap = await FirebaseFirestore.instance
+                            .collection('schools')
+                            .doc(schoolId)
+                            .collection('studentFeeLedgers')
+                            .where('studentId', isEqualTo: stuIdInt.toString())
+                            .get();
+                        for (final doc in ledgerSnap.docs) {
+                          await doc.reference.update({
+                            if (newParentPhone != null)
+                              'parentPhone': newParentPhone,
+                            if (newParentName != null)
+                              'parentName': newParentName,
+                            'updatedAt': FieldValue.serverTimestamp(),
+                          });
+                        }
+                      } catch (_) {}
                     } else {
                       final nextId = await repo.getNextStudentId(schoolId);
                       final newStudent = Student(
@@ -1824,21 +1980,21 @@ class _StudentDirectoryScreenState
                       await repo.createStudent(schoolId, newStudent);
 
                       // Create student fee details with concession and arrears
-                      if (feeStructure != null) {
-                        await _createStudentFeeDetails(
-                            schoolId,
-                            nextId.toString(),
-                            feeStructure!,
-                            concessionCtrl.text,
-                            arrearTuitionCtrl.text,
-                            arrearExamCtrl.text,
-                            arrearVanCtrl.text,
-                            nameController.text.trim(),
-                            selectedSection,
-                            selectedAcademicYear,
-                            vanAvailed,
-                            vanFeeCtrl.text);
-                      }
+                      // Always create the record so the student appears in Fee Management.
+                      await _createStudentFeeDetails(
+                          schoolId,
+                          nextId.toString(),
+                          feeStructure ?? {},
+                          selectedClass,
+                          concessionCtrl.text,
+                          arrearTuitionCtrl.text,
+                          arrearExamCtrl.text,
+                          arrearVanCtrl.text,
+                          nameController.text.trim(),
+                          selectedSection,
+                          selectedAcademicYear,
+                          vanAvailed,
+                          vanFeeCtrl.text);
 
                       // Also seed the V2 StudentFeeLedger from the active
                       // FeeStructureV2 for this class+AY so the new Fee
@@ -1920,9 +2076,9 @@ class _StudentDirectoryScreenState
             final v2Snap = await FirebaseFirestore.instance
                 .collection('schools')
                 .doc(schoolId)
-                .collection('fee_structures_v2')
+                .collection('feeStructuresV2')
                 .where('isActive', isEqualTo: true)
-                .where('applicableClassIds', arrayContains: className)
+                .where('applicableToClassIds', arrayContains: className)
                 .where('academicYear', isEqualTo: ay)
                 .limit(1)
                 .get();
@@ -1991,16 +2147,8 @@ class _StudentDirectoryScreenState
 
   /// Calculate total tuition from V2 fee structure
   double _calculateV2Tuition(Map<String, dynamic> v2Data) {
-    final terms = v2Data['terms'] as List? ?? [];
-    double total = 0;
-    for (final term in terms) {
-      if (term is Map) {
-        final termMap = Map<String, dynamic>.from(term);
-        final amount = (termMap['totalAmount'] as num?)?.toDouble() ?? 0;
-        total += amount;
-      }
-    }
-    return total;
+    // totalAmount is stored directly on the document; terms are a subcollection.
+    return (v2Data['totalAmount'] as num?)?.toDouble() ?? 0;
   }
 
   Future<void> _activateParentLogin(BuildContext context, Student student,
@@ -2406,175 +2554,6 @@ class _StudentDirectoryScreenState
     );
   }
 
-  // ─── Bulk Create Logins ───────────────────────────────────────────
-
-  Future<void> _bulkCreateLogins(BuildContext context, String schoolId) async {
-    final session = ref.read(currentSessionProvider);
-    if (session == null) return;
-
-    final eligibleStudents = _allStudents
-        .where((s) =>
-            (s.parentUserId == null || s.parentUserId!.isEmpty) &&
-            (s.parentEmail != null && s.parentEmail!.isNotEmpty) &&
-            (s.parentPhone != null && s.parentPhone!.isNotEmpty))
-        .toList();
-
-    if (eligibleStudents.isEmpty) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'No eligible students found. Students must have parent email and phone to create logins.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _cardDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Bulk Create Parent Logins',
-            style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-                'Found ${eligibleStudents.length} students with parent email & phone but no login.',
-                style: const TextStyle(color: _textPrimary)),
-            const SizedBox(height: 12),
-            const Text(
-                'Login credentials:\n• Email = Parent Email\n• Password = Parent Mobile Number',
-                style: TextStyle(color: _textSecondary, fontSize: 13)),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8)),
-              child: const Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded,
-                      size: 16, color: Colors.amber),
-                  SizedBox(width: 8),
-                  Expanded(
-                      child: Text(
-                          'This will create Firebase Auth users for all eligible students. This cannot be undone easily.',
-                          style: TextStyle(color: Colors.amber, fontSize: 11))),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel',
-                  style: TextStyle(color: _textSecondary))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: _accentBlue),
-            child: Text('Create ${eligibleStudents.length} Logins',
-                style: const TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !context.mounted) return;
-
-    setState(() => _isBulkCreating = true);
-
-    int created = 0;
-    int failed = 0;
-
-    try {
-      FirebaseApp secondaryApp;
-      try {
-        secondaryApp = Firebase.app('parent-helper');
-      } on FirebaseException {
-        secondaryApp = await Firebase.initializeApp(
-          name: 'parent-helper',
-          options: EnvironmentConfig.firebaseOptions,
-        );
-      }
-      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-      final firestore = FirebaseFirestore.instance;
-      final repo = ref.read(studentRepositoryProvider);
-
-      for (final student in eligibleStudents) {
-        try {
-          final loginEmail = student.parentEmail ?? '';
-          final loginPassword = student.parentPhone ?? '';
-
-          final userCredential =
-              await secondaryAuth.createUserWithEmailAndPassword(
-            email: loginEmail,
-            password: loginPassword,
-          );
-          final userId = userCredential.user!.uid;
-
-          final userData = AppUser(
-            uid: userId,
-            email: loginEmail,
-            displayName: student.parentName ?? student.name,
-            role: UserRole.PARENT,
-            schoolId: schoolId,
-            status: UserStatus.ACTIVE,
-            onboardingStatus: OnboardingStatus.ACTIVE,
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-            createdBy: session.uid,
-            profile: UserProfile(phoneNumber: loginPassword),
-            permissions: UserPermissions.forRole(UserRole.PARENT),
-          );
-
-          await firestore
-              .collection('users')
-              .doc(userId)
-              .set(userData.toFirestore());
-          await repo.updateStudent(
-              schoolId,
-              student.id,
-              student.copyWith(
-                  parentUserId: userId, updatedAt: DateTime.now()));
-
-          await secondaryAuth.signOut();
-
-          // Update local state
-          final idx = _allStudents.indexWhere((s) => s.id == student.id);
-          if (idx != -1) {
-            _allStudents[idx] =
-                _allStudents[idx].copyWith(parentUserId: userId);
-          }
-
-          // Queue WhatsApp notification
-          final parentPhone = student.parentPhone ?? student.phoneNumber;
-          if (parentPhone != null && parentPhone.isNotEmpty) {
-            await _queueWhatsAppLoginNotification(
-                schoolId, student.name, loginEmail, loginPassword, parentPhone);
-          }
-
-          created++;
-        } catch (_) {
-          failed++;
-        }
-      }
-    } catch (e) {
-      failed = eligibleStudents.length - created;
-    }
-
-    if (mounted) {
-      setState(() => _isBulkCreating = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Done! $created logins created, $failed failed.'),
-        backgroundColor: failed == 0 ? Colors.green : Colors.orange,
-      ));
-    }
-  }
-
   // ─── Enter Parent Info Dialog ─────────────────────────────────────
 
   Future<Map<String, String>?> _showEnterParentInfoDialog(
@@ -2743,6 +2722,7 @@ class _StudentDirectoryScreenState
       String schoolId,
       String studentId,
       Map<String, dynamic> feeStructure,
+      String studentClass,
       String concession,
       String arrearTuition,
       String arrearExam,
@@ -2753,8 +2733,25 @@ class _StudentDirectoryScreenState
       String vanAvailed,
       String vanFeeText) async {
     try {
-      final tuitionFee = (feeStructure['tuitionFee'] as num?)?.toDouble() ?? 0;
-      final examFee = (feeStructure['examFee'] as num?)?.toDouble() ?? 0;
+      // ── 1. Resolve tuition from FeeStructureV2 (same as sheet upload) ──
+      double tuitionFee = 0;
+      double examFee = 0;
+      try {
+        final feeRepo = ref.read(feeRepositoryProvider);
+        final v2 = await feeRepo.getFeeStructureV2ByClass(
+            schoolId, studentClass, academicYear);
+        if (v2 != null) {
+          tuitionFee = FeeStructureToPaymentMapper.totalAmountForStructure(v2);
+        } else {
+          // fallback to values from the dialog's local feeStructure map
+          tuitionFee = (feeStructure['tuitionFee'] as num?)?.toDouble() ?? 0;
+          examFee = (feeStructure['examFee'] as num?)?.toDouble() ?? 0;
+        }
+      } catch (_) {
+        tuitionFee = (feeStructure['tuitionFee'] as num?)?.toDouble() ?? 0;
+        examFee = (feeStructure['examFee'] as num?)?.toDouble() ?? 0;
+      }
+
       final vanFee = vanAvailed == 'Yes' ? double.tryParse(vanFeeText) ?? 0 : 0;
       final concessionAmount = double.tryParse(concession) ?? 0;
       final arrearTuitionAmount = double.tryParse(arrearTuition) ?? 0;
@@ -2762,59 +2759,119 @@ class _StudentDirectoryScreenState
       final arrearVanAmount =
           vanAvailed == 'Yes' ? double.tryParse(arrearVan) ?? 0 : 0;
 
-      final totalFee = tuitionFee + examFee + vanFee;
-      final totalPaid = 0.0;
-      final totalConcession = concessionAmount;
-      final totalArrears =
-          arrearTuitionAmount + arrearExamAmount + arrearVanAmount;
+      final stuTotalFees = tuitionFee + examFee + vanFee;
+      final stuBalTuition = tuitionFee - concessionAmount;
+      final stuBalExam = examFee;
+      final stuBalVan = vanFee;
+      final stuBalTotal = stuBalTuition + stuBalExam + stuBalVan;
 
-      // Calculate balances for each fee type
-      final balTuition =
-          (tuitionFee + arrearTuitionAmount) - totalConcession - totalPaid;
-      final balExam = (examFee + arrearExamAmount) - totalPaid;
-      final balVan = (vanFee + arrearVanAmount) - totalPaid;
-      final balTotal = totalFee + totalArrears - totalConcession - totalPaid;
+      // ── 2. Fetch next due date + reminder dates from V2 term ────────
+      DateTime? nextDueDate;
+      DateTime? reminderDate1;
+      DateTime? reminderDate2;
+      try {
+        final feeRepo = ref.read(feeRepositoryProvider);
+        final nextTerm = await feeRepo.getNextDueTermForClass(
+            schoolId, studentClass, academicYear);
+        if (nextTerm != null) {
+          nextDueDate = nextTerm.dueDate;
+          final reminderDays = nextTerm.reminderConfig.beforeDueDays;
+          if (reminderDays.isNotEmpty) {
+            reminderDate1 =
+                nextDueDate.subtract(Duration(days: reminderDays[0]));
+            if (reminderDays.length > 1) {
+              reminderDate2 =
+                  nextDueDate.subtract(Duration(days: reminderDays[1]));
+            }
+          }
+        }
+      } catch (_) {}
 
-      final feeData = {
-        'stuId': studentId,
-        'stuName': studentName, // Use actual student name
-        'stuClass': feeStructure['className'] ?? '',
-        'stuSection': studentSection, // Use actual student section
-        'stuConcessionFees': totalConcession,
-        'arrearTuitionFees': arrearTuitionAmount,
-        'arrearExamFees': arrearExamAmount,
-        'arrearVanFees': arrearVanAmount,
-        'isStuAvailVan': vanAvailed == 'Yes' ? 'y' : 'n',
-        'stuTotalVanFees': vanFee,
+      final stuIdInt = int.tryParse(studentId) ?? 0;
+      final isStuAvailVan = vanAvailed == 'Yes' ? 'y' : 'n';
+
+      // ── 3. Build the full fee-details doc (mirrors sheet upload) ────
+      final feeData = <String, dynamic>{
+        'stuId': stuIdInt,
+        'stuName': studentName,
+        'studentName': studentName,
+        'stuClass': studentClass,
+        'className': studentClass,
+        'stuSection': studentSection,
+        'section': studentSection,
+        'isStuAvailVan': isStuAvailVan,
+        if (nextDueDate != null) 'nextDueDate': Timestamp.fromDate(nextDueDate),
+        if (reminderDate1 != null)
+          'reminderDate1': Timestamp.fromDate(reminderDate1),
+        if (reminderDate2 != null)
+          'reminderDate2': Timestamp.fromDate(reminderDate2),
+        'stuConcessionFees': concessionAmount,
         'stuTotalTutionFees': tuitionFee,
         'stuTotalExamFees': examFee,
+        'stuTotalVanFees': vanFee,
         'stuTotalAdmissionFees': 0.0,
-        'stuTotalFees': totalFee,
+        'stuTotalFees': stuTotalFees,
         'stuPaidTutionFees': 0.0,
         'stuPaidExamFees': 0.0,
         'studPaidVanFees': 0.0,
         'stuPaidAdmissionFees': 0.0,
-        'stuPaidTotalFees': totalPaid,
-        'stuBalTutionFees': balTuition,
-        'stuBalExamFees': balExam,
-        'stuBalVanFees': balVan,
+        'stuPaidTotalFees': 0.0,
+        'stuBalTutionFees': stuBalTuition,
+        'stuBalExamFees': stuBalExam,
+        'stuBalVanFees': stuBalVan,
         'stuBalAdmissionFees': 0.0,
-        'stuBalTotalFees': balTotal,
+        'stuBalTotalFees': stuBalTotal,
+        // Arrears
+        'arrearTuitionFees': arrearTuitionAmount,
+        'arrearExamFees': arrearExamAmount,
+        'arrearAdmissionFees': 0.0,
+        'arrearVanFees': arrearVanAmount,
+        'stuPaidArrearTutionFees': 0.0,
+        'stuPaidArrearExamFees': 0.0,
+        'stuPaidArrearAdmissionFees': 0.0,
+        'stuPaidArrearVanFees': 0.0,
+        'balanceArrearTuitionFees': arrearTuitionAmount,
+        'balanceArrearExamFees': arrearExamAmount,
+        'balanceArrearAdmissionFees': 0.0,
+        'balanceArrearVanFees': arrearVanAmount,
+        'arrearsAcademicYear': _getPreviousAcademicYear(academicYear),
+        'stuBillDetails': 'NA',
         'academicYear': academicYear,
         'fiscalYear': FiscalYear.getCurrentYearCode(),
-        'createdAt': DateTime.now(),
-        'updatedAt': DateTime.now(),
+        'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      await FirebaseFirestore.instance
+      // ── 4. Upsert (same as sheet upload — no duplicate records) ────
+      final existing = await FirebaseFirestore.instance
           .collection('schools')
           .doc(schoolId)
           .collection('student_fee_details')
-          .add(feeData);
+          .where('stuId', isEqualTo: stuIdInt)
+          .where('academicYear', isEqualTo: academicYear)
+          .limit(1)
+          .get();
+
+      if (existing.docs.isNotEmpty) {
+        await existing.docs.first.reference.update(feeData);
+      } else {
+        feeData['createdAt'] = FieldValue.serverTimestamp();
+        await FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('student_fee_details')
+            .add(feeData);
+      }
     } catch (e) {
       print('Error creating student fee details: $e');
-      // Continue without failing the student creation
     }
+  }
+
+  /// Returns the previous academic year string (e.g. 2026-2027 → 2025-2026).
+  String _getPreviousAcademicYear(String ay) {
+    final match = RegExp(r'^(\d{4})').firstMatch(ay);
+    if (match == null) return ay;
+    final startYear = int.tryParse(match.group(1)!) ?? DateTime.now().year;
+    return '${startYear - 1}-$startYear';
   }
 
   Future<String> _getCurrentAcademicYear(String schoolId) async {
@@ -3169,16 +3226,8 @@ class _StudentFeeDetailsDialogState extends State<_StudentFeeDetailsDialog> {
 
   /// Calculate total tuition from V2 fee structure
   double _calculateV2Tuition(Map<String, dynamic> v2Data) {
-    final terms = v2Data['terms'] as List? ?? [];
-    double total = 0;
-    for (final term in terms) {
-      if (term is Map) {
-        final termMap = Map<String, dynamic>.from(term);
-        final amount = (termMap['totalAmount'] as num?)?.toDouble() ?? 0;
-        total += amount;
-      }
-    }
-    return total;
+    // totalAmount is stored directly on the document; terms are a subcollection.
+    return (v2Data['totalAmount'] as num?)?.toDouble() ?? 0;
   }
 
   // Apply concession deduction logic: term fees first, then others one by one

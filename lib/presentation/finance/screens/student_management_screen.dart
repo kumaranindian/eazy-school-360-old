@@ -7,6 +7,7 @@ import '../../../data/repositories/fee_repository.dart';
 import '../../../data/repositories/student_fee_ledger_repository.dart';
 import '../../../data/repositories/student_repository.dart';
 import '../../../domain/entities/academic_year.dart';
+import '../../../domain/entities/fee_structure_v2.dart';
 import '../../../domain/entities/student.dart';
 import '../../shared/widgets/searchable_dropdown.dart';
 
@@ -579,192 +580,366 @@ class _StudentManagementScreenState
         TextEditingController(text: existingStudent?.parentPhone ?? '');
     final parentEmailController =
         TextEditingController(text: existingStudent?.parentEmail ?? '');
-    String selectedClass = existingStudent?.className ?? 'I';
-    String selectedSection = existingStudent?.section ?? 'A';
+    String? selectedClass = existingStudent?.className;
+    String? selectedSection = existingStudent?.section;
+
+    // Fee structure state for preview
+    FeeStructureV2? matchedStructure;
+    bool loadingStructure = false;
+    String? structureError;
+
+    // All V2 structures for this school (loaded once)
+    List<FeeStructureV2> allStructures = [];
+
+    Future<void> loadStructures(StateSetter setDs) async {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('feeStructuresV2')
+            .where('isActive', isEqualTo: true)
+            .get();
+        if (!context.mounted) return;
+        setDs(() {
+          allStructures =
+              snap.docs.map((d) => FeeStructureV2.fromFirestore(d)).toList();
+        });
+        // If editing, pre-select match
+        if (selectedClass != null) {
+          final match = allStructures
+              .where((s) => s.applicableToClassIds.contains(selectedClass))
+              .toList();
+          setDs(() {
+            matchedStructure = match.isNotEmpty ? match.first : null;
+            structureError = match.isEmpty
+                ? 'No fee structure found for Class $selectedClass'
+                : null;
+          });
+        }
+      } catch (e) {
+        if (!context.mounted) return;
+        setDs(() => structureError = 'Failed to load fee structures: $e');
+      }
+    }
+
+    void onClassChanged(String? cls, StateSetter setDs) {
+      setDs(() {
+        selectedClass = cls;
+        matchedStructure = null;
+        structureError = null;
+        if (cls == null) return;
+        final matches = allStructures
+            .where((s) => s.applicableToClassIds.contains(cls))
+            .toList();
+        if (matches.isNotEmpty) {
+          matchedStructure = matches.first;
+        } else {
+          structureError =
+              'No fee structure found for Class $cls — you can still add the student and assign a fee structure later.';
+        }
+      });
+    }
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: _cardDark,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(isEditing ? 'Edit Student' : 'Add New Student',
-              style: const TextStyle(
-                  color: _textPrimary, fontWeight: FontWeight.bold)),
-          content: SizedBox(
-            width: 400,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildTextField(
-                      'Student Name *', nameController, Icons.person_outline),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildDropdownField(
-                            'Class *',
-                            selectedClass,
-                            [
-                              'LKG',
-                              'UKG',
-                              'KG',
-                              'I',
-                              'II',
-                              'III',
-                              'IV',
-                              'V',
-                              'VI',
-                              'VII',
-                              'VIII',
-                              'IX',
-                              'X',
-                              'XI',
-                              'XII'
+        builder: (context, setDialogState) {
+          // Load structures on first build
+          if (allStructures.isEmpty &&
+              !loadingStructure &&
+              structureError == null) {
+            loadingStructure = true;
+            loadStructures(setDialogState).then((_) {
+              if (context.mounted)
+                setDialogState(() => loadingStructure = false);
+            });
+          }
+
+          // Derive sorted class list from loaded structures
+          final availableClasses = allStructures
+              .expand((s) => s.applicableToClassIds)
+              .toSet()
+              .toList()
+            ..sort();
+
+          // Fallback to standard list if structures not yet loaded
+          final classOptions = availableClasses.isNotEmpty
+              ? availableClasses
+              : const [
+                  'Pre-KG',
+                  'LKG',
+                  'UKG',
+                  'KG',
+                  'I',
+                  'II',
+                  'III',
+                  'IV',
+                  'V',
+                  'VI',
+                  'VII',
+                  'VIII',
+                  'IX',
+                  'X',
+                  'XI',
+                  'XII'
+                ];
+
+          return AlertDialog(
+            backgroundColor: _cardDark,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(isEditing ? 'Edit Student' : 'Add New Student',
+                style: const TextStyle(
+                    color: _textPrimary, fontWeight: FontWeight.bold)),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTextField(
+                        'Student Name *', nameController, Icons.person_outline),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Class *',
+                                  style: TextStyle(
+                                      color: _textSecondary, fontSize: 12)),
+                              const SizedBox(height: 4),
+                              loadingStructure
+                                  ? const SizedBox(
+                                      height: 44,
+                                      child: Center(
+                                          child: SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: _accentBlue))))
+                                  : _buildDropdownField(
+                                      'Select Class',
+                                      selectedClass ?? '',
+                                      classOptions,
+                                      (v) => onClassChanged(v, setDialogState)),
                             ],
-                            (v) => setDialogState(() => selectedClass = v!)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Section *',
+                                  style: TextStyle(
+                                      color: _textSecondary, fontSize: 12)),
+                              const SizedBox(height: 4),
+                              _buildDropdownField(
+                                  'Select Section',
+                                  selectedSection ?? '',
+                                  const ['A', 'B', 'C', 'D', 'E', 'F'],
+                                  (v) => setDialogState(
+                                      () => selectedSection = v)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Fee structure preview banner
+                    if (matchedStructure != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: const Color(0xFF10B981).withOpacity(0.4)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle_outline,
+                                color: Color(0xFF10B981), size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Fee structure: ${matchedStructure!.name}  •  ₹${matchedStructure!.totalAmount.toStringAsFixed(0)} / year',
+                                style: const TextStyle(
+                                    color: Color(0xFF10B981), fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (structureError != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: const Color(0xFFF59E0B).withOpacity(0.4)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.warning_amber_rounded,
+                                color: Color(0xFFF59E0B), size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                structureError!,
+                                style: const TextStyle(
+                                    color: Color(0xFFF59E0B), fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildDropdownField(
-                            'Section *',
-                            selectedSection,
-                            ['A', 'B', 'C', 'D'],
-                            (v) => setDialogState(() => selectedSection = v!)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _buildTextField(
-                      'Phone Number', phoneController, Icons.phone_outlined),
-                  const SizedBox(height: 12),
-                  _buildTextField('Parent Name', parentNameController,
-                      Icons.family_restroom_outlined),
-                  const SizedBox(height: 12),
-                  _buildTextField('Parent Phone', parentPhoneController,
-                      Icons.phone_outlined),
-                  const SizedBox(height: 12),
-                  _buildTextField('Parent Email', parentEmailController,
-                      Icons.email_outlined),
-                ],
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                        'Phone Number', phoneController, Icons.phone_outlined),
+                    const SizedBox(height: 12),
+                    _buildTextField('Parent Name', parentNameController,
+                        Icons.family_restroom_outlined),
+                    const SizedBox(height: 12),
+                    _buildTextField('Parent Phone', parentPhoneController,
+                        Icons.phone_outlined),
+                    const SizedBox(height: 12),
+                    _buildTextField('Parent Email', parentEmailController,
+                        Icons.email_outlined),
+                  ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child:
-                  const Text('Cancel', style: TextStyle(color: _textSecondary)),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Student name is required'),
-                      backgroundColor: Colors.red));
-                  return;
-                }
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel',
+                    style: TextStyle(color: _textSecondary)),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (nameController.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Student name is required'),
+                        backgroundColor: Colors.red));
+                    return;
+                  }
+                  if (selectedClass == null || selectedClass!.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Please select a class'),
+                        backgroundColor: Colors.red));
+                    return;
+                  }
+                  if (selectedSection == null || selectedSection!.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Please select a section'),
+                        backgroundColor: Colors.red));
+                    return;
+                  }
 
-                try {
-                  final repo = ref.read(studentRepositoryProvider);
-                  final now = DateTime.now();
+                  try {
+                    final repo = ref.read(studentRepositoryProvider);
+                    final now = DateTime.now();
 
-                  if (isEditing) {
-                    final updated = existingStudent.copyWith(
-                      name: nameController.text.trim(),
-                      className: selectedClass,
-                      section: selectedSection,
-                      phoneNumber: phoneController.text.trim().isEmpty
-                          ? null
-                          : phoneController.text.trim(),
-                      parentName: parentNameController.text.trim().isEmpty
-                          ? null
-                          : parentNameController.text.trim(),
-                      parentPhone: parentPhoneController.text.trim().isEmpty
-                          ? null
-                          : parentPhoneController.text.trim(),
-                      parentEmail: parentEmailController.text.trim().isEmpty
-                          ? null
-                          : parentEmailController.text.trim(),
-                      updatedAt: now,
-                    );
-                    await repo.updateStudent(
-                        schoolId, existingStudent.id, updated);
-                  } else {
-                    final nextId = await repo.getNextStudentId(schoolId);
-                    final currentYearCode =
-                        await _getCurrentAcademicYear(schoolId);
-                    final newStudent = Student(
-                      id: '',
-                      schoolId: schoolId,
-                      studentId: nextId,
-                      name: nameController.text.trim(),
-                      className: selectedClass,
-                      section: selectedSection,
-                      phoneNumber: phoneController.text.trim().isEmpty
-                          ? null
-                          : phoneController.text.trim(),
-                      parentName: parentNameController.text.trim().isEmpty
-                          ? null
-                          : parentNameController.text.trim(),
-                      parentPhone: parentPhoneController.text.trim().isEmpty
-                          ? null
-                          : parentPhoneController.text.trim(),
-                      parentEmail: parentEmailController.text.trim().isEmpty
-                          ? null
-                          : parentEmailController.text.trim(),
-                      status: StudentStatus.ACTIVE,
-                      academicYearCode: currentYearCode,
-                      createdAt: now,
-                      updatedAt: now,
-                    );
-                    await repo.createStudent(schoolId, newStudent);
+                    if (isEditing) {
+                      final updated = existingStudent.copyWith(
+                        name: nameController.text.trim(),
+                        className: selectedClass,
+                        section: selectedSection,
+                        phoneNumber: phoneController.text.trim().isEmpty
+                            ? null
+                            : phoneController.text.trim(),
+                        parentName: parentNameController.text.trim().isEmpty
+                            ? null
+                            : parentNameController.text.trim(),
+                        parentPhone: parentPhoneController.text.trim().isEmpty
+                            ? null
+                            : parentPhoneController.text.trim(),
+                        parentEmail: parentEmailController.text.trim().isEmpty
+                            ? null
+                            : parentEmailController.text.trim(),
+                        updatedAt: now,
+                      );
+                      await repo.updateStudent(
+                          schoolId, existingStudent.id, updated);
+                    } else {
+                      final nextId = await repo.getNextStudentId(schoolId);
+                      final currentYearCode =
+                          await _getCurrentAcademicYear(schoolId);
+                      final newStudent = Student(
+                        id: '',
+                        schoolId: schoolId,
+                        studentId: nextId,
+                        name: nameController.text.trim(),
+                        className: selectedClass!,
+                        section: selectedSection!,
+                        phoneNumber: phoneController.text.trim().isEmpty
+                            ? null
+                            : phoneController.text.trim(),
+                        parentName: parentNameController.text.trim().isEmpty
+                            ? null
+                            : parentNameController.text.trim(),
+                        parentPhone: parentPhoneController.text.trim().isEmpty
+                            ? null
+                            : parentPhoneController.text.trim(),
+                        parentEmail: parentEmailController.text.trim().isEmpty
+                            ? null
+                            : parentEmailController.text.trim(),
+                        status: StudentStatus.ACTIVE,
+                        academicYearCode: currentYearCode,
+                        createdAt: now,
+                        updatedAt: now,
+                      );
+                      await repo.createStudent(schoolId, newStudent);
 
-                    // Auto-seed the student's fee ledger from the active
-                    // FeeStructureV2 for their class+AY. Non-fatal: student
-                    // stays created even if no structure matches (admin can
-                    // assign later from the Fee Management empty state).
-                    final ledgerMsg = await _autoAssignLedger(
-                      schoolId: schoolId,
-                      studentId: nextId.toString(),
-                      studentName: newStudent.name,
-                      className: newStudent.className,
-                      section: newStudent.section,
-                      academicYear: newStudent.academicYearCode,
-                      parentName: newStudent.parentName,
-                      parentPhone: newStudent.parentPhone,
-                    );
-                    if (mounted && ledgerMsg != null) {
+                      final ledgerMsg = await _autoAssignLedger(
+                        schoolId: schoolId,
+                        studentId: nextId.toString(),
+                        studentName: newStudent.name,
+                        className: newStudent.className,
+                        section: newStudent.section,
+                        academicYear: newStudent.academicYearCode,
+                        parentName: newStudent.parentName,
+                        parentPhone: newStudent.parentPhone,
+                      );
+                      if (mounted && ledgerMsg != null) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(ledgerMsg),
+                          backgroundColor: _accentBlue,
+                        ));
+                      }
+                    }
+
+                    if (mounted) {
+                      Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(ledgerMsg),
-                        backgroundColor: _accentBlue,
-                      ));
+                          content: Text(
+                              isEditing ? 'Student updated' : 'Student added'),
+                          backgroundColor: _accentBlue));
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Error: $e'),
+                          backgroundColor: Colors.red));
                     }
                   }
-
-                  if (mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(
-                            isEditing ? 'Student updated' : 'Student added'),
-                        backgroundColor: _accentBlue));
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text('Error: $e'),
-                        backgroundColor: Colors.red));
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: _accentBlue),
-              child: Text(isEditing ? 'Update' : 'Add Student',
-                  style: const TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: _accentBlue),
+                child: Text(isEditing ? 'Update' : 'Add Student',
+                    style: const TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

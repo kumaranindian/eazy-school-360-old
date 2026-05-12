@@ -6,18 +6,22 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
 
 import '../../domain/entities/payroll.dart';
+import '../../presentation/shared/pdf/pdf_branding.dart';
 
 class PayslipPdfService {
-  static final _fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  static final _fmt =
+      NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
   static final _dateFmt = DateFormat('dd MMM yyyy');
 
   // ══════════════════════════════════════════════════════════════════
   // SINGLE PAYSLIP PDF
   // ══════════════════════════════════════════════════════════════════
 
-  static Future<Uint8List> generateSinglePayslip(PayrollRecord record, {String schoolName = 'Eazy School 360'}) async {
+  static Future<Uint8List> generateSinglePayslip(PayrollRecord record,
+      {required String schoolId}) async {
+    final branding = await PdfBranding.forSchool(schoolId);
     final pdf = pw.Document();
-    pdf.addPage(_buildPayslipPage(record, schoolName));
+    pdf.addPage(_buildPayslipPage(record, branding));
     return pdf.save();
   }
 
@@ -25,10 +29,12 @@ class PayslipPdfService {
   // BULK PAYSLIPS (all staff for a month)
   // ══════════════════════════════════════════════════════════════════
 
-  static Future<Uint8List> generateBulkPayslips(List<PayrollRecord> records, {String schoolName = 'Eazy School 360'}) async {
+  static Future<Uint8List> generateBulkPayslips(List<PayrollRecord> records,
+      {required String schoolId}) async {
+    final branding = await PdfBranding.forSchool(schoolId);
     final pdf = pw.Document();
     for (final record in records) {
-      pdf.addPage(_buildPayslipPage(record, schoolName));
+      pdf.addPage(_buildPayslipPage(record, branding));
     }
     return pdf.save();
   }
@@ -37,7 +43,8 @@ class PayslipPdfService {
   // PAGE BUILDER
   // ══════════════════════════════════════════════════════════════════
 
-  static pw.Page _buildPayslipPage(PayrollRecord record, String schoolName) {
+  static pw.Page _buildPayslipPage(
+      PayrollRecord record, PdfBrandingContext branding) {
     return pw.Page(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.all(32),
@@ -46,7 +53,7 @@ class PayslipPdfService {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             // ── Header ──
-            _buildHeader(record, schoolName),
+            _buildHeader(record, branding),
             pw.SizedBox(height: 16),
             _divider(),
             pw.SizedBox(height: 12),
@@ -88,43 +95,98 @@ class PayslipPdfService {
   }
 
   // ── HEADER ──
-  static pw.Widget _buildHeader(PayrollRecord record, String schoolName) {
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+  static pw.Widget _buildHeader(
+      PayrollRecord record, PdfBrandingContext branding) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Column(
+        // School branding header
+        pw.Row(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text(schoolName,
-                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey800)),
-            pw.SizedBox(height: 2),
-            pw.Text('PAYSLIP', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
-          ],
-        ),
-        pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.end,
-          children: [
-            pw.Text(record.periodLabel, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 2),
-            pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: pw.BoxDecoration(
-                color: record.status == PayrollStatus.APPROVED || record.status == PayrollStatus.PAID
-                    ? PdfColors.green100
-                    : PdfColors.amber100,
-                borderRadius: pw.BorderRadius.circular(4),
+            if (branding.logoImage != null)
+              pw.Container(
+                width: 50,
+                height: 50,
+                margin: const pw.EdgeInsets.only(right: 12),
+                child: pw.Image(branding.logoImage!, fit: pw.BoxFit.contain),
               ),
-              child: pw.Text(record.status.name,
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    fontWeight: pw.FontWeight.bold,
-                    color: record.status == PayrollStatus.APPROVED || record.status == PayrollStatus.PAID
-                        ? PdfColors.green800
-                        : PdfColors.amber800,
-                  )),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    branding.schoolName.isNotEmpty
+                        ? branding.schoolName
+                        : 'School',
+                    style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blueGrey800),
+                  ),
+                  if (branding.schoolAddress.isNotEmpty) ...[
+                    pw.SizedBox(height: 2),
+                    pw.Text(branding.schoolAddress,
+                        style: const pw.TextStyle(
+                            fontSize: 9, color: PdfColors.grey600)),
+                  ],
+                  if (branding.schoolPhone.isNotEmpty ||
+                      branding.schoolEmail.isNotEmpty)
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.only(top: 2),
+                      child: pw.Text(
+                        [
+                          if (branding.schoolPhone.isNotEmpty)
+                            'Ph: ${branding.schoolPhone}',
+                          if (branding.schoolEmail.isNotEmpty)
+                            branding.schoolEmail,
+                        ].join('  •  '),
+                        style: const pw.TextStyle(
+                            fontSize: 8, color: PdfColors.grey600),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text('PAYSLIP',
+                    style: pw.TextStyle(
+                        fontSize: 20,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.green800)),
+                pw.SizedBox(height: 4),
+                pw.Text(record.periodLabel,
+                    style: pw.TextStyle(
+                        fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 2),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: pw.BoxDecoration(
+                    color: record.status == PayrollStatus.APPROVED ||
+                            record.status == PayrollStatus.PAID
+                        ? PdfColors.green100
+                        : PdfColors.amber100,
+                    borderRadius: pw.BorderRadius.circular(4),
+                  ),
+                  child: pw.Text(record.status.name,
+                      style: pw.TextStyle(
+                        fontSize: 10,
+                        fontWeight: pw.FontWeight.bold,
+                        color: record.status == PayrollStatus.APPROVED ||
+                                record.status == PayrollStatus.PAID
+                            ? PdfColors.green800
+                            : PdfColors.amber800,
+                      )),
+                ),
+              ],
             ),
           ],
         ),
+        pw.SizedBox(height: 8),
+        pw.Container(height: 1, color: PdfColors.grey300),
       ],
     );
   }
@@ -139,7 +201,8 @@ class PayslipPdfService {
       ),
       child: pw.Row(
         children: [
-          pw.Expanded(child: pw.Column(
+          pw.Expanded(
+              child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               _keyValue('Name', record.staffName),
@@ -147,15 +210,19 @@ class PayslipPdfService {
               _keyValue('Employee ID', record.employeeId),
             ],
           )),
-          pw.Expanded(child: pw.Column(
+          pw.Expanded(
+              child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              _keyValue('Department', record.department.isNotEmpty ? record.department : '-'),
+              _keyValue('Department',
+                  record.department.isNotEmpty ? record.department : '-'),
               pw.SizedBox(height: 4),
-              _keyValue('Designation', record.designation.isNotEmpty ? record.designation : '-'),
+              _keyValue('Designation',
+                  record.designation.isNotEmpty ? record.designation : '-'),
             ],
           )),
-          pw.Expanded(child: pw.Column(
+          pw.Expanded(
+              child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               _keyValue('Pay Period', record.periodLabel),
@@ -180,11 +247,16 @@ class PayslipPdfService {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
         children: [
-          _attendanceBox('Working Days', '${record.workingDays}', PdfColors.blueGrey700),
-          _attendanceBox('Present', '${record.presentDays}', PdfColors.green700),
-          _attendanceBox('Total Leave', '${record.leaveDaysTaken}', PdfColors.orange700),
-          _attendanceBox('Paid Leave', '${record.paidLeaveDays}', PdfColors.blue700),
-          _attendanceBox('Unpaid (LOP)', '${record.unpaidLeaveDays}', PdfColors.red700),
+          _attendanceBox(
+              'Working Days', '${record.workingDays}', PdfColors.blueGrey700),
+          _attendanceBox(
+              'Present', '${record.presentDays}', PdfColors.green700),
+          _attendanceBox(
+              'Total Leave', '${record.leaveDaysTaken}', PdfColors.orange700),
+          _attendanceBox(
+              'Paid Leave', '${record.paidLeaveDays}', PdfColors.blue700),
+          _attendanceBox(
+              'Unpaid (LOP)', '${record.unpaidLeaveDays}', PdfColors.red700),
         ],
       ),
     );
@@ -192,28 +264,41 @@ class PayslipPdfService {
 
   static pw.Widget _attendanceBox(String label, String value, PdfColor color) {
     return pw.Column(children: [
-      pw.Text(value, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: color)),
+      pw.Text(value,
+          style: pw.TextStyle(
+              fontSize: 16, fontWeight: pw.FontWeight.bold, color: color)),
       pw.SizedBox(height: 2),
-      pw.Text(label, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+      pw.Text(label,
+          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
     ]);
   }
 
   // ── LEAVE BREAKDOWN TABLE ──
   static pw.Widget _buildLeaveBreakdownTable(PayrollRecord record) {
-    final headers = ['Leave Type', 'Paid/Unpaid', 'Annual Quota', 'Used (YTD)', 'This Month', 'Balance'];
-    final data = record.leaveBreakdown.map((lb) => [
-      lb.leaveTypeName,
-      lb.isPaid ? 'Paid' : 'Unpaid',
-      '${lb.allowed}',
-      '${lb.used}',
-      '${lb.takenThisMonth}',
-      '${lb.balance}',
-    ]).toList();
+    final headers = [
+      'Leave Type',
+      'Paid/Unpaid',
+      'Annual Quota',
+      'Used (YTD)',
+      'This Month',
+      'Balance'
+    ];
+    final data = record.leaveBreakdown
+        .map((lb) => [
+              lb.leaveTypeName,
+              lb.isPaid ? 'Paid' : 'Unpaid',
+              '${lb.allowed}',
+              '${lb.used}',
+              '${lb.takenThisMonth}',
+              '${lb.balance}',
+            ])
+        .toList();
 
     return pw.TableHelper.fromTextArray(
       headers: headers,
       data: data,
-      headerStyle: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+      headerStyle: pw.TextStyle(
+          fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey700),
       cellStyle: const pw.TextStyle(fontSize: 9),
       cellAlignment: pw.Alignment.center,
@@ -236,20 +321,34 @@ class PayslipPdfService {
       ...record.deductions.map((d) => ['', '', d.name, _fmt.format(d.amount)]),
     ];
     if (record.lopDeduction > 0) {
-      deductionsRows.add(['', '', 'LOP (${record.unpaidLeaveDays}d × ${_fmt.format(record.perDaySalary)}/day)', _fmt.format(record.lopDeduction)]);
+      deductionsRows.add([
+        '',
+        '',
+        'LOP (${record.unpaidLeaveDays}d × ${_fmt.format(record.perDaySalary)}/day)',
+        _fmt.format(record.lopDeduction)
+      ]);
     }
 
     // Combine
-    final maxRows = earningsRows.length > deductionsRows.length ? earningsRows.length : deductionsRows.length;
+    final maxRows = earningsRows.length > deductionsRows.length
+        ? earningsRows.length
+        : deductionsRows.length;
     final tableData = <List<String>>[];
     for (int i = 0; i < maxRows; i++) {
-      final earning = i < earningsRows.length ? earningsRows[i] : ['', '', '', ''];
-      final deduction = i < deductionsRows.length ? deductionsRows[i] : ['', '', '', ''];
+      final earning =
+          i < earningsRows.length ? earningsRows[i] : ['', '', '', ''];
+      final deduction =
+          i < deductionsRows.length ? deductionsRows[i] : ['', '', '', ''];
       tableData.add([earning[0], earning[1], deduction[2], deduction[3]]);
     }
 
     // Totals row
-    tableData.add(['Gross Salary', _fmt.format(record.grossSalary), 'Total Deductions', _fmt.format(record.totalDeductions)]);
+    tableData.add([
+      'Gross Salary',
+      _fmt.format(record.grossSalary),
+      'Total Deductions',
+      _fmt.format(record.totalDeductions)
+    ]);
 
     return pw.Column(children: [
       pw.Row(children: [
@@ -258,9 +357,17 @@ class PayslipPdfService {
       ]),
       pw.SizedBox(height: 6),
       pw.TableHelper.fromTextArray(
-        headers: ['Earning Component', 'Amount', 'Deduction Component', 'Amount'],
+        headers: [
+          'Earning Component',
+          'Amount',
+          'Deduction Component',
+          'Amount'
+        ],
         data: tableData,
-        headerStyle: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+        headerStyle: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.white),
         headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey700),
         cellStyle: const pw.TextStyle(fontSize: 9),
         cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -282,9 +389,16 @@ class PayslipPdfService {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text('NET PAY', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.green900)),
+          pw.Text('NET PAY',
+              style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.green900)),
           pw.Text(_fmt.format(record.netSalary),
-              style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
+              style: pw.TextStyle(
+                  fontSize: 22,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.green800)),
         ],
       ),
     );
@@ -302,16 +416,20 @@ class PayslipPdfService {
           children: [
             if (record.processedAt != null)
               pw.Text('Processed: ${_dateFmt.format(record.processedAt!)}',
-                  style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
+                  style: const pw.TextStyle(
+                      fontSize: 8, color: PdfColors.grey500)),
             if (record.approvedAt != null)
               pw.Text('Approved: ${_dateFmt.format(record.approvedAt!)}',
-                  style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
+                  style: const pw.TextStyle(
+                      fontSize: 8, color: PdfColors.grey500)),
             pw.Text('Generated: ${_dateFmt.format(DateTime.now())}',
-                style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
+                style:
+                    const pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
           ],
         ),
         pw.SizedBox(height: 16),
-        pw.Text('This is a computer-generated payslip and does not require a signature.',
+        pw.Text(
+            'This is a computer-generated payslip and does not require a signature.',
             style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey400)),
       ],
     );
@@ -320,13 +438,22 @@ class PayslipPdfService {
   // ── HELPERS ──
 
   static pw.Widget _sectionTitle(String title) {
-    return pw.Text(title, style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey800));
+    return pw.Text(title,
+        style: pw.TextStyle(
+            fontSize: 10,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.blueGrey800));
   }
 
   static pw.Widget _keyValue(String key, String value) {
-    return pw.RichText(text: pw.TextSpan(children: [
-      pw.TextSpan(text: '$key: ', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
-      pw.TextSpan(text: value, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+    return pw.RichText(
+        text: pw.TextSpan(children: [
+      pw.TextSpan(
+          text: '$key: ',
+          style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
+      pw.TextSpan(
+          text: value,
+          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
     ]));
   }
 
@@ -348,16 +475,19 @@ class PayslipPdfService {
   }
 
   /// Download single payslip
-  static Future<void> downloadSinglePayslip(PayrollRecord record, {String schoolName = 'Eazy School 360'}) async {
-    final bytes = await generateSinglePayslip(record, schoolName: schoolName);
-    final fileName = 'Payslip_${record.staffName.replaceAll(' ', '_')}_${record.periodLabel.replaceAll(' ', '_')}.pdf';
+  static Future<void> downloadSinglePayslip(PayrollRecord record,
+      {required String schoolId}) async {
+    final bytes = await generateSinglePayslip(record, schoolId: schoolId);
+    final fileName =
+        'Payslip_${record.staffName.replaceAll(' ', '_')}_${record.periodLabel.replaceAll(' ', '_')}.pdf';
     downloadPdf(bytes, fileName);
   }
 
   /// Download all payslips for a month as combined PDF
-  static Future<void> downloadBulkPayslips(List<PayrollRecord> records, {String schoolName = 'Eazy School 360'}) async {
+  static Future<void> downloadBulkPayslips(List<PayrollRecord> records,
+      {required String schoolId}) async {
     if (records.isEmpty) return;
-    final bytes = await generateBulkPayslips(records, schoolName: schoolName);
+    final bytes = await generateBulkPayslips(records, schoolId: schoolId);
     final period = records.first.periodLabel.replaceAll(' ', '_');
     final fileName = 'All_Payslips_$period.pdf';
     downloadPdf(bytes, fileName);

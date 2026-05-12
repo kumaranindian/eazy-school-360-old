@@ -842,7 +842,7 @@ class _UploadSheetScreenState extends ConsumerState<UploadSheetScreen> {
           '0', // stuPaidExamFees
           '0', // studPaidVanFees
           '0', // stuPaidTotalFees
-          '9876543${(i % 10)}00', // phoneNumber
+          '', // phoneNumber (keep empty)
           'NA', // stuBillDetails
         ]);
       }

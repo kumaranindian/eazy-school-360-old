@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/providers/auth_provider.dart';
+import '../../../domain/entities/academic_year.dart';
 import '../../../data/repositories/student_fee_ledger_repository.dart';
 import '../../../domain/entities/student.dart';
 import '../../../domain/entities/student_fee_ledger.dart';
@@ -51,7 +52,7 @@ class _StudentDirectoryWithLedgerScreenState
   }
 
   String? get _schoolId => ref.read(currentSessionProvider)?.schoolId;
-  String? get _academicYear => '2024-2025'; // TODO: Get from settings
+  String get _academicYear => AcademicYear.getCurrentYearCode();
 
   Future<void> _loadData() async {
     final schoolId = _schoolId;
@@ -111,7 +112,6 @@ class _StudentDirectoryWithLedgerScreenState
           _isLoading = false;
         });
         _updateSections();
-        _loadLedgers();
       }
     } catch (e) {
       debugPrint('Error loading students: $e');
@@ -131,52 +131,6 @@ class _StudentDirectoryWithLedgerScreenState
       }
     }
     setState(() => _availableSections = sections.toList()..sort());
-  }
-
-  Future<void> _loadLedgers() async {
-    final schoolId = _schoolId;
-    final academicYear = _academicYear;
-    if (schoolId == null || academicYear == null) return;
-
-    final repo = ref.read(studentFeeLedgerRepositoryProvider);
-    int loadedCount = 0;
-    int notFoundCount = 0;
-    
-    for (final student in _allStudents) {
-      try {
-        final ledger =
-            await repo.getByStudent(schoolId, student.id, academicYear);
-        if (mounted) {
-          setState(() => _ledgerCache[student.id] = ledger);
-          if (ledger != null) {
-            loadedCount++;
-          } else {
-            notFoundCount++;
-          }
-        }
-      } catch (e) {
-        debugPrint('Error loading ledger for ${student.id}: $e');
-        notFoundCount++;
-      }
-    }
-    
-    debugPrint('Loaded $loadedCount ledgers, $notFoundCount students without ledgers');
-    
-    // Show message if many students don't have ledgers
-    if (mounted && notFoundCount > 0 && loadedCount == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No fee ledgers found for students. Please create ledgers from Fee Management.'),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'OK',
-            textColor: Colors.white,
-            onPressed: () {},
-          ),
-        ),
-      );
-    }
   }
 
   List<Student> get _filteredStudents {
@@ -230,7 +184,8 @@ class _StudentDirectoryWithLedgerScreenState
           _buildFilters(isWideScreen),
           if (_isLoading)
             const Expanded(
-                child: Center(child: CircularProgressIndicator(color: _accentBlue)))
+                child: Center(
+                    child: CircularProgressIndicator(color: _accentBlue)))
           else if (filteredStudents.isEmpty)
             _buildEmptyState()
           else
@@ -410,8 +365,8 @@ class _StudentDirectoryWithLedgerScreenState
             items: const [
               DropdownMenuItem(
                   value: null,
-                  child:
-                      Text('All Status', style: TextStyle(color: _textPrimary))),
+                  child: Text('All Status',
+                      style: TextStyle(color: _textPrimary))),
               DropdownMenuItem(
                   value: 'pending',
                   child: Text('Pending Fees',
@@ -598,7 +553,8 @@ class _StudentDirectoryWithLedgerScreenState
                   IconButton(
                     icon: const Icon(Icons.notifications,
                         size: 18, color: Colors.orange),
-                    onPressed: () => _sendPaymentDueNotification(student, ledger!),
+                    onPressed: () =>
+                        _sendPaymentDueNotification(student, ledger!),
                     tooltip: 'Send Payment Due',
                   ),
               ],
@@ -727,7 +683,8 @@ class _StudentDirectoryWithLedgerScreenState
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () => _sendPaymentDueNotification(student, ledger!),
+                    onPressed: () =>
+                        _sendPaymentDueNotification(student, ledger!),
                     icon: const Icon(Icons.notifications, size: 16),
                     label: const Text('Send Due'),
                     style: ElevatedButton.styleFrom(
@@ -844,8 +801,16 @@ class _StudentDirectoryWithLedgerScreenState
   }
 
   void _viewLedger(Student student) async {
-    final ledger = _ledgerCache[student.id];
+    final schoolId = _schoolId;
+    if (schoolId == null) return;
+
+    // Fetch ledger on demand instead of using a pre-loaded cache
+    final repo = ref.read(studentFeeLedgerRepositoryProvider);
+    final ledger = await repo.getByStudent(
+        schoolId, student.studentId.toString(), _academicYear);
+
     if (ledger == null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No ledger found for this student'),
@@ -855,15 +820,16 @@ class _StudentDirectoryWithLedgerScreenState
       return;
     }
 
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => StudentFeeLedgerDetailScreen(
-          schoolId: _schoolId!,
+          schoolId: schoolId,
           ledgerId: ledger.id,
         ),
       ),
-    ).then((_) => _loadData());
+    );
   }
 
   Future<void> _sendPaymentDueNotification(
@@ -957,7 +923,8 @@ class _StudentDirectoryWithLedgerScreenState
     if (studentsWithDues.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No students with pending fees and valid phone numbers'),
+          content:
+              Text('No students with pending fees and valid phone numbers'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -1030,8 +997,8 @@ class _StudentDirectoryWithLedgerScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Sent $successCount notification(s). Failed: $failCount'),
+            content:
+                Text('Sent $successCount notification(s). Failed: $failCount'),
             backgroundColor: failCount > 0 ? Colors.orange : Colors.green,
           ),
         );

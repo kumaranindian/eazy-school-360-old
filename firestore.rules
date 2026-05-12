@@ -244,11 +244,38 @@ service cloud.firestore {
         allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
       }
       
-      // PAYROLL SUBCOLLECTION
+      // PAYROLL SUBCOLLECTION (Legacy)
       match /payroll/{payrollId} {
         allow read: if isSignedIn() && isActive() && (isSuperAdmin() || belongsToSchool(schoolId));
         allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
         allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // PAYROLL CONFIG SUBCOLLECTION (Salary structure per staff)
+      match /payrollConfig/{staffId} {
+        // Admin can read all configs
+        allow read: if isSignedIn() && (isSuperAdmin() || (isAdmin() && belongsToSchool(schoolId)));
+        // Only admin can create/update/delete payroll configs
+        allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || (isAdmin() && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // PAYROLL RECORDS SUBCOLLECTION (Monthly processed payroll)
+      match /payrollRecords/{recordId} {
+        // Admin can read all records, Staff can read only their approved/paid records
+        allow read: if isSignedIn() && (
+          isSuperAdmin() || 
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          // Staff can read their own approved/paid payroll records
+          (isStaff() && belongsToSchool(schoolId) && (
+            resource.data.userId == request.auth.uid &&
+            (resource.data.status == 'APPROVED' || resource.data.status == 'PAID')
+          ))
+        );
+        // Only admin can create/update payroll records
+        allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || (isAdmin() && belongsToSchool(schoolId)));
+        // Only admin can delete payroll records
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || (isAdmin() && belongsToSchool(schoolId)));
       }
       
       // ATTENDANCE SUBCOLLECTION
@@ -478,6 +505,13 @@ service cloud.firestore {
         allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
       }
 
+      // CONCESSION CATEGORIES SUBCOLLECTION
+      match /concessionCategories/{categoryId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && isActive() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && isActive() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
+      }
+
       // FEE CATEGORIES SUBCOLLECTION — catalog of fee buckets (Tuition, Exam, Van, etc.)
       match /feeCategories/{categoryId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
@@ -550,6 +584,22 @@ service cloud.firestore {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || isAdminOrFinance());
         allow create: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
         allow delete: if isSignedIn() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+      }
+      
+      // COMMUNICATION LOGS (audit trail for all outgoing messages)
+      match /communicationLogs/{logId} {
+        // Admin and staff can read all communication logs for their school
+        // Support both legacy (schoolId field) and multi-tenant (membership docs)
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (belongsToSchool(schoolId) && (isAdmin() || isStaff()))
+        );
+        // Any authenticated user from the school can create logs (automated systems)
+        allow create: if isSignedIn() && belongsToSchool(schoolId);
+        // Only admin can update logs (e.g., status updates from webhooks)
+        allow update: if isSignedIn() && (isSuperAdmin() || (isAdmin() && belongsToSchool(schoolId)));
+        // Only admin can delete logs
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isAdmin() && belongsToSchool(schoolId)));
       }
 
       // RAZORPAY SETTINGS

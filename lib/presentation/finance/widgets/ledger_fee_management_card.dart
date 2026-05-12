@@ -258,9 +258,20 @@ class _LedgerFeeManagementCardState
 
       if (!mounted) return;
       setState(() {
-        // Merge arrears entries with ledger termStatus
+        // Merge arrears entries with ledger termStatus, but only add entries
+        // whose category+isArrear combo is NOT already in the ledger (the
+        // ledger repo seeds arrears via _loadArrearsEntries on assignToStudent;
+        // adding them again here would double the displayed amount).
         if (ledger != null && arrearsEntries.isNotEmpty) {
-          final mergedTermStatus = [...ledger.termStatus, ...arrearsEntries];
+          final existingArrearCategories = ledger.termStatus
+              .where((e) => e.isArrear)
+              .map((e) => e.category.toUpperCase())
+              .toSet();
+          final newEntries = arrearsEntries
+              .where((e) =>
+                  !existingArrearCategories.contains(e.category.toUpperCase()))
+              .toList();
+          final mergedTermStatus = [...ledger.termStatus, ...newEntries];
           _ledger = ledger.copyWith(termStatus: mergedTermStatus);
         } else {
           _ledger = ledger;
@@ -286,7 +297,7 @@ class _LedgerFeeManagementCardState
     ref.listen<int>(feeRefreshProvider, (previous, next) {
       _refresh();
     });
-    
+
     if (_loading) {
       return _shell(
           child: const Padding(
@@ -581,7 +592,8 @@ class _LedgerFeeManagementCardState
       agg.total += e.amount + e.lateFeeApplied;
       agg.paid += e.paidAmount;
       agg.balance += e.balanceAmount;
-      print('[LedgerFeeManagementCard] Term: ${e.termName}, Amount: ${e.amount}, Paid: ${e.paidAmount}, LateFee: ${e.lateFeeApplied}, Balance: ${e.balanceAmount}, Category: ${e.category}');
+      print(
+          '[LedgerFeeManagementCard] Term: ${e.termName}, Amount: ${e.amount}, Paid: ${e.paidAmount}, LateFee: ${e.lateFeeApplied}, Balance: ${e.balanceAmount}, Category: ${e.category}');
     }
 
     // Add ad-hoc fees to the category aggregation
@@ -615,7 +627,8 @@ class _LedgerFeeManagementCardState
 
     // Debug: print category aggregates
     for (final cat in cats) {
-      print('[LedgerFeeManagementCard] Category ${cat.category}: Total=${cat.total}, Paid=${cat.paid}, Balance=${cat.balance}');
+      print(
+          '[LedgerFeeManagementCard] Category ${cat.category}: Total=${cat.total}, Paid=${cat.paid}, Balance=${cat.balance}');
     }
 
     const totalColor = _accentAmber;
@@ -799,14 +812,17 @@ class _LedgerFeeManagementCardState
     double actualOutstanding = 0;
     for (final entry in ledger.termStatus) {
       actualOutstanding += entry.balanceAmount;
-      print('[LedgerFeeManagementCard] Outstanding calc: Term=${entry.termName}, Balance=${entry.balanceAmount}, RunningTotal=$actualOutstanding');
+      print(
+          '[LedgerFeeManagementCard] Outstanding calc: Term=${entry.termName}, Balance=${entry.balanceAmount}, RunningTotal=$actualOutstanding');
     }
     // Also include ad-hoc fee items
     for (final item in _adhocFeeItems) {
       actualOutstanding += item.balanceAmount;
-      print('[LedgerFeeManagementCard] Outstanding calc: AdHoc=${item.itemName}, Balance=${item.balanceAmount}, RunningTotal=$actualOutstanding');
+      print(
+          '[LedgerFeeManagementCard] Outstanding calc: AdHoc=${item.itemName}, Balance=${item.balanceAmount}, RunningTotal=$actualOutstanding');
     }
-    print('[LedgerFeeManagementCard] Final outstanding balance: $actualOutstanding, ledger.totalPending: ${ledger.totalPending}');
+    print(
+        '[LedgerFeeManagementCard] Final outstanding balance: $actualOutstanding, ledger.totalPending: ${ledger.totalPending}');
 
     final outstanding =
         actualOutstanding > 0 ? actualOutstanding : ledger.totalPending;

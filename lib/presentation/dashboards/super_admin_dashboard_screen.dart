@@ -7,10 +7,12 @@ class SuperAdminDashboardScreen extends ConsumerStatefulWidget {
   const SuperAdminDashboardScreen({super.key});
 
   @override
-  ConsumerState<SuperAdminDashboardScreen> createState() => _SuperAdminDashboardScreenState();
+  ConsumerState<SuperAdminDashboardScreen> createState() =>
+      _SuperAdminDashboardScreenState();
 }
 
-class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardScreen> {
+class _SuperAdminDashboardScreenState
+    extends ConsumerState<SuperAdminDashboardScreen> {
   int _selectedNavIndex = 0;
 
   @override
@@ -24,16 +26,15 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
       body: Row(
         children: [
           // Side Navigation for wide screens
-          if (isWideScreen)
-            _buildSideNavigation(context, colorScheme),
-          
+          if (isWideScreen) _buildSideNavigation(context, colorScheme),
+
           // Main Content
           Expanded(
             child: Column(
               children: [
                 // Top App Bar
                 _buildTopBar(context, session, colorScheme),
-                
+
                 // Dashboard Content
                 Expanded(
                   child: SingleChildScrollView(
@@ -44,22 +45,23 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
                         // Welcome Header
                         _buildWelcomeHeader(session, colorScheme),
                         const SizedBox(height: 24),
-                        
+
                         // Platform Stats
                         _buildPlatformStats(colorScheme),
                         const SizedBox(height: 24),
-                        
+
                         // Quick Actions
                         Text(
                           'Platform Management',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                         ),
                         const SizedBox(height: 16),
                         _buildQuickActionsGrid(context, colorScheme),
                         const SizedBox(height: 24),
-                        
+
                         // Schools Overview
                         _buildSchoolsOverview(context, colorScheme),
                       ],
@@ -71,7 +73,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
           ),
         ],
       ),
-      bottomNavigationBar: isWideScreen ? null : _buildBottomNavigation(colorScheme),
+      bottomNavigationBar:
+          isWideScreen ? null : _buildBottomNavigation(colorScheme),
     );
   }
 
@@ -103,7 +106,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
                     ),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.admin_panel_settings, color: Colors.white, size: 28),
+                  child: const Icon(Icons.admin_panel_settings,
+                      color: Colors.white, size: 28),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
@@ -132,20 +136,28 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
             ),
           ),
           const Divider(color: Colors.white12, height: 1),
-          
+
           // Navigation Items
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
-                _buildNavItem(Icons.dashboard_rounded, 'Dashboard', 0, colorScheme),
+                _buildSectionHeader('Overview'),
+                _buildNavItem(
+                    Icons.dashboard_rounded, 'Dashboard', 0, colorScheme),
+                _buildSectionHeader('Platform Management'),
                 _buildNavItem(Icons.school_rounded, 'Schools', 1, colorScheme),
                 _buildNavItem(Icons.people_rounded, 'Admins', 2, colorScheme),
-                _buildNavItem(Icons.analytics_rounded, 'Analytics', 3, colorScheme),
-                _buildNavItem(Icons.payment_rounded, 'Subscriptions', 4, colorScheme),
-                _buildNavItem(Icons.settings_rounded, 'Settings', 5, colorScheme),
-                const Divider(color: Colors.white12, height: 32),
-                _buildNavItem(Icons.developer_mode, 'Developer Tools', 6, colorScheme),
+                _buildNavItem(
+                    Icons.analytics_rounded, 'Analytics', 3, colorScheme),
+                _buildNavItem(
+                    Icons.payment_rounded, 'Subscriptions', 4, colorScheme),
+                _buildSectionHeader('Settings'),
+                _buildNavItem(
+                    Icons.settings_rounded, 'Settings', 5, colorScheme),
+                _buildSectionHeader('Tools'),
+                _buildNavItem(
+                    Icons.developer_mode, 'Developer Tools', 6, colorScheme),
               ],
             ),
           ),
@@ -154,7 +166,23 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, int index, ColorScheme colorScheme) {
+  Widget _buildSectionHeader(String label) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          color: Colors.white60,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(
+      IconData icon, String label, int index, ColorScheme colorScheme) {
     final isSelected = _selectedNavIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
@@ -189,7 +217,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
     );
   }
 
-  Widget _buildTopBar(BuildContext context, dynamic session, ColorScheme colorScheme) {
+  Widget _buildTopBar(
+      BuildContext context, dynamic session, ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: BoxDecoration(
@@ -224,17 +253,18 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
             ),
           ),
           const SizedBox(width: 16),
-          
+
           // Notifications
           IconButton(
             icon: Badge(
               label: const Text('5'),
-              child: Icon(Icons.notifications_outlined, color: Colors.grey.shade600),
+              child: Icon(Icons.notifications_outlined,
+                  color: Colors.grey.shade600),
             ),
             onPressed: () {},
           ),
           const SizedBox(width: 8),
-          
+
           // User Menu
           PopupMenuButton<String>(
             offset: const Offset(0, 50),
@@ -244,14 +274,19 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
                   padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF6A1B9A), width: 2),
+                    border:
+                        Border.all(color: const Color(0xFF6A1B9A), width: 2),
                   ),
                   child: CircleAvatar(
                     backgroundColor: const Color(0xFF6A1B9A),
                     radius: 16,
                     child: Text(
-                      ((session?.displayName as String?) ?? 'S')[0].toUpperCase(),
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      ((session?.displayName as String?) ?? 'S')[0]
+                          .toUpperCase(),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14),
                     ),
                   ),
                 ),
@@ -262,11 +297,13 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
                   children: [
                     Text(
                       (session?.displayName as String?) ?? 'Super Admin',
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                     Text(
                       'Platform Administrator',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                      style:
+                          TextStyle(color: Colors.grey.shade600, fontSize: 12),
                     ),
                   ],
                 ),
@@ -343,7 +380,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(Icons.admin_panel_settings, color: Colors.white, size: 48),
+            child: const Icon(Icons.admin_panel_settings,
+                color: Colors.white, size: 48),
           ),
         ],
       ),
@@ -358,17 +396,22 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
           spacing: 16,
           runSpacing: 16,
           children: [
-            _buildStatCard('Total Schools', '12', Icons.school, Colors.blue, isNarrow, '+2 this month'),
-            _buildStatCard('Active Admins', '24', Icons.admin_panel_settings, Colors.green, isNarrow, '100% active'),
-            _buildStatCard('Total Staff', '450', Icons.people, Colors.orange, isNarrow, 'Across all schools'),
-            _buildStatCard('Subscriptions', '10', Icons.payment, Colors.purple, isNarrow, '2 pending'),
+            _buildStatCard('Total Schools', '12', Icons.school, Colors.blue,
+                isNarrow, '+2 this month'),
+            _buildStatCard('Active Admins', '24', Icons.admin_panel_settings,
+                Colors.green, isNarrow, '100% active'),
+            _buildStatCard('Total Staff', '450', Icons.people, Colors.orange,
+                isNarrow, 'Across all schools'),
+            _buildStatCard('Subscriptions', '10', Icons.payment, Colors.purple,
+                isNarrow, '2 pending'),
           ],
         );
       },
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color, bool isNarrow, String subtitle) {
+  Widget _buildStatCard(String title, String value, IconData icon, Color color,
+      bool isNarrow, String subtitle) {
     return Container(
       width: isNarrow ? double.infinity : 220,
       padding: const EdgeInsets.all(20),
@@ -431,7 +474,9 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
   Widget _buildQuickActionsGrid(BuildContext context, ColorScheme colorScheme) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth > 800 ? 4 : (constraints.maxWidth > 500 ? 3 : 2);
+        final crossAxisCount = constraints.maxWidth > 800
+            ? 4
+            : (constraints.maxWidth > 500 ? 3 : 2);
         return GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -440,21 +485,30 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
           crossAxisSpacing: 16,
           childAspectRatio: 1.2,
           children: [
-            _buildActionCard('Manage Schools', Icons.school_rounded, Colors.blue, () => _showComingSoon(context)),
-            _buildActionCard('Add School', Icons.add_business_rounded, Colors.green, () => _showComingSoon(context)),
-            _buildActionCard('View Analytics', Icons.analytics_rounded, Colors.orange, () => _showComingSoon(context)),
-            _buildActionCard('Subscriptions', Icons.payment_rounded, Colors.purple, () => _showComingSoon(context)),
-            _buildActionCard('System Settings', Icons.settings_rounded, Colors.grey, () => _showComingSoon(context)),
-            _buildActionCard('Audit Logs', Icons.history_rounded, Colors.teal, () => _showComingSoon(context)),
-            _buildActionCard('Notifications', Icons.notifications_rounded, Colors.pink, () => _showComingSoon(context)),
-            _buildActionCard('Dev Tools', Icons.developer_mode, Colors.amber.shade700, () => _handleNavigation(6)),
+            _buildActionCard('Manage Schools', Icons.school_rounded,
+                Colors.blue, () => _showComingSoon(context)),
+            _buildActionCard('Add School', Icons.add_business_rounded,
+                Colors.green, () => _showComingSoon(context)),
+            _buildActionCard('View Analytics', Icons.analytics_rounded,
+                Colors.orange, () => _showComingSoon(context)),
+            _buildActionCard('Subscriptions', Icons.payment_rounded,
+                Colors.purple, () => _showComingSoon(context)),
+            _buildActionCard('System Settings', Icons.settings_rounded,
+                Colors.grey, () => _showComingSoon(context)),
+            _buildActionCard('Audit Logs', Icons.history_rounded, Colors.teal,
+                () => _showComingSoon(context)),
+            _buildActionCard('Notifications', Icons.notifications_rounded,
+                Colors.pink, () => _showComingSoon(context)),
+            _buildActionCard('Dev Tools', Icons.developer_mode,
+                Colors.amber.shade700, () => _handleNavigation(6)),
           ],
         );
       },
     );
   }
 
-  Widget _buildActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildActionCard(
+      String title, IconData icon, Color color, VoidCallback onTap) {
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
@@ -535,7 +589,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
             ],
           ),
           const SizedBox(height: 16),
-          _buildSchoolItem('Springfield Elementary School', 'Springfield, IL', 35, true),
+          _buildSchoolItem(
+              'Springfield Elementary School', 'Springfield, IL', 35, true),
           _buildSchoolItem('Riverside High School', 'Riverside, CA', 85, true),
           _buildSchoolItem('Oak Valley Academy', 'Oak Valley, TX', 42, false),
         ],
@@ -543,7 +598,8 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
     );
   }
 
-  Widget _buildSchoolItem(String name, String location, int staffCount, bool isActive) {
+  Widget _buildSchoolItem(
+      String name, String location, int staffCount, bool isActive) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -575,7 +631,9 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: isActive ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+              color: isActive
+                  ? Colors.green.withOpacity(0.1)
+                  : Colors.orange.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
@@ -602,9 +660,18 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
       selectedIndex: _selectedNavIndex > 3 ? 0 : _selectedNavIndex,
       onDestinationSelected: _handleNavigation,
       destinations: const [
-        NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-        NavigationDestination(icon: Icon(Icons.school_outlined), selectedIcon: Icon(Icons.school), label: 'Schools'),
-        NavigationDestination(icon: Icon(Icons.analytics_outlined), selectedIcon: Icon(Icons.analytics), label: 'Analytics'),
+        NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard'),
+        NavigationDestination(
+            icon: Icon(Icons.school_outlined),
+            selectedIcon: Icon(Icons.school),
+            label: 'Schools'),
+        NavigationDestination(
+            icon: Icon(Icons.analytics_outlined),
+            selectedIcon: Icon(Icons.analytics),
+            label: 'Analytics'),
         NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
       ],
     );
@@ -612,7 +679,7 @@ class _SuperAdminDashboardScreenState extends ConsumerState<SuperAdminDashboardS
 
   void _handleNavigation(int index) {
     setState(() => _selectedNavIndex = index);
-    
+
     switch (index) {
       case 6:
         _showComingSoon(context);

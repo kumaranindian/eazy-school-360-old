@@ -13,10 +13,13 @@ class PayrollManagementScreen extends ConsumerStatefulWidget {
   const PayrollManagementScreen({super.key});
 
   @override
-  ConsumerState<PayrollManagementScreen> createState() => _PayrollManagementScreenState();
+  ConsumerState<PayrollManagementScreen> createState() =>
+      _PayrollManagementScreenState();
 }
 
-class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScreen> with SingleTickerProviderStateMixin {
+class _PayrollManagementScreenState
+    extends ConsumerState<PayrollManagementScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _selectedMonth = DateTime.now().month;
   int _selectedYear = DateTime.now().year;
@@ -29,7 +32,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
   static const Color _textSecondary = Color(0xFF8B949E);
   static const Color _borderColor = Color(0xFF30363D);
 
-  final _currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final _currencyFormat =
+      NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
   @override
   void initState() {
@@ -47,7 +51,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
   Widget build(BuildContext context) {
     final session = ref.watch(currentSessionProvider);
     if (session == null || session.schoolId == null) {
-      return const Center(child: Text('Access Denied', style: TextStyle(color: _textPrimary)));
+      return const Center(
+          child: Text('Access Denied', style: TextStyle(color: _textPrimary)));
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -84,7 +89,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
 
   Widget _buildMonthSelector(bool isDesktop) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isDesktop ? 28 : 16, vertical: 12),
+      padding:
+          EdgeInsets.symmetric(horizontal: isDesktop ? 28 : 16, vertical: 12),
       decoration: const BoxDecoration(
         color: _bgDark,
         border: Border(bottom: BorderSide(color: _borderColor)),
@@ -115,14 +121,20 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.calendar_month, color: _accentBlue, size: 18),
+                  const Icon(Icons.calendar_month,
+                      color: _accentBlue, size: 18),
                   const SizedBox(width: 8),
                   Text(
-                    DateFormat('MMMM yyyy').format(DateTime(_selectedYear, _selectedMonth)),
-                    style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 15),
+                    DateFormat('MMMM yyyy')
+                        .format(DateTime(_selectedYear, _selectedMonth)),
+                    style: const TextStyle(
+                        color: _textPrimary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15),
                   ),
                   const SizedBox(width: 4),
-                  const Icon(Icons.arrow_drop_down, color: _textSecondary, size: 20),
+                  const Icon(Icons.arrow_drop_down,
+                      color: _textSecondary, size: 20),
                 ],
               ),
             ),
@@ -148,14 +160,18 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
               style: ElevatedButton.styleFrom(
                 backgroundColor: _accentBlue,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
             )
           else
             const SizedBox(
-              width: 24, height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2, color: _accentBlue),
+              width: 24,
+              height: 24,
+              child:
+                  CircularProgressIndicator(strokeWidth: 2, color: _accentBlue),
             ),
           const SizedBox(width: 8),
           ElevatedButton.icon(
@@ -165,7 +181,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF3B82F6),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
           ),
@@ -179,22 +196,31 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
   // ══════════════════════════════════════════════════════════════════
 
   Widget _buildSalaryConfigTab(dynamic session) {
-    final configsAsync = ref.watch(allPayrollConfigsProvider(session.schoolId as String));
-    final staffAsync = ref.watch(schoolStaffProvider(session.schoolId as String));
+    final configsAsync =
+        ref.watch(allPayrollConfigsProvider(session.schoolId as String));
+    final staffAsync =
+        ref.watch(schoolStaffProvider(session.schoolId as String));
 
     return staffAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
-      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
+      loading: () =>
+          const Center(child: CircularProgressIndicator(color: _accentBlue)),
+      error: (e, _) => Center(
+          child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
       data: (staffList) {
         return configsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
-          error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
+          loading: () => const Center(
+              child: CircularProgressIndicator(color: _accentBlue)),
+          error: (e, _) => Center(
+              child:
+                  Text('Error: $e', style: const TextStyle(color: Colors.red))),
           data: (configs) {
             final configMap = {for (var c in configs) c.staffId: c};
             final activeStaff = staffList.where((s) => s.isActive).toList();
 
             if (activeStaff.isEmpty) {
-              return const Center(child: Text('No active staff found', style: TextStyle(color: _textSecondary)));
+              return const Center(
+                  child: Text('No active staff found',
+                      style: TextStyle(color: _textSecondary)));
             }
 
             return ListView.builder(
@@ -212,14 +238,16 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
     );
   }
 
-  Widget _buildStaffConfigCard(StaffProfile staff, PayrollConfig? config, dynamic session) {
+  Widget _buildStaffConfigCard(
+      StaffProfile staff, PayrollConfig? config, dynamic session) {
     final hasConfig = config != null && config.netSalary > 0;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: _cardDark,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: hasConfig ? _accentBlue.withOpacity(0.3) : _borderColor),
+        border: Border.all(
+            color: hasConfig ? _accentBlue.withOpacity(0.3) : _borderColor),
       ),
       child: Material(
         color: Colors.transparent,
@@ -231,20 +259,29 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
             child: Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: hasConfig ? _accentBlue.withOpacity(0.2) : _borderColor,
+                  backgroundColor:
+                      hasConfig ? _accentBlue.withOpacity(0.2) : _borderColor,
                   radius: 22,
                   child: Text(staff.name[0].toUpperCase(),
-                      style: TextStyle(color: hasConfig ? _accentBlue : _textSecondary, fontWeight: FontWeight.bold, fontSize: 16)),
+                      style: TextStyle(
+                          color: hasConfig ? _accentBlue : _textSecondary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(staff.name, style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                      Text(staff.name,
+                          style: const TextStyle(
+                              color: _textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14)),
                       const SizedBox(height: 2),
                       Text(staff.employeeId,
-                          style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                          style: const TextStyle(
+                              color: _textSecondary, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -253,14 +290,23 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(_currencyFormat.format(config.netSalary),
-                          style: const TextStyle(color: _accentBlue, fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text('Net/month', style: const TextStyle(color: _textSecondary, fontSize: 11)),
+                          style: const TextStyle(
+                              color: _accentBlue,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16)),
+                      Text('Net/month',
+                          style: const TextStyle(
+                              color: _textSecondary, fontSize: 11)),
                     ],
                   ),
                   const SizedBox(width: 12),
                 ],
-                Icon(hasConfig ? Icons.edit_rounded : Icons.add_circle_outline_rounded,
-                    color: hasConfig ? _textSecondary : _accentBlue, size: 22),
+                Icon(
+                    hasConfig
+                        ? Icons.edit_rounded
+                        : Icons.add_circle_outline_rounded,
+                    color: hasConfig ? _textSecondary : _accentBlue,
+                    size: 22),
               ],
             ),
           ),
@@ -281,20 +327,26 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
     )));
 
     return payrollAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: _accentBlue)),
-      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
+      loading: () =>
+          const Center(child: CircularProgressIndicator(color: _accentBlue)),
+      error: (e, _) => Center(
+          child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
       data: (records) {
         if (records.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.receipt_long_rounded, size: 48, color: _textSecondary.withOpacity(0.5)),
+                Icon(Icons.receipt_long_rounded,
+                    size: 48, color: _textSecondary.withOpacity(0.5)),
                 const SizedBox(height: 16),
-                Text('No payroll records for ${DateFormat('MMMM yyyy').format(DateTime(_selectedYear, _selectedMonth))}',
-                    style: const TextStyle(color: _textSecondary, fontSize: 14)),
+                Text(
+                    'No payroll records for ${DateFormat('MMMM yyyy').format(DateTime(_selectedYear, _selectedMonth))}',
+                    style:
+                        const TextStyle(color: _textSecondary, fontSize: 14)),
                 const SizedBox(height: 8),
-                const Text('Click "Process All" to generate payroll', style: TextStyle(color: _textSecondary, fontSize: 12)),
+                const Text('Click "Process All" to generate payroll',
+                    style: TextStyle(color: _textSecondary, fontSize: 12)),
               ],
             ),
           );
@@ -311,47 +363,69 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
             // Summary bar
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: const BoxDecoration(color: _cardDark, border: Border(bottom: BorderSide(color: _borderColor))),
+              decoration: const BoxDecoration(
+                  color: _cardDark,
+                  border: Border(bottom: BorderSide(color: _borderColor))),
               child: Row(
                 children: [
-                  _summaryChip('Total Staff', '${records.length}', Icons.people_alt_rounded, const Color(0xFF3B82F6)),
+                  _summaryChip('Total Staff', '${records.length}',
+                      Icons.people_alt_rounded, const Color(0xFF3B82F6)),
                   const SizedBox(width: 16),
-                  _summaryChip('Gross', _currencyFormat.format(totalGross), Icons.account_balance_wallet_rounded, const Color(0xFF8B5CF6)),
+                  _summaryChip(
+                      'Gross',
+                      _currencyFormat.format(totalGross),
+                      Icons.account_balance_wallet_rounded,
+                      const Color(0xFF8B5CF6)),
                   const SizedBox(width: 16),
-                  _summaryChip('Net Payable', _currencyFormat.format(totalNet), Icons.payments_rounded, _accentBlue),
+                  _summaryChip('Net Payable', _currencyFormat.format(totalNet),
+                      Icons.payments_rounded, _accentBlue),
                   const SizedBox(width: 16),
-                  _summaryChip('Approved', '$approvedCount / ${records.length}', Icons.check_circle_rounded, const Color(0xFF10B981)),
+                  _summaryChip('Approved', '$approvedCount / ${records.length}',
+                      Icons.check_circle_rounded, const Color(0xFF10B981)),
                   if (processedCount > 0) ...[
                     const SizedBox(width: 16),
-                    _summaryChip('Pending Approval', '$processedCount', Icons.pending_rounded, const Color(0xFFF59E0B)),
+                    _summaryChip('Pending Approval', '$processedCount',
+                        Icons.pending_rounded, const Color(0xFFF59E0B)),
                   ],
                   const Spacer(),
                   Tooltip(
                     message: 'Download all payslips as PDF',
                     child: ElevatedButton.icon(
-                      onPressed: records.isEmpty ? null : () async {
-                        try {
-                          await PayslipPdfService.downloadBulkPayslips(records);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('All payslips downloaded!'), backgroundColor: Color(0xFF10B981)),
-                            );
-                          }
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Download failed: $e'), backgroundColor: Colors.red),
-                            );
-                          }
-                        }
-                      },
+                      onPressed: records.isEmpty
+                          ? null
+                          : () async {
+                              try {
+                                await PayslipPdfService.downloadBulkPayslips(
+                                    records,
+                                    schoolId: session.schoolId! as String);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content:
+                                            Text('All payslips downloaded!'),
+                                        backgroundColor: Color(0xFF10B981)),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text('Download failed: $e'),
+                                        backgroundColor: Colors.red),
+                                  );
+                                }
+                              }
+                            },
                       icon: const Icon(Icons.download_rounded, size: 16),
-                      label: const Text('Download All', style: TextStyle(fontSize: 12)),
+                      label: const Text('Download All',
+                          style: TextStyle(fontSize: 12)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF3B82F6),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                   ),
@@ -363,7 +437,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
               child: ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: records.length,
-                itemBuilder: (context, index) => _buildPayrollRecordCard(records[index], session),
+                itemBuilder: (context, index) =>
+                    _buildPayrollRecordCard(records[index], session),
               ),
             ),
           ],
@@ -389,8 +464,14 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text(label, style: const TextStyle(color: _textSecondary, fontSize: 10)),
+                  Text(value,
+                      style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
+                  Text(label,
+                      style:
+                          const TextStyle(color: _textSecondary, fontSize: 10)),
                 ],
               ),
             ),
@@ -402,6 +483,7 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
 
   Widget _buildPayrollRecordCard(PayrollRecord record, dynamic session) {
     final statusColor = _getStatusColor(record.status);
+    final schoolId = session.schoolId! as String;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -412,7 +494,7 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => _showPayslipDetailDialog(record),
+          onTap: () => _showPayslipDetailDialog(record, session),
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -421,27 +503,42 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
                 CircleAvatar(
                   backgroundColor: statusColor.withOpacity(0.2),
                   radius: 22,
-                  child: Text(record.staffName.isNotEmpty ? record.staffName[0].toUpperCase() : '?',
-                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: Text(
+                      record.staffName.isNotEmpty
+                          ? record.staffName[0].toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(record.staffName, style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                      Text(record.staffName,
+                          style: const TextStyle(
+                              color: _textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14)),
                       const SizedBox(height: 2),
                       Text(record.employeeId,
-                          style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                          style: const TextStyle(
+                              color: _textSecondary, fontSize: 12)),
                       const SizedBox(height: 4),
                       Row(children: [
-                        _miniChip('Present: ${record.presentDays}/${record.workingDays}', const Color(0xFF10B981)),
+                        _miniChip(
+                            'Present: ${record.presentDays}/${record.workingDays}',
+                            const Color(0xFF10B981)),
                         const SizedBox(width: 6),
                         if (record.paidLeaveDays > 0)
-                          _miniChip('Paid Leave: ${record.paidLeaveDays}d', const Color(0xFF3B82F6)),
+                          _miniChip('Paid Leave: ${record.paidLeaveDays}d',
+                              const Color(0xFF3B82F6)),
                         if (record.paidLeaveDays > 0) const SizedBox(width: 6),
                         if (record.unpaidLeaveDays > 0)
-                          _miniChip('LOP: ${record.unpaidLeaveDays}d', const Color(0xFFF59E0B)),
+                          _miniChip('LOP: ${record.unpaidLeaveDays}d',
+                              const Color(0xFFF59E0B)),
                       ]),
                     ],
                   ),
@@ -450,19 +547,27 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(_currencyFormat.format(record.netSalary),
-                        style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+                        style: const TextStyle(
+                            color: _textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16)),
                     if (record.lopDeduction > 0)
                       Text('-${_currencyFormat.format(record.lopDeduction)}',
-                          style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 11)),
+                          style: const TextStyle(
+                              color: Color(0xFFF59E0B), fontSize: 11)),
                     const SizedBox(height: 4),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(record.status.name,
-                          style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                          style: TextStyle(
+                              color: statusColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -470,16 +575,24 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
                 if (record.isProcessed)
                   PopupMenuButton<String>(
                     color: _cardDark,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
                     onSelected: (value) {
                       if (value == 'approve') _approveSingle(record, session);
                       if (value == 'reject') _rejectSingle(record, session);
                     },
                     itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'approve', child: Text('Approve', style: TextStyle(color: _textPrimary))),
-                      PopupMenuItem(value: 'reject', child: Text('Reject', style: TextStyle(color: Colors.red))),
+                      PopupMenuItem(
+                          value: 'approve',
+                          child: Text('Approve',
+                              style: TextStyle(color: _textPrimary))),
+                      PopupMenuItem(
+                          value: 'reject',
+                          child: Text('Reject',
+                              style: TextStyle(color: Colors.red))),
                     ],
-                    child: const Icon(Icons.more_vert, color: _textSecondary, size: 20),
+                    child: const Icon(Icons.more_vert,
+                        color: _textSecondary, size: 20),
                   ),
               ],
             ),
@@ -492,8 +605,12 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
   Widget _miniChip(String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
-      child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+      decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(4)),
+      child: Text(text,
+          style: TextStyle(
+              color: color, fontSize: 10, fontWeight: FontWeight.w600)),
     );
   }
 
@@ -501,7 +618,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
   // DETAILED PAYSLIP DIALOG (Admin view)
   // ══════════════════════════════════════════════════════════════════
 
-  void _showPayslipDetailDialog(PayrollRecord record) {
+  void _showPayslipDetailDialog(PayrollRecord record, dynamic session) {
+    final schoolId = session.schoolId! as String;
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -516,48 +634,71 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
               // Header
               Container(
                 padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _borderColor))),
+                decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: _borderColor))),
                 child: Row(
                   children: [
-                    const Icon(Icons.receipt_long_rounded, color: _accentBlue, size: 24),
+                    const Icon(Icons.receipt_long_rounded,
+                        color: _accentBlue, size: 24),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const Text('Payslip', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
-                        Text(record.periodLabel, style: const TextStyle(color: _textSecondary, fontSize: 13)),
-                      ]),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Payslip',
+                                style: TextStyle(
+                                    color: _textPrimary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18)),
+                            Text(record.periodLabel,
+                                style: const TextStyle(
+                                    color: _textSecondary, fontSize: 13)),
+                          ]),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: _getStatusColor(record.status).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(record.status.name,
-                          style: TextStyle(color: _getStatusColor(record.status), fontSize: 11, fontWeight: FontWeight.bold)),
+                          style: TextStyle(
+                              color: _getStatusColor(record.status),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold)),
                     ),
                     const SizedBox(width: 8),
                     IconButton(
-                      icon: const Icon(Icons.download_rounded, color: _accentBlue),
+                      icon: const Icon(Icons.download_rounded,
+                          color: _accentBlue),
                       tooltip: 'Download Payslip PDF',
                       onPressed: () async {
                         try {
-                          await PayslipPdfService.downloadSinglePayslip(record);
+                          await PayslipPdfService.downloadSinglePayslip(record,
+                              schoolId: schoolId);
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Payslip downloaded for ${record.staffName}'), backgroundColor: const Color(0xFF10B981)),
+                              SnackBar(
+                                  content: Text(
+                                      'Payslip downloaded for ${record.staffName}'),
+                                  backgroundColor: const Color(0xFF10B981)),
                             );
                           }
                         } catch (e) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Download failed: $e'), backgroundColor: Colors.red),
+                              SnackBar(
+                                  content: Text('Download failed: $e'),
+                                  backgroundColor: Colors.red),
                             );
                           }
                         }
                       },
                     ),
-                    IconButton(icon: const Icon(Icons.close, color: _textSecondary), onPressed: () => Navigator.pop(ctx)),
+                    IconButton(
+                        icon: const Icon(Icons.close, color: _textSecondary),
+                        onPressed: () => Navigator.pop(ctx)),
                   ],
                 ),
               ),
@@ -565,115 +706,246 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
               Flexible(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    // Employee Info
-                    _payslipSection('Employee Details', Icons.person_rounded, const Color(0xFF3B82F6), [
-                      _payslipRow('Name', record.staffName),
-                      _payslipRow('Employee ID', record.employeeId),
-                      _payslipRow('Designation', record.designation.isNotEmpty ? record.designation : '-'),
-                      _payslipRow('Pay Period', record.periodLabel),
-                    ]),
-                    const SizedBox(height: 16),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Employee Info
+                        _payslipSection('Employee Details',
+                            Icons.person_rounded, const Color(0xFF3B82F6), [
+                          _payslipRow('Name', record.staffName),
+                          _payslipRow('Employee ID', record.employeeId),
+                          _payslipRow(
+                              'Designation',
+                              record.designation.isNotEmpty
+                                  ? record.designation
+                                  : '-'),
+                          _payslipRow('Pay Period', record.periodLabel),
+                        ]),
+                        const SizedBox(height: 16),
 
-                    // Attendance Summary
-                    _payslipSection('Attendance Summary', Icons.calendar_today_rounded, const Color(0xFF10B981), [
-                      _payslipRow('Total Working Days', '${record.workingDays}'),
-                      _payslipRow('Days Present', '${record.presentDays}'),
-                      _payslipRow('Total Leave Days', '${record.leaveDaysTaken}'),
-                      _payslipRow('Paid Leave Days', '${record.paidLeaveDays}', valueColor: const Color(0xFF10B981)),
-                      _payslipRow('Unpaid Leave (LOP)', '${record.unpaidLeaveDays}',
-                          valueColor: record.unpaidLeaveDays > 0 ? const Color(0xFFF59E0B) : null),
-                    ]),
-                    const SizedBox(height: 16),
+                        // Attendance Summary
+                        _payslipSection(
+                            'Attendance Summary',
+                            Icons.calendar_today_rounded,
+                            const Color(0xFF10B981), [
+                          _payslipRow(
+                              'Total Working Days', '${record.workingDays}'),
+                          _payslipRow('Days Present', '${record.presentDays}'),
+                          _payslipRow(
+                              'Total Leave Days', '${record.leaveDaysTaken}'),
+                          _payslipRow(
+                              'Paid Leave Days', '${record.paidLeaveDays}',
+                              valueColor: const Color(0xFF10B981)),
+                          _payslipRow(
+                              'Unpaid Leave (LOP)', '${record.unpaidLeaveDays}',
+                              valueColor: record.unpaidLeaveDays > 0
+                                  ? const Color(0xFFF59E0B)
+                                  : null),
+                        ]),
+                        const SizedBox(height: 16),
 
-                    // Leave Breakdown
-                    if (record.leaveBreakdown.isNotEmpty) ...[
-                      _payslipSection('Leave Breakdown', Icons.event_note_rounded, const Color(0xFF8B5CF6), [
-                        // Table header
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Row(children: const [
-                            Expanded(flex: 3, child: Text('Leave Type', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600))),
-                            Expanded(child: Text('Allowed', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
-                            Expanded(child: Text('Used', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
-                            Expanded(child: Text('This Mo.', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
-                            Expanded(child: Text('Balance', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
-                            SizedBox(width: 50, child: Text('Type', style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
+                        // Leave Breakdown
+                        if (record.leaveBreakdown.isNotEmpty) ...[
+                          _payslipSection(
+                              'Leave Breakdown',
+                              Icons.event_note_rounded,
+                              const Color(0xFF8B5CF6), [
+                            // Table header
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(children: const [
+                                Expanded(
+                                    flex: 3,
+                                    child: Text('Leave Type',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600))),
+                                Expanded(
+                                    child: Text('Allowed',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600),
+                                        textAlign: TextAlign.center)),
+                                Expanded(
+                                    child: Text('Used',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600),
+                                        textAlign: TextAlign.center)),
+                                Expanded(
+                                    child: Text('This Mo.',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600),
+                                        textAlign: TextAlign.center)),
+                                Expanded(
+                                    child: Text('Balance',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600),
+                                        textAlign: TextAlign.center)),
+                                SizedBox(
+                                    width: 50,
+                                    child: Text('Type',
+                                        style: TextStyle(
+                                            color: _textSecondary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600),
+                                        textAlign: TextAlign.center)),
+                              ]),
+                            ),
+                            ...record.leaveBreakdown.map((lb) => Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 3),
+                                  child: Row(children: [
+                                    Expanded(
+                                        flex: 3,
+                                        child: Text(lb.leaveTypeName,
+                                            style: const TextStyle(
+                                                color: _textPrimary,
+                                                fontSize: 12))),
+                                    Expanded(
+                                        child: Text('${lb.allowed}',
+                                            style: const TextStyle(
+                                                color: _textSecondary,
+                                                fontSize: 12),
+                                            textAlign: TextAlign.center)),
+                                    Expanded(
+                                        child: Text('${lb.used}',
+                                            style: const TextStyle(
+                                                color: _textSecondary,
+                                                fontSize: 12),
+                                            textAlign: TextAlign.center)),
+                                    Expanded(
+                                        child: Text('${lb.takenThisMonth}',
+                                            style: TextStyle(
+                                                color: lb.takenThisMonth > 0
+                                                    ? const Color(0xFFF59E0B)
+                                                    : _textSecondary,
+                                                fontSize: 12,
+                                                fontWeight:
+                                                    lb.takenThisMonth > 0
+                                                        ? FontWeight.bold
+                                                        : FontWeight.normal),
+                                            textAlign: TextAlign.center)),
+                                    Expanded(
+                                        child: Text('${lb.balance}',
+                                            style: TextStyle(
+                                                color: lb.balance <= 0
+                                                    ? Colors.redAccent
+                                                    : const Color(0xFF10B981),
+                                                fontSize: 12),
+                                            textAlign: TextAlign.center)),
+                                    SizedBox(
+                                        width: 50,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: lb.isPaid
+                                                ? const Color(0xFF10B981)
+                                                    .withOpacity(0.12)
+                                                : const Color(0xFFF59E0B)
+                                                    .withOpacity(0.12),
+                                            borderRadius:
+                                                BorderRadius.circular(3),
+                                          ),
+                                          child: Text(
+                                              lb.isPaid ? 'Paid' : 'Unpaid',
+                                              style: TextStyle(
+                                                  color: lb.isPaid
+                                                      ? const Color(0xFF10B981)
+                                                      : const Color(0xFFF59E0B),
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold),
+                                              textAlign: TextAlign.center),
+                                        )),
+                                  ]),
+                                )),
                           ]),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // Earnings
+                        _payslipSection('Earnings', Icons.trending_up_rounded,
+                            _accentBlue, [
+                          _payslipRow('Basic Pay',
+                              _currencyFormat.format(record.basicPay)),
+                          ...record.earnings.map((e) => _payslipRow(
+                              e.name, _currencyFormat.format(e.amount))),
+                          const Divider(color: _borderColor, height: 12),
+                          _payslipRow('Gross Salary',
+                              _currencyFormat.format(record.grossSalary),
+                              isBold: true),
+                        ]),
+                        const SizedBox(height: 16),
+
+                        // Deductions
+                        _payslipSection('Deductions',
+                            Icons.trending_down_rounded, Colors.redAccent, [
+                          ...record.deductions.map((d) => _payslipRow(
+                              d.name, '- ${_currencyFormat.format(d.amount)}',
+                              valueColor: Colors.redAccent)),
+                          if (record.lopDeduction > 0)
+                            _payslipRow(
+                                'LOP Deduction (${record.unpaidLeaveDays} days × ${_currencyFormat.format(record.perDaySalary)}/day)',
+                                '- ${_currencyFormat.format(record.lopDeduction)}',
+                                valueColor: const Color(0xFFF59E0B)),
+                          const Divider(color: _borderColor, height: 12),
+                          _payslipRow('Total Deductions',
+                              '- ${_currencyFormat.format(record.totalDeductions)}',
+                              isBold: true, valueColor: Colors.redAccent),
+                        ]),
+                        const SizedBox(height: 16),
+
+                        // Net Pay
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [
+                              _accentBlue.withOpacity(0.15),
+                              _cardDark
+                            ]),
+                            borderRadius: BorderRadius.circular(12),
+                            border:
+                                Border.all(color: _accentBlue.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('NET PAY',
+                                    style: TextStyle(
+                                        color: _textPrimary,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
+                                Text(_currencyFormat.format(record.netSalary),
+                                    style: const TextStyle(
+                                        color: _accentBlue,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 22)),
+                              ]),
                         ),
-                        ...record.leaveBreakdown.map((lb) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3),
-                          child: Row(children: [
-                            Expanded(flex: 3, child: Text(lb.leaveTypeName, style: const TextStyle(color: _textPrimary, fontSize: 12))),
-                            Expanded(child: Text('${lb.allowed}', style: const TextStyle(color: _textSecondary, fontSize: 12), textAlign: TextAlign.center)),
-                            Expanded(child: Text('${lb.used}', style: const TextStyle(color: _textSecondary, fontSize: 12), textAlign: TextAlign.center)),
-                            Expanded(child: Text('${lb.takenThisMonth}',
-                                style: TextStyle(color: lb.takenThisMonth > 0 ? const Color(0xFFF59E0B) : _textSecondary, fontSize: 12, fontWeight: lb.takenThisMonth > 0 ? FontWeight.bold : FontWeight.normal),
-                                textAlign: TextAlign.center)),
-                            Expanded(child: Text('${lb.balance}',
-                                style: TextStyle(color: lb.balance <= 0 ? Colors.redAccent : const Color(0xFF10B981), fontSize: 12), textAlign: TextAlign.center)),
-                            SizedBox(width: 50, child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: lb.isPaid ? const Color(0xFF10B981).withOpacity(0.12) : const Color(0xFFF59E0B).withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                              child: Text(lb.isPaid ? 'Paid' : 'Unpaid',
-                                  style: TextStyle(color: lb.isPaid ? const Color(0xFF10B981) : const Color(0xFFF59E0B), fontSize: 9, fontWeight: FontWeight.bold),
-                                  textAlign: TextAlign.center),
-                            )),
-                          ]),
-                        )),
+
+                        if (record.perDaySalary > 0) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                              'Per day salary: ${_currencyFormat.format(record.perDaySalary)}',
+                              style: const TextStyle(
+                                  color: _textSecondary, fontSize: 11)),
+                        ],
+                        if (record.approvedAt != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                              'Approved on: ${DateFormat('dd MMM yyyy, hh:mm a').format(record.approvedAt!)}',
+                              style: const TextStyle(
+                                  color: _textSecondary, fontSize: 11)),
+                        ],
                       ]),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Earnings
-                    _payslipSection('Earnings', Icons.trending_up_rounded, _accentBlue, [
-                      _payslipRow('Basic Pay', _currencyFormat.format(record.basicPay)),
-                      ...record.earnings.map((e) => _payslipRow(e.name, _currencyFormat.format(e.amount))),
-                      const Divider(color: _borderColor, height: 12),
-                      _payslipRow('Gross Salary', _currencyFormat.format(record.grossSalary), isBold: true),
-                    ]),
-                    const SizedBox(height: 16),
-
-                    // Deductions
-                    _payslipSection('Deductions', Icons.trending_down_rounded, Colors.redAccent, [
-                      ...record.deductions.map((d) => _payslipRow(d.name, '- ${_currencyFormat.format(d.amount)}', valueColor: Colors.redAccent)),
-                      if (record.lopDeduction > 0)
-                        _payslipRow('LOP Deduction (${record.unpaidLeaveDays} days × ${_currencyFormat.format(record.perDaySalary)}/day)',
-                            '- ${_currencyFormat.format(record.lopDeduction)}', valueColor: const Color(0xFFF59E0B)),
-                      const Divider(color: _borderColor, height: 12),
-                      _payslipRow('Total Deductions', '- ${_currencyFormat.format(record.totalDeductions)}', isBold: true, valueColor: Colors.redAccent),
-                    ]),
-                    const SizedBox(height: 16),
-
-                    // Net Pay
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [_accentBlue.withOpacity(0.15), _cardDark]),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _accentBlue.withOpacity(0.3)),
-                      ),
-                      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('NET PAY', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text(_currencyFormat.format(record.netSalary),
-                            style: const TextStyle(color: _accentBlue, fontWeight: FontWeight.bold, fontSize: 22)),
-                      ]),
-                    ),
-
-                    if (record.perDaySalary > 0) ...[
-                      const SizedBox(height: 8),
-                      Text('Per day salary: ${_currencyFormat.format(record.perDaySalary)}',
-                          style: const TextStyle(color: _textSecondary, fontSize: 11)),
-                    ],
-                    if (record.approvedAt != null) ...[
-                      const SizedBox(height: 4),
-                      Text('Approved on: ${DateFormat('dd MMM yyyy, hh:mm a').format(record.approvedAt!)}',
-                          style: const TextStyle(color: _textSecondary, fontSize: 11)),
-                    ],
-                  ]),
                 ),
               ),
             ],
@@ -683,12 +955,15 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
     );
   }
 
-  Widget _payslipSection(String title, IconData icon, Color color, List<Widget> children) {
+  Widget _payslipSection(
+      String title, IconData icon, Color color, List<Widget> children) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         Icon(icon, color: color, size: 16),
         const SizedBox(width: 8),
-        Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+        Text(title,
+            style: TextStyle(
+                color: color, fontWeight: FontWeight.bold, fontSize: 14)),
       ]),
       const SizedBox(height: 10),
       Container(
@@ -703,23 +978,38 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
     ]);
   }
 
-  Widget _payslipRow(String label, String value, {bool isBold = false, Color? valueColor}) {
+  Widget _payslipRow(String label, String value,
+      {bool isBold = false, Color? valueColor}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Flexible(child: Text(label, style: TextStyle(color: _textSecondary, fontSize: 12, fontWeight: isBold ? FontWeight.w600 : FontWeight.normal))),
-        Text(value, style: TextStyle(color: valueColor ?? _textPrimary, fontSize: 12, fontWeight: isBold ? FontWeight.bold : FontWeight.w500)),
+        Flexible(
+            child: Text(label,
+                style: TextStyle(
+                    color: _textSecondary,
+                    fontSize: 12,
+                    fontWeight: isBold ? FontWeight.w600 : FontWeight.normal))),
+        Text(value,
+            style: TextStyle(
+                color: valueColor ?? _textPrimary,
+                fontSize: 12,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w500)),
       ]),
     );
   }
 
   Color _getStatusColor(PayrollStatus status) {
     switch (status) {
-      case PayrollStatus.DRAFT: return _textSecondary;
-      case PayrollStatus.PROCESSED: return const Color(0xFFF59E0B);
-      case PayrollStatus.APPROVED: return const Color(0xFF10B981);
-      case PayrollStatus.PAID: return const Color(0xFF3B82F6);
-      case PayrollStatus.REJECTED: return Colors.red;
+      case PayrollStatus.DRAFT:
+        return _textSecondary;
+      case PayrollStatus.PROCESSED:
+        return const Color(0xFFF59E0B);
+      case PayrollStatus.APPROVED:
+        return const Color(0xFF10B981);
+      case PayrollStatus.PAID:
+        return const Color(0xFF3B82F6);
+      case PayrollStatus.REJECTED:
+        return Colors.red;
     }
   }
 
@@ -731,7 +1021,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
     final session = ref.read(currentSessionProvider);
     if (session?.schoolId == null) return;
 
-    final staffList = await ref.read(schoolStaffProvider(session!.schoolId!).future);
+    final staffList =
+        await ref.read(schoolStaffProvider(session!.schoolId!).future);
     if (staffList.isEmpty) {
       _showSnack('No staff found', Colors.orange);
       return;
@@ -763,9 +1054,14 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
     try {
       final repo = ref.read(payrollRepositoryProvider);
       final count = await repo.approveAllPayroll(
-        session!.schoolId!, _selectedMonth, _selectedYear, session.uid,
+        session!.schoolId!,
+        _selectedMonth,
+        _selectedYear,
+        session.uid,
       );
-      _showSnack('$count payroll records approved! Teachers can now view their payslips.', _accentBlue);
+      _showSnack(
+          '$count payroll records approved! Teachers can now view their payslips.',
+          _accentBlue);
     } catch (e) {
       _showSnack('Error: $e', Colors.red);
     }
@@ -774,7 +1070,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
   Future<void> _approveSingle(PayrollRecord record, dynamic session) async {
     try {
       final repo = ref.read(payrollRepositoryProvider);
-      await repo.approvePayroll(session.schoolId as String, record.id, session.uid as String);
+      await repo.approvePayroll(
+          session.schoolId as String, record.id, session.uid as String);
       _showSnack('Payroll approved for ${record.staffName}', _accentBlue);
     } catch (e) {
       _showSnack('Error: $e', Colors.red);
@@ -787,19 +1084,23 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardDark,
-        title: const Text('Reject Payroll', style: TextStyle(color: _textPrimary)),
+        title:
+            const Text('Reject Payroll', style: TextStyle(color: _textPrimary)),
         content: TextField(
           controller: reasonController,
           style: const TextStyle(color: _textPrimary),
           decoration: InputDecoration(
             hintText: 'Reason for rejection',
             hintStyle: const TextStyle(color: _textSecondary),
-            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _borderColor)),
-            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: _accentBlue)),
+            enabledBorder:
+                OutlineInputBorder(borderSide: BorderSide(color: _borderColor)),
+            focusedBorder:
+                OutlineInputBorder(borderSide: BorderSide(color: _accentBlue)),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, reasonController.text),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -811,7 +1112,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
     if (result != null && result.isNotEmpty) {
       try {
         final repo = ref.read(payrollRepositoryProvider);
-        await repo.rejectPayroll(session.schoolId as String, record.id, session.uid as String, result);
+        await repo.rejectPayroll(session.schoolId as String, record.id,
+            session.uid as String, result);
         _showSnack('Payroll rejected for ${record.staffName}', Colors.orange);
       } catch (e) {
         _showSnack('Error: $e', Colors.red);
@@ -823,7 +1125,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
   // PAYROLL CONFIG DIALOG
   // ══════════════════════════════════════════════════════════════════
 
-  void _showPayrollConfigDialog(StaffProfile staff, PayrollConfig? existing, dynamic session) {
+  void _showPayrollConfigDialog(
+      StaffProfile staff, PayrollConfig? existing, dynamic session) {
     showDialog(
       context: context,
       builder: (ctx) => _PayrollConfigDialog(
@@ -840,7 +1143,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardDark,
-        title: const Text('Select Month', style: TextStyle(color: _textPrimary)),
+        title:
+            const Text('Select Month', style: TextStyle(color: _textPrimary)),
         content: SizedBox(
           width: 300,
           height: 300,
@@ -859,13 +1163,19 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
                 child: Container(
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: isSelected ? _accentBlue.withOpacity(0.2) : Colors.transparent,
+                    color: isSelected
+                        ? _accentBlue.withOpacity(0.2)
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: isSelected ? _accentBlue : _borderColor),
+                    border: Border.all(
+                        color: isSelected ? _accentBlue : _borderColor),
                   ),
                   child: Text(
                     DateFormat('MMM').format(DateTime(_selectedYear, month)),
-                    style: TextStyle(color: isSelected ? _accentBlue : _textPrimary, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                    style: TextStyle(
+                        color: isSelected ? _accentBlue : _textPrimary,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal),
                   ),
                 ),
               );
@@ -877,7 +1187,8 @@ class _PayrollManagementScreenState extends ConsumerState<PayrollManagementScree
   }
 
   void _showSnack(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
   }
 }
 
@@ -899,7 +1210,8 @@ class _PayrollConfigDialog extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<_PayrollConfigDialog> createState() => _PayrollConfigDialogState();
+  ConsumerState<_PayrollConfigDialog> createState() =>
+      _PayrollConfigDialogState();
 }
 
 class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
@@ -914,7 +1226,8 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
   static const Color _textSecondary = Color(0xFF8B949E);
   static const Color _borderColor = Color(0xFF30363D);
 
-  final _currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final _currencyFormat =
+      NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
   @override
   void initState() {
@@ -924,13 +1237,15 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
       for (final e in widget.existing!.earnings) {
         _earnings.add(_ComponentEntry(
           nameController: TextEditingController(text: e.name),
-          amountController: TextEditingController(text: e.amount.toStringAsFixed(0)),
+          amountController:
+              TextEditingController(text: e.amount.toStringAsFixed(0)),
         ));
       }
       for (final d in widget.existing!.deductions) {
         _deductions.add(_ComponentEntry(
           nameController: TextEditingController(text: d.name),
-          amountController: TextEditingController(text: d.amount.toStringAsFixed(0)),
+          amountController:
+              TextEditingController(text: d.amount.toStringAsFixed(0)),
         ));
       }
     }
@@ -961,14 +1276,20 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
   @override
   void dispose() {
     _basicPayController.dispose();
-    for (final e in _earnings) { e.dispose(); }
-    for (final d in _deductions) { d.dispose(); }
+    for (final e in _earnings) {
+      e.dispose();
+    }
+    for (final d in _deductions) {
+      d.dispose();
+    }
     super.dispose();
   }
 
   double get _basicPay => double.tryParse(_basicPayController.text) ?? 0;
-  double get _totalEarnings => _earnings.fold<double>(0, (s, e) => s + (double.tryParse(e.amountController.text) ?? 0));
-  double get _totalDeductions => _deductions.fold<double>(0, (s, d) => s + (double.tryParse(d.amountController.text) ?? 0));
+  double get _totalEarnings => _earnings.fold<double>(
+      0, (s, e) => s + (double.tryParse(e.amountController.text) ?? 0));
+  double get _totalDeductions => _deductions.fold<double>(
+      0, (s, d) => s + (double.tryParse(d.amountController.text) ?? 0));
   double get _grossSalary => _basicPay + _totalEarnings;
   double get _netSalary => _grossSalary - _totalDeductions;
 
@@ -993,19 +1314,29 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
                 children: [
                   CircleAvatar(
                     backgroundColor: _accentBlue.withOpacity(0.2),
-                    child: Text(widget.staff.name[0], style: const TextStyle(color: _accentBlue, fontWeight: FontWeight.bold)),
+                    child: Text(widget.staff.name[0],
+                        style: const TextStyle(
+                            color: _accentBlue, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Salary Structure', style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text(widget.staff.name, style: const TextStyle(color: _textSecondary, fontSize: 13)),
+                        Text('Salary Structure',
+                            style: const TextStyle(
+                                color: _textPrimary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16)),
+                        Text(widget.staff.name,
+                            style: const TextStyle(
+                                color: _textSecondary, fontSize: 13)),
                       ],
                     ),
                   ),
-                  IconButton(icon: const Icon(Icons.close, color: _textSecondary), onPressed: () => Navigator.pop(context)),
+                  IconButton(
+                      icon: const Icon(Icons.close, color: _textSecondary),
+                      onPressed: () => Navigator.pop(context)),
                 ],
               ),
             ),
@@ -1018,48 +1349,75 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Basic Pay
-                    const Text('Basic Pay', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                    const Text('Basic Pay',
+                        style: TextStyle(
+                            color: _textPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14)),
                     const SizedBox(height: 8),
-                    _buildAmountField(_basicPayController, 'Enter basic pay amount'),
+                    _buildAmountField(
+                        _basicPayController, 'Enter basic pay amount'),
                     const SizedBox(height: 20),
 
                     // Earnings
                     Row(
                       children: [
-                        const Text('Earnings (Allowances)', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                        const Text('Earnings (Allowances)',
+                            style: TextStyle(
+                                color: _textPrimary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14)),
                         const Spacer(),
                         TextButton.icon(
-                          onPressed: () => setState(() => _earnings.add(_ComponentEntry(
-                            nameController: TextEditingController(),
-                            amountController: TextEditingController(),
-                          ))),
-                          icon: const Icon(Icons.add, size: 16, color: _accentBlue),
-                          label: const Text('Add', style: TextStyle(color: _accentBlue, fontSize: 12)),
+                          onPressed: () =>
+                              setState(() => _earnings.add(_ComponentEntry(
+                                    nameController: TextEditingController(),
+                                    amountController: TextEditingController(),
+                                  ))),
+                          icon: const Icon(Icons.add,
+                              size: 16, color: _accentBlue),
+                          label: const Text('Add',
+                              style:
+                                  TextStyle(color: _accentBlue, fontSize: 12)),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    ..._earnings.asMap().entries.map((e) => _buildComponentRow(e.value, e.key, true)),
+                    ..._earnings
+                        .asMap()
+                        .entries
+                        .map((e) => _buildComponentRow(e.value, e.key, true)),
 
                     const SizedBox(height: 20),
 
                     // Deductions
                     Row(
                       children: [
-                        const Text('Deductions', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                        const Text('Deductions',
+                            style: TextStyle(
+                                color: _textPrimary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14)),
                         const Spacer(),
                         TextButton.icon(
-                          onPressed: () => setState(() => _deductions.add(_ComponentEntry(
-                            nameController: TextEditingController(),
-                            amountController: TextEditingController(),
-                          ))),
-                          icon: const Icon(Icons.add, size: 16, color: Colors.redAccent),
-                          label: const Text('Add', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                          onPressed: () =>
+                              setState(() => _deductions.add(_ComponentEntry(
+                                    nameController: TextEditingController(),
+                                    amountController: TextEditingController(),
+                                  ))),
+                          icon: const Icon(Icons.add,
+                              size: 16, color: Colors.redAccent),
+                          label: const Text('Add',
+                              style: TextStyle(
+                                  color: Colors.redAccent, fontSize: 12)),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    ..._deductions.asMap().entries.map((e) => _buildComponentRow(e.value, e.key, false)),
+                    ..._deductions
+                        .asMap()
+                        .entries
+                        .map((e) => _buildComponentRow(e.value, e.key, false)),
 
                     const SizedBox(height: 20),
 
@@ -1075,11 +1433,14 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
                         children: [
                           _summaryRow('Basic Pay', _basicPay),
                           _summaryRow('Total Earnings', _totalEarnings),
-                          _summaryRow('Gross Salary', _grossSalary, isBold: true),
+                          _summaryRow('Gross Salary', _grossSalary,
+                              isBold: true),
                           const Divider(color: _borderColor, height: 20),
-                          _summaryRow('Total Deductions', _totalDeductions, color: Colors.redAccent),
+                          _summaryRow('Total Deductions', _totalDeductions,
+                              color: Colors.redAccent),
                           const Divider(color: _borderColor, height: 20),
-                          _summaryRow('Net Salary', _netSalary, isBold: true, color: _accentBlue, fontSize: 18),
+                          _summaryRow('Net Salary', _netSalary,
+                              isBold: true, color: _accentBlue, fontSize: 18),
                         ],
                       ),
                     ),
@@ -1091,13 +1452,15 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
             // Footer
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(border: Border(top: BorderSide(color: _borderColor))),
+              decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: _borderColor))),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel', style: TextStyle(color: _textSecondary)),
+                    child: const Text('Cancel',
+                        style: TextStyle(color: _textSecondary)),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
@@ -1105,11 +1468,17 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _accentBlue,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
                     ),
                     child: _isSaving
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
                         : const Text('Save Salary Structure'),
                   ),
                 ],
@@ -1131,12 +1500,18 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
         hintText: hint,
         hintStyle: const TextStyle(color: _textSecondary),
         prefixText: '₹ ',
-        prefixStyle: const TextStyle(color: _accentBlue, fontWeight: FontWeight.bold),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borderColor)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _accentBlue)),
+        prefixStyle:
+            const TextStyle(color: _accentBlue, fontWeight: FontWeight.bold),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: _borderColor)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: _accentBlue)),
         filled: true,
         fillColor: const Color(0xFF0D1117),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
     );
   }
@@ -1154,11 +1529,17 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
               decoration: InputDecoration(
                 hintText: 'Component name',
                 hintStyle: const TextStyle(color: _textSecondary, fontSize: 12),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borderColor)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isEarning ? _accentBlue : Colors.redAccent)),
+                enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _borderColor)),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                        color: isEarning ? _accentBlue : Colors.redAccent)),
                 filled: true,
                 fillColor: const Color(0xFF0D1117),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               ),
             ),
           ),
@@ -1174,18 +1555,27 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
                 hintText: '₹ 0',
                 hintStyle: const TextStyle(color: _textSecondary, fontSize: 12),
                 prefixText: '₹ ',
-                prefixStyle: TextStyle(color: isEarning ? _accentBlue : Colors.redAccent, fontSize: 12),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borderColor)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isEarning ? _accentBlue : Colors.redAccent)),
+                prefixStyle: TextStyle(
+                    color: isEarning ? _accentBlue : Colors.redAccent,
+                    fontSize: 12),
+                enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _borderColor)),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                        color: isEarning ? _accentBlue : Colors.redAccent)),
                 filled: true,
                 fillColor: const Color(0xFF0D1117),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               ),
             ),
           ),
           const SizedBox(width: 4),
           IconButton(
-            icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
+            icon: const Icon(Icons.remove_circle_outline,
+                color: Colors.redAccent, size: 20),
             onPressed: () {
               setState(() {
                 if (isEarning) {
@@ -1201,16 +1591,24 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
     );
   }
 
-  Widget _summaryRow(String label, double amount, {bool isBold = false, Color? color, double fontSize = 14}) {
+  Widget _summaryRow(String label, double amount,
+      {bool isBold = false, Color? color, double fontSize = 14}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: _textSecondary, fontSize: fontSize - 1, fontWeight: isBold ? FontWeight.w600 : FontWeight.normal)),
+          Text(label,
+              style: TextStyle(
+                  color: _textSecondary,
+                  fontSize: fontSize - 1,
+                  fontWeight: isBold ? FontWeight.w600 : FontWeight.normal)),
           Text(
             _currencyFormat.format(amount),
-            style: TextStyle(color: color ?? _textPrimary, fontSize: fontSize, fontWeight: isBold ? FontWeight.bold : FontWeight.w500),
+            style: TextStyle(
+                color: color ?? _textPrimary,
+                fontSize: fontSize,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w500),
           ),
         ],
       ),
@@ -1220,7 +1618,9 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
   Future<void> _save() async {
     if (_basicPay <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter basic pay'), backgroundColor: Colors.orange),
+        const SnackBar(
+            content: Text('Please enter basic pay'),
+            backgroundColor: Colors.orange),
       );
       return;
     }
@@ -1228,7 +1628,9 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
     setState(() => _isSaving = true);
     try {
       final earningComponents = _earnings
-          .where((e) => e.nameController.text.isNotEmpty && (double.tryParse(e.amountController.text) ?? 0) > 0)
+          .where((e) =>
+              e.nameController.text.isNotEmpty &&
+              (double.tryParse(e.amountController.text) ?? 0) > 0)
           .map((e) => SalaryComponent(
                 name: e.nameController.text.trim(),
                 amount: double.tryParse(e.amountController.text) ?? 0,
@@ -1237,7 +1639,9 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
           .toList();
 
       final deductionComponents = _deductions
-          .where((d) => d.nameController.text.isNotEmpty && (double.tryParse(d.amountController.text) ?? 0) > 0)
+          .where((d) =>
+              d.nameController.text.isNotEmpty &&
+              (double.tryParse(d.amountController.text) ?? 0) > 0)
           .map((d) => SalaryComponent(
                 name: d.nameController.text.trim(),
                 amount: double.tryParse(d.amountController.text) ?? 0,
@@ -1268,7 +1672,9 @@ class _PayrollConfigDialogState extends ConsumerState<_PayrollConfigDialog> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Salary structure saved for ${widget.staff.name}'), backgroundColor: const Color(0xFF4CAF50)),
+          SnackBar(
+              content: Text('Salary structure saved for ${widget.staff.name}'),
+              backgroundColor: const Color(0xFF4CAF50)),
         );
       }
     } catch (e) {
@@ -1285,7 +1691,8 @@ class _ComponentEntry {
   final TextEditingController nameController;
   final TextEditingController amountController;
 
-  _ComponentEntry({required this.nameController, required this.amountController});
+  _ComponentEntry(
+      {required this.nameController, required this.amountController});
 
   void dispose() {
     nameController.dispose();
