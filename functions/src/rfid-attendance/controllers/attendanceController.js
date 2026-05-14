@@ -82,39 +82,7 @@ const markAttendance = async (req, res) => {
     const targetCollection = staffId ? 'staff' : 'students';
     const targetId = staffId || studentId;
 
-    // Check for duplicate scan within window
-    const duplicateWindowStart = admin.firestore.Timestamp.fromDate(
-      new Date(Date.now() - DUPLICATE_SCAN_WINDOW)
-    );
-
-    const duplicateCheck = await db
-      .collection('schools')
-      .doc(schoolId)
-      .collection('attendance')
-      .where('rfidTag', '==', rfidTag)
-      .where('scannedAt', '>=', duplicateWindowStart)
-      .orderBy('scannedAt', 'desc')
-      .limit(1)
-      .get();
-
-    if (!duplicateCheck.empty) {
-      const lastAttendance = duplicateCheck.docs[0].data();
-      const lastScanTime = lastAttendance.scannedAt.toDate();
-      const timeSinceLastScan = Date.now() - lastScanTime.getTime();
-      const minutesSince = Math.floor(timeSinceLastScan / 1000 / 60);
-
-      logWarning('MARK_ATTENDANCE', `Duplicate scan detected for RFID ${rfidTag}. Last scan was ${minutesSince} minutes ago`);
-
-      return res.status(409).json({
-        success: false,
-        error: 'DUPLICATE_SCAN',
-        message: `Duplicate scan detected. Last scan was ${minutesSince} minutes ago`,
-        data: {
-          lastScanTime: lastScanTime.toISOString(),
-          timeSinceLastScan: timeSinceLastScan
-        }
-      });
-    }
+    // Duplicate scan check removed to allow multiple scans
 
     // Use provided timestamp or server time
     const scanTime = timestamp 

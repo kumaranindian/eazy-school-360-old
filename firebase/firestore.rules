@@ -673,6 +673,18 @@ service cloud.firestore {
         allow write: if false; // No client-side writes allowed
       }
       
+      // ATTENDANCE SUBCOLLECTION (RFID attendance entries)
+      match /attendance/{attendanceId} {
+        // READ: Admins and staff can read attendance entries for their school
+        allow read: if isSignedIn() && isActive() && (
+          isSuperAdmin() || 
+          (isAdmin() && belongsToSchool(schoolId)) ||
+          (isStaff() && belongsToSchool(schoolId))
+        );
+        // WRITE: ONLY backend (Cloud Functions) can create/update attendance
+        allow write: if false; // No client-side writes allowed
+      }
+      
       // ============================================================
       // RFID ATTENDANCE SYSTEM COLLECTIONS
       // ============================================================

@@ -17,6 +17,7 @@ import '../../admin/screens/leave_approval_screen.dart';
 import '../../admin/screens/permission_approval_screen.dart';
 import '../../admin/screens/holiday_management_screen.dart';
 import '../../admin/screens/rfid_card_management_screen.dart';
+import '../../admin/screens/rfid_attendance_entries_screen.dart';
 import '../../admin/screens/communication_logs_screen.dart';
 import '../../admin/screens/student_directory_screen.dart';
 import '../../admin/screens/student_directory_with_ledger_screen.dart';
@@ -33,7 +34,6 @@ import '../../finance/screens/student_fee_management_screen.dart';
 import '../../finance/screens/fee_structure_list_screen.dart';
 import '../../finance/screens/manage_fee_categories_screen.dart';
 import '../../finance/screens/ad_hoc_fee_assignment_screen.dart';
-import '../../admin/screens/payroll_management_screen.dart';
 import '../../admin/screens/school_settings_screen.dart';
 import '../../auth/screens/enhanced_login_screen.dart';
 import '../../shared/widgets/school_switcher.dart';
@@ -142,7 +142,11 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     MenuItem(
         id: 'rfid_card_management',
         icon: Icons.nfc_rounded,
-        label: 'RFID Attendance'),
+        label: 'RFID Card Management'),
+    MenuItem(
+        id: 'rfid_attendance_entries',
+        icon: Icons.history_rounded,
+        label: 'RFID Attendance Entries'),
 
     // ── Students ────────────────────────────────────────────
     MenuItem(
@@ -936,6 +940,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return 'Payroll Management';
       case 'rfid_card_management':
         return 'RFID Card Management';
+      case 'rfid_attendance_entries':
+        return 'RFID Attendance Entries';
       case 'student_management':
         return 'Student Directory';
       case 'student_ledgers':
@@ -1185,9 +1191,11 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       case 'holiday_management':
         return const HolidayManagementScreen();
       case 'payroll_management':
-        return const PayrollManagementScreen();
+        return _buildComingSoonScreen('Payroll Management');
       case 'rfid_card_management':
         return const RfidCardManagementScreen();
+      case 'rfid_attendance_entries':
+        return const RfidAttendanceEntriesScreen();
       case 'communication_logs':
         return const CommunicationLogsScreen();
       case 'student_management':

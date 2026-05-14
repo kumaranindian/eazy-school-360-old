@@ -109,13 +109,42 @@ class _StudentDirectoryWithLedgerScreenState
         setState(() {
           _allStudents = students;
           _availableClasses = sorted;
-          _isLoading = false;
         });
+      }
+      
+      // Load ledgers for all students
+      await _loadLedgersForStudents(students, schoolId);
+      
+      if (mounted) {
+        setState(() => _isLoading = false);
         _updateSections();
       }
     } catch (e) {
       debugPrint('Error loading students: $e');
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadLedgersForStudents(List<Student> students, String schoolId) async {
+    final repo = ref.read(studentFeeLedgerRepositoryProvider);
+    final cache = <String, StudentFeeLedger?>{};
+    
+    for (final student in students) {
+      try {
+        final ledger = await repo.getByStudent(
+          schoolId,
+          student.studentId.toString(),
+          _academicYear,
+        );
+        cache[student.id] = ledger;
+      } catch (e) {
+        debugPrint('Error loading ledger for student ${student.id}: $e');
+        cache[student.id] = null;
+      }
+    }
+    
+    if (mounted) {
+      setState(() => _ledgerCache = cache);
     }
   }
 
