@@ -3,7 +3,7 @@
   "description": "Cloud Functions for Eazy School 360 Leave Management System",
   "scripts": {
     "lint": "eslint .",
-    "build": "tsc",
+    "build": "tsc && xcopy src\\*.js lib\\src\\ /S /Y /Q",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",

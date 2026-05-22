@@ -191,18 +191,34 @@ class SchoolManagementRepository {
       });
 
       // Find and activate the admin user for this school
+      // Query for both 'ADMIN' and 'tenant_admin' roles since signup creates tenant_admin
       final adminSnapshot = await _firestore
           .collection('users')
           .where('schoolId', isEqualTo: schoolId)
-          .where('role', isEqualTo: 'ADMIN')
+          .where('role', whereIn: ['ADMIN', 'tenant_admin'])
           .get();
 
       for (final adminDoc in adminSnapshot.docs) {
+        final uid = adminDoc.id;
+        
+        // Update user document
         batch.update(adminDoc.reference, {
           'isActive': true,
           'status': 'ACTIVE',
           'activatedAt': FieldValue.serverTimestamp(),
           'activatedBy': approvedBy,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        
+        // Update membership document
+        final membershipRef = _firestore
+            .collection('userMemberships')
+            .doc(uid)
+            .collection('schools')
+            .doc(schoolId);
+        batch.update(membershipRef, {
+          'isActive': true,
+          'schoolIsActive': true,
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }

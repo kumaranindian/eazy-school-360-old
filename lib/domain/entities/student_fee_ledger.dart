@@ -158,6 +158,7 @@ class StudentFeeLedger {
   final double totalPending;
   final double totalOverdue;
   final double totalLateFee;
+  final double totalConcession;
   final List<TermLedgerEntry> termStatus;
   final bool remindersEnabled;
   final DateTime? lastReminderSentAt;
@@ -181,6 +182,7 @@ class StudentFeeLedger {
     this.totalPending = 0,
     this.totalOverdue = 0,
     this.totalLateFee = 0,
+    this.totalConcession = 0,
     this.termStatus = const [],
     this.remindersEnabled = true,
     this.lastReminderSentAt,
@@ -207,6 +209,7 @@ class StudentFeeLedger {
       totalPending: (data['totalPending'] as num?)?.toDouble() ?? 0,
       totalOverdue: (data['totalOverdue'] as num?)?.toDouble() ?? 0,
       totalLateFee: (data['totalLateFee'] as num?)?.toDouble() ?? 0,
+      totalConcession: (data['totalConcession'] as num?)?.toDouble() ?? 0,
       termStatus: ((data['termStatus'] as List?) ?? [])
           .map((e) => TermLedgerEntry.fromMap(Map<String, dynamic>.from(e as Map)))
           .toList(),
@@ -241,6 +244,7 @@ class StudentFeeLedger {
         'totalPending': totalPending,
         'totalOverdue': totalOverdue,
         'totalLateFee': totalLateFee,
+        'totalConcession': totalConcession,
         'termStatus': termStatus.map((t) => t.toMap()).toList(),
         'remindersEnabled': remindersEnabled,
         if (lastReminderSentAt != null) 'lastReminderSentAt': Timestamp.fromDate(lastReminderSentAt!),
@@ -258,6 +262,7 @@ class StudentFeeLedger {
     double? totalPending,
     double? totalOverdue,
     double? totalLateFee,
+    double? totalConcession,
     List<TermLedgerEntry>? termStatus,
     bool? remindersEnabled,
     DateTime? lastReminderSentAt,
@@ -280,6 +285,7 @@ class StudentFeeLedger {
         totalPending: totalPending ?? this.totalPending,
         totalOverdue: totalOverdue ?? this.totalOverdue,
         totalLateFee: totalLateFee ?? this.totalLateFee,
+        totalConcession: totalConcession ?? this.totalConcession,
         termStatus: termStatus ?? this.termStatus,
         remindersEnabled: remindersEnabled ?? this.remindersEnabled,
         lastReminderSentAt: lastReminderSentAt ?? this.lastReminderSentAt,

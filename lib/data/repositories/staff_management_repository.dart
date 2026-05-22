@@ -861,11 +861,13 @@ class StaffManagementRepository {
     }
 
     final userStatus = adminData['status'];
-    print('🔍 [STAFF_REPO] User status: $userStatus');
+    final isActive = adminData['isActive'] == true;
+    print('🔍 [STAFF_REPO] User status: $userStatus, isActive: $isActive');
     
-    // UserStatus is stored as enum string, check against ACTIVE
-    if (userStatus != 'ACTIVE' && userStatus != 'Active') {
-      print('❌ [STAFF_REPO] Admin account is not active');
+    // Check both status (enum string) and isActive (boolean) for backward compatibility
+    final isStatusActive = userStatus == 'ACTIVE' || userStatus == 'Active';
+    if (!isStatusActive && !isActive) {
+      print('❌ [STAFF_REPO] Admin account is not active (status: $userStatus, isActive: $isActive)');
       throw Exception('Admin account is not active');
     }
     

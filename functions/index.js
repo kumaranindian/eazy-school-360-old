@@ -26,9 +26,10 @@ exports.rfidApi = rfidAttendance.api;
 exports.onAttendanceCreate = rfidAttendance.onAttendanceCreate;
 
 // Export WhatsApp notification functions
-const whatsappReminders = require('./src/whatsapp-fee-reminders');
+const whatsappReminders = require('./lib/src/whatsapp-fee-reminders');
 exports.testWhatsAppConfiguration = whatsappReminders.testWhatsAppConfiguration;
 exports.sendPaymentNotification = whatsappReminders.sendPaymentNotification;
+exports.sendFeeDueNotification = whatsappReminders.sendFeeDueNotification;
 
 // Export data cleanup functions
 try {

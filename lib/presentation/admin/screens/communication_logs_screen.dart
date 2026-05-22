@@ -39,7 +39,6 @@ class _CommunicationLogsScreenState
     extends ConsumerState<CommunicationLogsScreen> {
   // Filters
   CommStatus? _statusFilter;
-  CommPurpose? _purposeFilter;
   CommChannel? _channelFilter;
   RecipientType? _recipientTypeFilter;
   DateTime? _startDate;
@@ -92,7 +91,6 @@ class _CommunicationLogsScreenState
 
   CommunicationLogFilter _buildFilter() => CommunicationLogFilter(
         status: _statusFilter,
-        purpose: _purposeFilter,
         channel: _channelFilter,
         recipientType: _recipientTypeFilter,
         startDate: _startDate,
@@ -206,7 +204,6 @@ class _CommunicationLogsScreenState
   void _clearFilters() {
     setState(() {
       _statusFilter = null;
-      _purposeFilter = null;
       _channelFilter = null;
       _recipientTypeFilter = null;
       _startDate = DateTime.now().subtract(const Duration(days: 30));
@@ -272,7 +269,7 @@ class _CommunicationLogsScreenState
       final sheet = excel['Communication Logs'];
       final headers = [
         'Date & Time', 'Recipient', 'Phone', 'Type',
-        'Channel', 'Purpose', 'Status', 'Subject', 'Message'
+        'Channel', 'Status', 'Subject', 'Message'
       ];
       sheet.appendRow(headers.map((h) => excel_pkg.TextCellValue(h)).toList());
       for (final log in _logs) {
@@ -282,7 +279,6 @@ class _CommunicationLogsScreenState
           excel_pkg.TextCellValue(log.recipientPhone),
           excel_pkg.TextCellValue(log.recipientType.displayName),
           excel_pkg.TextCellValue(log.channel.displayName),
-          excel_pkg.TextCellValue(log.purpose.displayName),
           excel_pkg.TextCellValue(log.status.displayName),
           excel_pkg.TextCellValue(log.subject),
           excel_pkg.TextCellValue(log.message),
@@ -328,7 +324,6 @@ class _CommunicationLogsScreenState
         log.recipientPhone,
         log.recipientType.displayName,
         log.channel.displayName,
-        log.purpose.displayName,
         log.status.displayName,
         log.subject,
         log.message,
@@ -607,17 +602,6 @@ class _CommunicationLogsScreenState
                   },
                 ),
                 const SizedBox(width: 8),
-                _buildDropdownFilter<CommPurpose>(
-                  label: 'Purpose',
-                  value: _purposeFilter,
-                  options: CommPurpose.values,
-                  labelOf: (v) => v.displayName,
-                  onChanged: (v) {
-                    setState(() => _purposeFilter = v);
-                    _applyFilters();
-                  },
-                ),
-                const SizedBox(width: 8),
                 _buildDropdownFilter<CommChannel>(
                   label: 'Channel',
                   value: _channelFilter,
@@ -661,7 +645,6 @@ class _CommunicationLogsScreenState
 
   bool _hasActiveFilters() =>
       _statusFilter != null ||
-      _purposeFilter != null ||
       _channelFilter != null ||
       _recipientTypeFilter != null ||
       _searchQuery.isNotEmpty;
@@ -778,10 +761,10 @@ class _CommunicationLogsScreenState
   // -------- Table --------
 
   static const _cols = [
-    '#', 'Date & Time', 'Recipient', 'Phone', 'Type', 'Channel', 'Purpose', 'Status', 'Message', ''
+    '#', 'Date & Time', 'Recipient', 'Phone', 'Type', 'Channel', 'Status', 'Message', ''
   ];
   static const _colWidths = [
-    40.0, 130.0, 150.0, 120.0, 80.0, 90.0, 110.0, 90.0, 260.0, 44.0
+    40.0, 130.0, 150.0, 120.0, 80.0, 90.0, 90.0, 260.0, 44.0
   ];
 
   Widget _buildTable() {
@@ -831,7 +814,6 @@ class _CommunicationLogsScreenState
   TableRow _buildDataRow(int index, CommunicationLog log) {
     final isEven = index.isEven;
     final statusColor = _statusColor(log.status);
-    final purposeColor = _purposeColor(log.purpose);
 
     return TableRow(
       decoration: BoxDecoration(
@@ -884,11 +866,6 @@ class _CommunicationLogsScreenState
                   style: const TextStyle(color: _accentBlue, fontSize: 11)),
             ],
           ),
-        ),
-        // Purpose
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          child: _Pill(label: log.purpose.displayName, color: purposeColor),
         ),
         // Status
         Padding(
@@ -988,17 +965,6 @@ class _CommunicationLogsScreenState
       case CommChannel.email:    return Icons.email_rounded;
       case CommChannel.push:     return Icons.notifications_active_rounded;
       case CommChannel.inApp:    return Icons.app_registration_rounded;
-    }
-  }
-
-  static Color _purposeColor(CommPurpose p) {
-    switch (p) {
-      case CommPurpose.paymentDue:
-      case CommPurpose.feeReminder:    return _accentAmber;
-      case CommPurpose.paymentReceipt: return _accentGreen;
-      case CommPurpose.attendance:     return _accentBlue;
-      case CommPurpose.leaveUpdate:    return _accentPurple;
-      default:                         return _textSecondary;
     }
   }
 
@@ -1122,7 +1088,6 @@ class _LogDetailDialog extends StatelessWidget {
                 ],
               ),
               const Divider(color: _borderColor),
-              _detailRow('Purpose', log.purpose.displayName),
               _detailRow('Channel', log.channel.displayName),
               _detailRow('Status', log.status.displayName, color: _statusColor),
               _detailRow('Recipient', '${log.recipientName} (${log.recipientPhone})'),

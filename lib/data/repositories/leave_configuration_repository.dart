@@ -355,8 +355,11 @@ class LeaveConfigurationRepository {
       throw Exception('Access denied to this school');
     }
 
-    // UserStatus is stored as enum string, check against ACTIVE
-    if (adminData['status'] != 'ACTIVE' && adminData['status'] != 'Active') {
+    // Check both status (enum string) and isActive (boolean) for backward compatibility
+    final userStatus = adminData['status'];
+    final isActive = adminData['isActive'] == true;
+    final isStatusActive = userStatus == 'ACTIVE' || userStatus == 'Active';
+    if (!isStatusActive && !isActive) {
       throw Exception('Admin account is not active');
     }
   }

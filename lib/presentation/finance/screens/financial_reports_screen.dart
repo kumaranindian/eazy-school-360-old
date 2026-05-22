@@ -258,6 +258,27 @@ class _FinancialReportsScreenState
         return data['isArchived'] != true;
       }).toList();
 
+      // Query adhoc fee items (event-based fees)
+      final adhocFeeSnap = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(_schoolId)
+          .collection('studentFeeItems')
+          .where('isActive', isEqualTo: true)
+          .where('source', whereIn: ['ad_hoc', 'event'])
+          .get();
+
+      // Group adhoc fees by student ID
+      final adhocFeeMap = <String, double>{};
+      final adhocPaidMap = <String, double>{};
+      for (final doc in adhocFeeSnap.docs) {
+        final d = doc.data();
+        final studentId = d['studentId']?.toString() ?? '';
+        final amount = (d['amount'] as num?)?.toDouble() ?? 0;
+        final paidAmount = (d['paidAmount'] as num?)?.toDouble() ?? 0;
+        adhocFeeMap[studentId] = (adhocFeeMap[studentId] ?? 0) + amount;
+        adhocPaidMap[studentId] = (adhocPaidMap[studentId] ?? 0) + paidAmount;
+      }
+
       // Query fee structures V2 (new system)
       final feeStructSnap = await FirebaseFirestore.instance
           .collection('schools')
@@ -288,7 +309,11 @@ class _FinancialReportsScreenState
         'Total Paid',
         'Total Pending',
         'Total Overdue',
-        'Late Fees'
+        'Late Fees',
+        'Adhoc Fees Assigned',
+        'Adhoc Fees Paid',
+        'Total Assigned (with Adhoc)',
+        'Total Paid (with Adhoc)'
       ];
       for (int c = 0; c < headers.length; c++) {
         sheet
@@ -314,6 +339,8 @@ class _FinancialReportsScreenState
             totalPending = 0,
             totalOverdue = 0,
             totalLateFee = 0;
+        double totalAdhocAssigned = 0,
+            totalAdhocPaid = 0;
 
         for (final s in students) {
           totalAssigned += (s['totalAssigned'] as num?)?.toDouble() ?? 0;
@@ -321,6 +348,11 @@ class _FinancialReportsScreenState
           totalPending += (s['totalPending'] as num?)?.toDouble() ?? 0;
           totalOverdue += (s['totalOverdue'] as num?)?.toDouble() ?? 0;
           totalLateFee += (s['totalLateFee'] as num?)?.toDouble() ?? 0;
+          
+          // Add adhoc fees for this student
+          final studentId = s['studentId']?.toString() ?? '';
+          totalAdhocAssigned += adhocFeeMap[studentId] ?? 0;
+          totalAdhocPaid += adhocPaidMap[studentId] ?? 0;
         }
 
         sheet
@@ -344,6 +376,18 @@ class _FinancialReportsScreenState
         sheet
             .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 6))
             .value = DoubleCellValue(totalLateFee);
+        sheet
+            .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 7))
+            .value = DoubleCellValue(totalAdhocAssigned);
+        sheet
+            .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 8))
+            .value = DoubleCellValue(totalAdhocPaid);
+        sheet
+            .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 9))
+            .value = DoubleCellValue(totalAssigned + totalAdhocAssigned);
+        sheet
+            .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 10))
+            .value = DoubleCellValue(totalPaid + totalAdhocPaid);
         row++;
       }
 
@@ -395,6 +439,27 @@ class _FinancialReportsScreenState
         return nameA.compareTo(nameB);
       });
 
+      // Query adhoc fee items (event-based fees)
+      final adhocFeeSnap = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(_schoolId)
+          .collection('studentFeeItems')
+          .where('isActive', isEqualTo: true)
+          .where('source', whereIn: ['ad_hoc', 'event'])
+          .get();
+
+      // Group adhoc fees by student ID
+      final adhocFeeMap = <String, double>{};
+      final adhocPaidMap = <String, double>{};
+      for (final doc in adhocFeeSnap.docs) {
+        final d = doc.data();
+        final studentId = d['studentId']?.toString() ?? '';
+        final amount = (d['amount'] as num?)?.toDouble() ?? 0;
+        final paidAmount = (d['paidAmount'] as num?)?.toDouble() ?? 0;
+        adhocFeeMap[studentId] = (adhocFeeMap[studentId] ?? 0) + amount;
+        adhocPaidMap[studentId] = (adhocPaidMap[studentId] ?? 0) + paidAmount;
+      }
+
       final excel = Excel.createExcel();
       final sheet = excel['StudentWiseReport'];
       int row = 0;
@@ -409,6 +474,10 @@ class _FinancialReportsScreenState
         'Total Pending',
         'Total Overdue',
         'Late Fees',
+        'Adhoc Fees Assigned',
+        'Adhoc Fees Paid',
+        'Total Assigned (with Adhoc)',
+        'Total Paid (with Adhoc)',
         'Fee Structure'
       ];
       for (int c = 0; c < headers.length; c++) {
@@ -420,9 +489,15 @@ class _FinancialReportsScreenState
 
       for (final doc in activeDocs) {
         final d = doc.data();
+        final studentId = d['studentId']?.toString() ?? '';
+        final adhocAssigned = adhocFeeMap[studentId] ?? 0;
+        final adhocPaid = adhocPaidMap[studentId] ?? 0;
+        final totalAssigned = (d['totalAssigned'] as num?)?.toDouble() ?? 0.0;
+        final totalPaid = (d['totalPaid'] as num?)?.toDouble() ?? 0.0;
+        
         sheet
             .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 0))
-            .value = TextCellValue(d['studentId']?.toString() ?? '');
+            .value = TextCellValue(studentId);
         sheet
             .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 1))
             .value = TextCellValue((d['studentName'] ?? '').toString());
@@ -434,12 +509,10 @@ class _FinancialReportsScreenState
             .value = TextCellValue((d['section'] ?? '').toString());
         sheet
                 .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 4))
-                .value =
-            DoubleCellValue((d['totalAssigned'] as num?)?.toDouble() ?? 0.0);
+                .value = DoubleCellValue(totalAssigned);
         sheet
                 .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 5))
-                .value =
-            DoubleCellValue((d['totalPaid'] as num?)?.toDouble() ?? 0.0);
+                .value = DoubleCellValue(totalPaid);
         sheet
                 .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 6))
                 .value =
@@ -453,7 +526,19 @@ class _FinancialReportsScreenState
                 .value =
             DoubleCellValue((d['totalLateFee'] as num?)?.toDouble() ?? 0.0);
         sheet
-            .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 9))
+                .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 9))
+                .value = DoubleCellValue(adhocAssigned);
+        sheet
+                .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 10))
+                .value = DoubleCellValue(adhocPaid);
+        sheet
+                .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 11))
+                .value = DoubleCellValue(totalAssigned + adhocAssigned);
+        sheet
+                .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 12))
+                .value = DoubleCellValue(totalPaid + adhocPaid);
+        sheet
+            .cell(CellIndex.indexByColumnRow(rowIndex: row, columnIndex: 13))
             .value = TextCellValue((d['feeStructureName'] ?? '').toString());
         row++;
       }
@@ -484,6 +569,7 @@ class _FinancialReportsScreenState
     try {
       final now = DateTime.now();
       final startOfYear = DateTime(now.year, 1, 1);
+      
       // Query bills ordered by billDate only to avoid composite index requirement
       final billsSnap = await FirebaseFirestore.instance
           .collection('schools')
@@ -502,6 +588,24 @@ class _FinancialReportsScreenState
             billDate.isAtSameMomentAs(startOfYear);
       }).toList();
 
+      // Query adhoc fee items for the year
+      final adhocFeeSnap = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(_schoolId)
+          .collection('studentFeeItems')
+          .where('isActive', isEqualTo: true)
+          .where('source', whereIn: ['ad_hoc', 'event'])
+          .get();
+
+      // Filter adhoc fees for the current year
+      final filteredAdhocFees = adhocFeeSnap.docs.where((doc) {
+        final d = doc.data();
+        final assignedAt = (d['assignedAt'] as Timestamp?)?.toDate();
+        if (assignedAt == null) return false;
+        return assignedAt.isAfter(startOfYear) ||
+            assignedAt.isAtSameMomentAs(startOfYear);
+      }).toList();
+
       final months = [
         'Jan',
         'Feb',
@@ -518,6 +622,7 @@ class _FinancialReportsScreenState
       ];
       final monthlyRevenue = List.filled(12, 0.0);
       final monthlyExpense = List.filled(12, 0.0);
+      final monthlyAdhocRevenue = List.filled(12, 0.0);
 
       for (final doc in filteredBills) {
         final d = doc.data();
@@ -533,6 +638,16 @@ class _FinancialReportsScreenState
         }
       }
 
+      // Add adhoc fee revenue to monthly totals
+      for (final doc in filteredAdhocFees) {
+        final d = doc.data();
+        final assignedAt = (d['assignedAt'] as Timestamp?)?.toDate();
+        if (assignedAt == null) continue;
+        final monthIdx = assignedAt.month - 1;
+        final paidAmount = (d['paidAmount'] as num?)?.toDouble() ?? 0;
+        monthlyAdhocRevenue[monthIdx] += paidAmount;
+      }
+
       final excel = Excel.createExcel();
       final sheet = excel['MonthlyReport'];
 
@@ -544,12 +659,19 @@ class _FinancialReportsScreenState
           .value = TextCellValue('Revenue');
       sheet
           .cell(CellIndex.indexByColumnRow(rowIndex: 0, columnIndex: 2))
-          .value = TextCellValue('Expense');
+          .value = TextCellValue('Adhoc Fee Revenue');
       sheet
           .cell(CellIndex.indexByColumnRow(rowIndex: 0, columnIndex: 3))
+          .value = TextCellValue('Total Revenue');
+      sheet
+          .cell(CellIndex.indexByColumnRow(rowIndex: 0, columnIndex: 4))
+          .value = TextCellValue('Expense');
+      sheet
+          .cell(CellIndex.indexByColumnRow(rowIndex: 0, columnIndex: 5))
           .value = TextCellValue('Net');
 
       for (int i = 0; i < 12; i++) {
+        final totalRevenue = monthlyRevenue[i] + monthlyAdhocRevenue[i];
         sheet
             .cell(CellIndex.indexByColumnRow(rowIndex: i + 1, columnIndex: 0))
             .value = TextCellValue('${months[i]} ${now.year}');
@@ -558,10 +680,16 @@ class _FinancialReportsScreenState
             .value = DoubleCellValue(monthlyRevenue[i]);
         sheet
             .cell(CellIndex.indexByColumnRow(rowIndex: i + 1, columnIndex: 2))
-            .value = DoubleCellValue(monthlyExpense[i]);
+            .value = DoubleCellValue(monthlyAdhocRevenue[i]);
         sheet
             .cell(CellIndex.indexByColumnRow(rowIndex: i + 1, columnIndex: 3))
-            .value = DoubleCellValue(monthlyRevenue[i] - monthlyExpense[i]);
+            .value = DoubleCellValue(totalRevenue);
+        sheet
+            .cell(CellIndex.indexByColumnRow(rowIndex: i + 1, columnIndex: 4))
+            .value = DoubleCellValue(monthlyExpense[i]);
+        sheet
+            .cell(CellIndex.indexByColumnRow(rowIndex: i + 1, columnIndex: 5))
+            .value = DoubleCellValue(totalRevenue - monthlyExpense[i]);
       }
 
       final bytes = excel.save();

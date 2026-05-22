@@ -93,18 +93,23 @@ service cloud.firestore {
     // ============================================================
     // SCHOOLS COLLECTION
     // ============================================================
-    match /schools/{schoolId} {
-      // SIGNUP: Any authenticated user can CREATE a school (for registration)
-      allow create: if isSignedIn();
+    match /schools {
+      // LIST: Any authenticated user can list schools to check for duplicate names during signup
+      allow list: if isSignedIn();
       
-      // READ: Super admin can read all, others can read their own school
-      allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
-      
-      // UPDATE: Super admin or tenant admin of the school (must be active)
-      allow update: if isSignedIn() && (isSuperAdmin() || (isActive() && isTenantAdmin() && belongsToSchool(schoolId)));
-      
-      // DELETE: Only super admin
-      allow delete: if isSignedIn() && isSuperAdmin();
+      match /{schoolId} {
+        // SIGNUP: Any authenticated user can CREATE a school (for registration)
+        allow create: if isSignedIn();
+        
+        // READ: Super admin can read all, others can read their own school
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        
+        // UPDATE: Super admin or tenant admin of the school (must be active)
+        allow update: if isSignedIn() && (isSuperAdmin() || (isActive() && isTenantAdmin() && belongsToSchool(schoolId)));
+        
+        // DELETE: Only super admin
+        allow delete: if isSignedIn() && isSuperAdmin();
+      }
     }
     
     // ============================================================
@@ -268,9 +273,14 @@ service cloud.firestore {
         allow read: if isSignedIn() && (
           isSuperAdmin() || 
           belongsToSchool(schoolId) ||
-          (isStaff() && belongsToSchool(schoolId) && settingId == 'permission')
+          (settingId == 'permissions' && isStaff())
         );
-        allow write: if isSignedIn() && isActive() && (isSuperAdmin() || (isTenantAdmin() && belongsToSchool(schoolId)));
+        // Allow school creator to write during provisioning, or admin after
+        allow write: if isSignedIn() && (
+          isSuperAdmin() || 
+          (isTenantAdmin() && belongsToSchool(schoolId)) ||
+          (request.auth.uid == get(/databases/$(database)/documents/schools/$(schoolId)).data.createdBy)
+        );
       }
       
       // PERMISSION SETTINGS SUBCOLLECTION
@@ -480,6 +490,13 @@ service cloud.firestore {
 
       // FEE CATEGORIES SUBCOLLECTION — catalog of fee buckets (Tuition, Exam, Van, etc.)
       match /feeCategories/{categoryId} {
+        allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+        allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
+        allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
+      }
+
+      // CONCESSION CATEGORIES SUBCOLLECTION — catalog of concession types (RTE, Staff Ward, Sibling, etc.)
+      match /concessionCategories/{categoryId} {
         allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
         allow create, update: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin() || isFinance()) && belongsToSchool(schoolId)));
         allow delete: if isSignedIn() && (isSuperAdmin() || ((isTenantAdmin() || isAdmin()) && belongsToSchool(schoolId)));
@@ -1071,12 +1088,29 @@ service cloud.firestore {
     }
     
     // ============================================================
+    // SCHOOL COUNTERS COLLECTION (ID generation)
+    // ============================================================
+    match /schoolCounters/{schoolId} {
+      // READ: Admins and staff from the school can read counters
+      allow read: if isSignedIn() && isActive() && (
+        isSuperAdmin() ||
+        (isAdmin() && belongsToSchool(schoolId))
+      );
+      
+      // WRITE: Admins from the school can update counters (for ID generation)
+      allow write: if isSignedIn() && isActive() && (
+        isSuperAdmin() ||
+        (isAdmin() && belongsToSchool(schoolId))
+      );
+    }
+
+    // ============================================================
     // USER MEMBERSHIPS COLLECTION (Multi-tenant)
     // ============================================================
     match /userMemberships/{uid}/schools/{schoolId} {
-      // CREATE: Admin can create memberships for users in their school
-      // Admin must belong to the school they're creating membership for
+      // CREATE: User can create their own membership during signup, or admin can create for others
       allow create: if isSignedIn() && (
+        request.auth.uid == uid || // User creating their own membership during signup
         isSuperAdmin() ||
         (isActive() && isAdmin() && belongsToSchool(schoolId))
       );

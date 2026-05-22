@@ -470,6 +470,103 @@ class StudentFeeLedgerRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
+
+  /// Update or add a VAN fee term in the student's ledger.
+  /// This is called when van fee is updated via the student edit dialog.
+  Future<void> updateVanFeeTerm({
+    required String schoolId,
+    required String studentId,
+    required String academicYear,
+    required double vanFee,
+  }) async {
+    final ledger = await getByStudent(schoolId, studentId, academicYear);
+    if (ledger == null) {
+      print('[StudentFeeLedgerRepository] No ledger found for student $studentId, cannot update van fee');
+      return;
+    }
+
+    // Find existing VAN term or create new one
+    final existingTerms = [...ledger.termStatus];
+    final vanTermIndex = existingTerms.indexWhere(
+      (t) => t.category.toUpperCase() == 'VAN' && !t.isArrear,
+    );
+
+    final now = DateTime.now();
+    final newVanTerm = TermLedgerEntry(
+      termId: 'VAN_FEE_${academicYear}_${now.millisecondsSinceEpoch}',
+      termName: 'Van Fee',
+      sequence: 100,
+      amount: vanFee,
+      dueDate: now,
+      category: 'VAN',
+      isArrear: false,
+    );
+
+    if (vanTermIndex >= 0) {
+      // Preserve any paid amount from existing term
+      final existing = existingTerms[vanTermIndex];
+      existingTerms[vanTermIndex] = newVanTerm.copyWith(
+        paidAmount: existing.paidAmount,
+        status: existing.status,
+        paidAt: existing.paidAt,
+        paymentIds: existing.paymentIds,
+      );
+    } else {
+      // Add new VAN term
+      existingTerms.add(newVanTerm);
+    }
+
+    // Recalculate totals
+    final totalAssigned = existingTerms.fold<double>(0, (s, e) => s + e.amount);
+    final totalPaid = existingTerms.fold<double>(0, (s, e) => s + e.paidAmount);
+    final totalLateFee = existingTerms.fold<double>(0, (s, e) => s + e.lateFeeApplied);
+    final totalPending = (totalAssigned + totalLateFee - totalPaid).clamp(0, double.infinity);
+
+    await _col(schoolId).doc(ledger.id).update({
+      'termStatus': existingTerms.map((e) => e.toMap()).toList(),
+      'totalAssigned': totalAssigned,
+      'totalPaid': totalPaid,
+      'totalPending': totalPending,
+      'totalLateFee': totalLateFee,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    print('[StudentFeeLedgerRepository] Updated VAN fee to $vanFee for student $studentId');
+  }
+
+  /// Update concession amount in the student's ledger.
+  /// This reduces the total pending amount by the concession value.
+  /// Concession is stored as a separate field and applied to tuition first.
+  Future<void> updateConcession({
+    required String schoolId,
+    required String studentId,
+    required String academicYear,
+    required double concessionAmount,
+  }) async {
+    final ledger = await getByStudent(schoolId, studentId, academicYear);
+    if (ledger == null) {
+      print('[StudentFeeLedgerRepository] No ledger found for student $studentId, cannot update concession');
+      return;
+    }
+
+    // Store concession as a field on the ledger document
+    // The totalPending will be calculated as: totalAssigned - totalPaid - concession
+    final totalAssigned = ledger.totalAssigned;
+    final totalPaid = ledger.totalPaid;
+    final totalLateFee = ledger.totalLateFee;
+    
+    // Calculate new pending with concession applied
+    // Concession reduces the pending amount (applied to tuition first conceptually)
+    final totalPending = (totalAssigned + totalLateFee - totalPaid - concessionAmount).clamp(0, double.infinity);
+
+    await _col(schoolId).doc(ledger.id).update({
+      'totalConcession': concessionAmount,
+      'totalPending': totalPending,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    print('[StudentFeeLedgerRepository] Updated concession to $concessionAmount for student $studentId, new pending: $totalPending');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

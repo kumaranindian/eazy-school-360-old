@@ -182,7 +182,7 @@ class CommunicationLog {
   final RecipientType recipientType;
 
   // Message content/metadata
-  final CommPurpose purpose;
+  final CommPurpose? purpose;
   final CommChannel channel;
   final CommStatus status;
   final String subject;
@@ -213,7 +213,7 @@ class CommunicationLog {
     required this.recipientPhone,
     this.recipientEmail,
     required this.recipientType,
-    required this.purpose,
+    this.purpose,
     required this.channel,
     required this.status,
     required this.subject,
@@ -240,7 +240,7 @@ class CommunicationLog {
       recipientPhone: data['recipientPhone']?.toString() ?? '',
       recipientEmail: data['recipientEmail']?.toString(),
       recipientType: RecipientType.fromString(data['recipientType'] as String?),
-      purpose: CommPurpose.fromString(data['purpose'] as String?),
+      purpose: data['purpose'] != null ? CommPurpose.fromString(data['purpose'] as String?) : null,
       channel: CommChannel.fromString(data['channel'] as String?),
       status: CommStatus.fromString(data['status'] as String?),
       subject: data['subject']?.toString() ?? '',
@@ -266,7 +266,7 @@ class CommunicationLog {
       'recipientPhone': recipientPhone,
       'recipientEmail': recipientEmail,
       'recipientType': recipientType.name,
-      'purpose': purpose.name,
+      if (purpose != null) 'purpose': purpose!.name,
       'channel': channel.name,
       'status': status.name,
       'subject': subject,

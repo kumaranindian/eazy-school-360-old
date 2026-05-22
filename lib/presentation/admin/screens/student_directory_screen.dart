@@ -1949,6 +1949,34 @@ class _StudentDirectoryScreenState
                           });
                         }
                       } catch (_) {}
+
+                      // Update VAN fee in ledger
+                      try {
+                        final ledgerRepo = ref.read(studentFeeLedgerRepositoryProvider);
+                        await ledgerRepo.updateVanFeeTerm(
+                          schoolId: schoolId,
+                          studentId: stuIdInt.toString(),
+                          academicYear: selectedAcademicYear,
+                          vanFee: vanFeeAmount,
+                        );
+                      } catch (e) {
+                        print('❌ Error updating VAN fee in ledger: $e');
+                        // Non-fatal - don't block the save if ledger update fails
+                      }
+
+                      // Update concession in ledger
+                      try {
+                        final ledgerRepo = ref.read(studentFeeLedgerRepositoryProvider);
+                        await ledgerRepo.updateConcession(
+                          schoolId: schoolId,
+                          studentId: stuIdInt.toString(),
+                          academicYear: selectedAcademicYear,
+                          concessionAmount: concessionAmount,
+                        );
+                      } catch (e) {
+                        print('❌ Error updating concession in ledger: $e');
+                        // Non-fatal - don't block the save if ledger update fails
+                      }
                     } else {
                       final nextId = await repo.getNextStudentId(schoolId);
                       final newStudent = Student(
@@ -2010,6 +2038,21 @@ class _StudentDirectoryScreenState
                         parentName: parentNameController.text.trim(),
                         parentPhone: parentPhoneController.text.trim(),
                       );
+
+                      // Update concession in ledger for new student
+                      try {
+                        final concessionAmount = double.tryParse(concessionCtrl.text) ?? 0;
+                        final ledgerRepo = ref.read(studentFeeLedgerRepositoryProvider);
+                        await ledgerRepo.updateConcession(
+                          schoolId: schoolId,
+                          studentId: nextId.toString(),
+                          academicYear: selectedAcademicYear,
+                          concessionAmount: concessionAmount,
+                        );
+                      } catch (e) {
+                        print('❌ Error updating concession in ledger for new student: $e');
+                        // Non-fatal - don't block the save if ledger update fails
+                      }
                     }
                     if (ctx.mounted) {
                       Navigator.pop(ctx);
