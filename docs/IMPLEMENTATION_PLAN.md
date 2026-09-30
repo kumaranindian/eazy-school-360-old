@@ -158,16 +158,16 @@ Six tasks below (IMPL-01 through IMPL-06) are already **Done** — they were fix
 
 ### IMPL-11 — GAP-014: Bill/Invoice numbering atomicity
 **Module**: Finance / Bill Management | **Feature**: `getNextBillId()`
-**Current State**: Plain max+1 query, collision-prone under concurrency.
-**Expected State**: Transactional counter, matching the receipt-numbering pattern already proven correct elsewhere in the same codebase.
-**Problem**: Duplicate bill IDs possible.
-**Implementation**: Rewrite `getNextBillId()` (and the expense equivalent) to use a Firestore transaction against a counter document, following `term_fee_payment_repository.dart`'s existing pattern as the template.
-**Files Expected To Change**: `lib/data/repositories/fee_repository.dart`, `lib/data/repositories/expense_repository.dart`.
-**Dependencies**: None. **Database Changes**: New counter document(s) per school (additive).
+**Current State (before)**: Plain max+1 query, collision-prone under concurrency, duplicated identically in both `fee_repository.dart` and `expense_repository.dart` (both point at the same `schools/{schoolId}/bills` collection, confirmed by reading both `_billsCollection` methods).
+**Expected State**: Transactional counter, matching the receipt-numbering pattern already proven correct in `term_fee_payment_repository.dart`.
+**Problem**: Duplicate bill IDs were possible under concurrent bill creation.
+**Implementation**: Rewrote `getNextBillId()` in both repositories identically. Each call: (1) queries the current max `billId` as a seed value — done *outside* the transaction, since Firestore transactions can't run a `.where()`/`.orderBy()` query; (2) opens a transaction that reads `financeSettings/billCounter`, uses the counter's stored value if the doc exists, otherwise falls back to the pre-computed seed; (3) writes `seed_or_counter + 1` back to the counter doc via `transaction.set(..., SetOptions(merge: true))` and returns that value. The seeding step is race-safe despite running outside the transaction: if two calls race on the very first use (when the counter doc doesn't exist yet), Firestore's automatic transaction retry-on-conflict means only one of them actually creates the counter doc — the other's transaction detects the conflict, retries, and on retry sees the counter already exists, incrementing from it instead of re-seeding.
+**Files Changed**: `lib/data/repositories/fee_repository.dart`, `lib/data/repositories/expense_repository.dart`. Call sites (`fee_collection_screen.dart`, `expense_entry_screen.dart`) needed no changes — the method's signature and return type (`Future<int>`) are unchanged.
+**Dependencies**: None. **Database Changes**: New document `schools/{schoolId}/financeSettings/billCounter` per school, created lazily on first use (additive; confirmed the `financeSettings` collection already has Firestore rules permitting read/write for `isTenantAdmin()`/`isAdmin()`/`isFinance()` roles within their own school, so no rules change was needed).
 **Security Impact**: None.
-**Testing Required**: A concurrency test (fire two bill-creation calls near-simultaneously in a test environment) confirming no duplicate ID — this is exactly the test described in TESTING_STRATEGY.md item 7.
-**Acceptance Criteria**: No duplicate bill IDs producible under concurrent creation, verified by test.
-**Status**: **Not started**
+**Testing Required**: No Dart/Flutter toolchain available this session. Verified: brace/paren structural balance on both files; the transaction's `transaction.get()` call happens before its `transaction.set()` call (Firestore's read-before-write requirement); the seed-query and counter-document logic is identical in both repositories, matching the fact that they share one underlying collection and were previously identical buggy implementations; call sites confirmed unchanged (`await repo.getNextBillId(schoolId)` still type-checks against the same signature). **Not verified**: the concurrency test described in `TESTING_STRATEGY.md` item 7 (fire two bill-creation calls near-simultaneously against a real Firestore emulator and confirm no duplicate ID) — recommend running this, along with a check that a school with pre-existing bills gets its counter correctly seeded above its current max rather than restarting at 1, before trusting this fix in production.
+**Acceptance Criteria**: No duplicate bill IDs producible under concurrent creation, and existing bills' IDs are never collided with. **Not live-verified.**
+**Status**: **Done, pending compiler and live/emulator verification**
 
 ### IMPL-12 — GAP-008: Bill deletion / ledger reversion atomicity
 **Module**: Finance / Bill Management | **Feature**: `_deleteBill`

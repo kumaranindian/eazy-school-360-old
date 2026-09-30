@@ -282,14 +282,52 @@ class FeeRepository {
     return snapshot.docs.map((doc) => FeePayment.fromFirestore(doc)).toList();
   }
 
+  /// Returns a unique, monotonically-increasing bill ID for this school,
+  /// shared across both revenue (fee) and expense bills since both are
+  /// stored in the same `bills` collection. Uses a transactional counter
+  /// document (mirroring the pattern already used correctly for receipt
+  /// numbering in term_fee_payment_repository.dart) rather than reading the
+  /// current max `billId` and adding one, which was collision-prone: two
+  /// concurrent calls could both read the same max and return the same
+  /// "next" value before either bill was actually written.
+  ///
+  /// The counter is seeded from the current max `billId` the first time
+  /// it's used (so it continues the sequence rather than restarting at 1
+  /// and colliding with bills created before this fix). Firestore
+  /// transactions can't run a `.where()`/`.orderBy()` query, so that seed
+  /// value is computed just before the transaction starts; if two calls
+  /// race on the very first use, Firestore's automatic retry-on-conflict
+  /// means only one of them actually creates the counter doc, and the
+  /// other sees it already exists on retry and increments from it normally
+  /// rather than re-seeding.
   Future<int> getNextBillId(String schoolId) async {
-    final snapshot = await _billsCollection(schoolId)
+    final counterRef = _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('financeSettings')
+        .doc('billCounter');
+
+    final existingSnap = await _billsCollection(schoolId)
         .orderBy('billId', descending: true)
         .limit(1)
         .get();
-    if (snapshot.docs.isEmpty) return 1;
-    final lastId = (snapshot.docs.first.data()['billId'] as num?)?.toInt() ?? 0;
-    return lastId + 1;
+    final seed = existingSnap.docs.isEmpty
+        ? 0
+        : (existingSnap.docs.first.data()['billId'] as num?)?.toInt() ?? 0;
+
+    return _firestore.runTransaction<int>((transaction) async {
+      final counterSnap = await transaction.get(counterRef);
+      final base = counterSnap.exists
+          ? (counterSnap.data()?['value'] as num?)?.toInt() ?? seed
+          : seed;
+      final next = base + 1;
+      transaction.set(
+        counterRef,
+        {'value': next, 'updatedAt': FieldValue.serverTimestamp()},
+        SetOptions(merge: true),
+      );
+      return next;
+    });
   }
 
   Future<String> createFeePayment(String schoolId, FeePayment payment) async {

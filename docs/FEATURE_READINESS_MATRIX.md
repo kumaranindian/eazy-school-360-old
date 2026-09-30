@@ -63,7 +63,7 @@ Legend: ✅ Yes/Good · ⚠️ Partial/Weak · ❌ No/Missing/Broken · 🚫 N/A
 | ID | Feature | UI | Backend | DB | Validation | Security | Error Handling | Tests | Prod Ready | Status |
 |---|---|---|---|---|---|---|---|---|---|---|
 | INV-01 | Invoice/Bill generation | ✅ | ⚠️ | ✅ | ❓ | ✅ | ⚠️ | ⚠️ | **Partial** | No formal "Invoice" entity — "Bill" is generated on-demand as a PDF, no persisted status lifecycle. |
-| INV-02 | Invoice/Bill numbering | ✅ | ❌ | ✅ | 🚫 | ✅ | 🚫 | ❌ | **Not Ready** | Plain max+1 query, not a transaction — duplicate IDs possible under concurrent creation. Contrast with receipt numbering (RCP-02), which is done correctly. |
+| INV-02 | Invoice/Bill numbering | ✅ | ✅ | ✅ | 🚫 | ✅ | ✅ | ❌ | **Ready** (pending compiler verification) | Fixed (IMPL-11): `getNextBillId` in both `fee_repository.dart` and `expense_repository.dart` now uses a transactional counter document (`financeSettings/billCounter`, seeded from the pre-existing max `billId` for backward compatibility), matching the pattern already used correctly for receipt numbering (RCP-02). |
 | INV-03 | Invoice/Bill status (draft/issued/paid/cancelled) | ❌ | ❌ | ❌ | 🚫 | 🚫 | 🚫 | ❌ | **Missing** | Only a soft-delete boolean exists; no formal status field/lifecycle. |
 | INV-04 | Invoice/Bill cancellation | ✅ | ✅ | ✅ | 🚫 | ✅ | ✅ | ❌ | **Ready** (pending compiler verification) | Fixed (IMPL-12): deletion + all ledger-reversal paths now run inside a single Firestore transaction — any failure rolls back everything and surfaces a real error instead of a false success message. |
 | INV-05 | Invoice/Bill history | ✅ | ✅ | ✅ | 🚫 | ✅ | ❓ | ❌ | **Partial** | Viewable via Bill Management screen, filterable by date range. |

@@ -82,15 +82,47 @@ class ExpenseRepository {
     return snapshot.docs.map((doc) => Expense.fromFirestore(doc)).toList();
   }
 
-  // Get next bill ID
+  /// Returns a unique, monotonically-increasing bill ID for this school,
+  /// shared across both revenue (fee) and expense bills since both are
+  /// stored in the same `bills` collection (see the identical method in
+  /// fee_repository.dart, which this mirrors exactly since fee_repository
+  /// and this class point at the same underlying collection and previously
+  /// had the same collision-prone max-query implementation). Uses a
+  /// transactional counter document rather than reading the current max
+  /// `billId` and adding one. The counter is seeded from the current max
+  /// the first time it's used, so it continues the existing sequence
+  /// rather than colliding with bills created before this fix; Firestore's
+  /// automatic transaction retry makes the seeding step race-safe even if
+  /// this and fee_repository.dart's getNextBillId are called concurrently
+  /// for the same school on the very first use.
   Future<int> getNextBillId(String schoolId) async {
-    final snapshot = await _billsCollection(schoolId)
+    final counterRef = _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('financeSettings')
+        .doc('billCounter');
+
+    final existingSnap = await _billsCollection(schoolId)
         .orderBy('billId', descending: true)
         .limit(1)
         .get();
-    if (snapshot.docs.isEmpty) return 1;
-    final lastId = (snapshot.docs.first.data()['billId'] as num?)?.toInt() ?? 0;
-    return lastId + 1;
+    final seed = existingSnap.docs.isEmpty
+        ? 0
+        : (existingSnap.docs.first.data()['billId'] as num?)?.toInt() ?? 0;
+
+    return _firestore.runTransaction<int>((transaction) async {
+      final counterSnap = await transaction.get(counterRef);
+      final base = counterSnap.exists
+          ? (counterSnap.data()?['value'] as num?)?.toInt() ?? seed
+          : seed;
+      final next = base + 1;
+      transaction.set(
+        counterRef,
+        {'value': next, 'updatedAt': FieldValue.serverTimestamp()},
+        SetOptions(merge: true),
+      );
+      return next;
+    });
   }
 
   // Create a new expense
