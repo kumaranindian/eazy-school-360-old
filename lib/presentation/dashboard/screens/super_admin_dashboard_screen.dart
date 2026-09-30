@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/security/route_guard.dart';
 import '../../../core/security/role_policy.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/school_management_repository.dart';
+import '../../../domain/entities/school.dart';
 import '../../auth/screens/enhanced_login_screen.dart';
 import '../../widgets/theme_toggle_button.dart';
 
@@ -459,6 +462,8 @@ class _SuperAdminDashboardScreenState
     switch (_selectedIndex) {
       case 0:
         return _buildDashboardHome(context, session, isDesktop, isTablet);
+      case 1:
+        return _buildSchoolsManagementTab(context, isDesktop);
       default:
         return _buildComingSoon();
     }
@@ -468,6 +473,7 @@ class _SuperAdminDashboardScreenState
       BuildContext context, dynamic session, bool isDesktop, bool isTablet) {
     final crossAxisCount = isDesktop ? 4 : (isTablet ? 3 : 2);
     final padding = isDesktop ? 32.0 : 16.0;
+    final platformStatsAsync = ref.watch(platformStatsProvider);
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(padding),
@@ -519,11 +525,23 @@ class _SuperAdminDashboardScreenState
                       Wrap(
                         spacing: 12,
                         runSpacing: 8,
-                        children: [
-                          _buildBannerChip(Icons.school, '156 Schools'),
-                          _buildBannerChip(Icons.people, '2,847 Users'),
-                          _buildBannerChip(Icons.check_circle, '99.9% Uptime'),
-                        ],
+                        children: platformStatsAsync.when(
+                          data: (stats) => [
+                            _buildBannerChip(Icons.school,
+                                '${stats.totalSchools} Schools'),
+                            _buildBannerChip(
+                                Icons.people, '${stats.totalUsers} Users'),
+                            _buildBannerChip(Icons.pending_actions,
+                                '${stats.pendingSchools} Pending Approval'),
+                          ],
+                          loading: () => [
+                            _buildBannerChip(Icons.hourglass_empty, 'Loading...'),
+                          ],
+                          error: (err, st) => [
+                            _buildBannerChip(
+                                Icons.error_outline, 'Stats unavailable'),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -555,28 +573,55 @@ class _SuperAdminDashboardScreenState
           ),
           const SizedBox(height: 16),
 
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            childAspectRatio: isDesktop ? 1.4 : 1.2,
-            children: [
-              _buildStatCard('Total Schools', '156', Icons.school_rounded,
-                  const Color(0xFF7B1FA2), '+12 this month', true),
-              _buildStatCard('Active Users', '2,847', Icons.people_rounded,
-                  const Color(0xFF2196F3), '+156 this week', true),
-              _buildStatCard('Pending', '23', Icons.pending_actions_rounded,
-                  const Color(0xFFFF9800), 'Needs attention', false),
-              _buildStatCard(
-                  'System Health',
-                  '99.9%',
-                  Icons.health_and_safety_rounded,
-                  const Color(0xFF4CAF50),
-                  'All systems go',
-                  true),
-            ],
+          platformStatsAsync.when(
+            data: (stats) => GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: isDesktop ? 1.4 : 1.2,
+              children: [
+                _buildStatCard(
+                    'Total Schools',
+                    '${stats.totalSchools}',
+                    Icons.school_rounded,
+                    const Color(0xFF7B1FA2),
+                    '${stats.activeSchools} active',
+                    true),
+                _buildStatCard('Total Users', '${stats.totalUsers}',
+                    Icons.people_rounded, const Color(0xFF2196F3),
+                    '${stats.totalStaff} staff, ${stats.totalAdmins} admins',
+                    true),
+                _buildStatCard(
+                    'Pending Approval',
+                    '${stats.pendingSchools}',
+                    Icons.pending_actions_rounded,
+                    const Color(0xFFFF9800),
+                    stats.pendingSchools > 0
+                        ? 'Needs attention'
+                        : 'All caught up',
+                    stats.pendingSchools == 0),
+                _buildStatCard(
+                    'Active Schools',
+                    '${stats.activeSchools}',
+                    Icons.check_circle_rounded,
+                    const Color(0xFF4CAF50),
+                    'of ${stats.totalSchools} total',
+                    true),
+              ],
+            ),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (err, st) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                'Failed to load platform stats: $err',
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
           ),
 
           SizedBox(height: isDesktop ? 32 : 24),
@@ -600,8 +645,11 @@ class _SuperAdminDashboardScreenState
             mainAxisSpacing: 16,
             childAspectRatio: isDesktop ? 1.5 : 1.3,
             children: [
-              _buildActionCard('Add School', Icons.add_business_rounded,
-                  const Color(0xFF7B1FA2), () {}),
+              _buildActionCard(
+                  'Add School',
+                  Icons.add_business_rounded,
+                  const Color(0xFF7B1FA2),
+                  () => setState(() => _selectedIndex = 1)),
               _buildActionCard(
                   'Manage Users',
                   Icons.people_alt_rounded,
@@ -771,6 +819,8 @@ class _SuperAdminDashboardScreenState
   }
 
   Widget _buildRecentSchools(bool isDesktop) {
+    final pendingSchoolsAsync = ref.watch(pendingSchoolsProvider);
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -791,7 +841,7 @@ class _SuperAdminDashboardScreenState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Recent Schools',
+                'Pending School Approvals',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -800,23 +850,45 @@ class _SuperAdminDashboardScreenState
               ),
               TextButton(
                 onPressed: () => setState(() => _selectedIndex = 1),
-                child: const Text('View All'),
+                child: const Text('View All Schools'),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          _buildSchoolItem(
-              'Springfield Elementary', 'Springfield, IL', 35, true),
-          _buildSchoolItem('Riverside High School', 'Riverside, CA', 85, true),
-          _buildSchoolItem('Oak Valley Academy', 'Oak Valley, TX', 42, false),
-          _buildSchoolItem('Maple Grove School', 'Maple Grove, MN', 28, true),
+          pendingSchoolsAsync.when(
+            data: (schools) {
+              if (schools.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'No schools awaiting approval.',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                );
+              }
+              return Column(
+                children: schools
+                    .take(5)
+                    .map((school) => _buildPendingSchoolItem(school))
+                    .toList(),
+              );
+            },
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (err, st) => Text(
+              'Failed to load pending schools: $err',
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSchoolItem(
-      String name, String location, int staffCount, bool isActive) {
+  Widget _buildPendingSchoolItem(School school) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -835,14 +907,14 @@ class _SuperAdminDashboardScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name,
+                  school.schoolName.isNotEmpty ? school.schoolName : '(unnamed school)',
                   style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
                       color: Theme.of(context).colorScheme.onSurface),
                 ),
                 Text(
-                  '$location • $staffCount staff',
+                  '${school.email.isNotEmpty ? school.email : 'no email on file'} • signed up ${DateFormat.yMMMd().format(school.createdAt)}',
                   style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 13),
@@ -850,20 +922,184 @@ class _SuperAdminDashboardScreenState
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: isActive
-                  ? Colors.green.withOpacity(0.1)
-                  : Colors.orange.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
+          const SizedBox(width: 12),
+          ElevatedButton(
+            onPressed: () => _activateSchool(school),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
-            child: Text(
-              isActive ? 'Active' : 'Pending',
-              style: TextStyle(
-                color: isActive ? Colors.green : Colors.orange,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+            child: const Text('Activate'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _activateSchool(School school) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Activate School'),
+        content: Text(
+          'Activate "${school.schoolName}"? This will allow their admin account to sign in and start using the app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50)),
+            child: const Text('Activate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final session = ref.read(currentSessionProvider);
+    if (session == null) return;
+
+    try {
+      await ref
+          .read(schoolManagementRepositoryProvider)
+          .activateSchool(school.schoolId, session.uid);
+      ref.invalidate(platformStatsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${school.schoolName} activated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to activate school: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildSchoolsManagementTab(BuildContext context, bool isDesktop) {
+    final pendingSchoolsAsync = ref.watch(pendingSchoolsProvider);
+    final allSchoolsAsync = ref.watch(allSchoolsProvider(false));
+    final padding = isDesktop ? 32.0 : 16.0;
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(padding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Pending Approval',
+            style: TextStyle(
+              fontSize: isDesktop ? 20 : 18,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: pendingSchoolsAsync.when(
+              data: (schools) {
+                if (schools.isEmpty) {
+                  return Text(
+                    'No schools awaiting approval.',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  );
+                }
+                return Column(
+                  children: schools
+                      .map((school) => _buildPendingSchoolItem(school))
+                      .toList(),
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, st) => Text(
+                'Failed to load pending schools: $err',
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+          ),
+          SizedBox(height: isDesktop ? 32 : 24),
+          Text(
+            'All Schools',
+            style: TextStyle(
+              fontSize: isDesktop ? 20 : 18,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: allSchoolsAsync.when(
+              data: (schools) {
+                if (schools.isEmpty) {
+                  return Text(
+                    'No schools found.',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  );
+                }
+                return Column(
+                  children: schools.map((school) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.school_outlined, size: 20),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  school.schoolName.isNotEmpty
+                                      ? school.schoolName
+                                      : '(unnamed school)',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600, fontSize: 14),
+                                ),
+                                Text(
+                                  '${school.email.isNotEmpty ? school.email : 'no email on file'} • created ${DateFormat.yMMMd().format(school.createdAt)}',
+                                  style: TextStyle(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                      fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, st) => Text(
+                'Failed to load schools: $err',
+                style: const TextStyle(color: Colors.red),
               ),
             ),
           ),

@@ -88,17 +88,23 @@ Six tasks below (IMPL-01 through IMPL-06) are already **Done** — they were fix
 
 ### IMPL-07 — GAP-001: Super Admin tenant activation
 **Module**: Core / Super Admin | **Feature**: School activation after self-signup
-**Current State**: `super_admin_dashboard_screen.dart` shows hardcoded fake stats; "Add School" is `onTap: () {}`; no path to call `activateSchool`.
-**Expected State**: A real "Pending Schools" list with working Activate/Deactivate actions, backed by the already-implemented `SchoolManagementRepository`.
-**Problem**: Blocks all new-tenant onboarding — the highest-priority functional gap in the app.
-**Implementation**: Replace the dashboard's hardcoded data with live providers (`pendingSchoolsProvider`, `platformStatsProvider`, already implemented and unused); build/wire a minimal "Schools" management screen calling `activateSchool`/`deactivateSchool`.
-**Files Expected To Change**: `lib/presentation/dashboard/screens/super_admin_dashboard_screen.dart`, possibly a new `lib/presentation/admin/screens/school_management_screen.dart` (or similar) if one doesn't already exist in usable form.
-**Dependencies**: None — backend logic already exists.
+**Current State (before)**: `super_admin_dashboard_screen.dart` showed hardcoded fake stats; "Add School" was `onTap: () {}`; no path to call `activateSchool`.
+**Expected State**: A real "Pending Schools" list with a working Activate action, backed by the already-implemented `SchoolManagementRepository`.
+**Problem**: Blocked all new-tenant onboarding — the highest-priority functional gap in the app.
+**Implementation**:
+- Dashboard home (`_buildDashboardHome`): replaced the hardcoded banner chips and 4 stat cards with `ref.watch(platformStatsProvider)`, handled via `.when(data/loading/error)` — real totals, active/pending school counts, staff/admin breakdown.
+- Replaced the fake `_buildRecentSchools`/`_buildSchoolItem` (four hardcoded school names) with a real "Pending School Approvals" section driven by `ref.watch(pendingSchoolsProvider)`, showing up to 5 pending schools with an **Activate** button on each.
+- New `_activateSchool(School school)` method: confirmation dialog → `schoolManagementRepositoryProvider.activateSchool(schoolId, session.uid)` → invalidates `platformStatsProvider` to refresh counts → success/error snackbar. `pendingSchoolsProvider` is a `StreamProvider`, so the activated school disappears from the pending list automatically once the Firestore write commits, with no manual refresh needed.
+- New `_buildSchoolsManagementTab`: wired to the "Schools" nav item (`_selectedIndex == 1`, both desktop side-nav and mobile bottom-nav), showing the full pending-approval list (not just 5) plus a browsable "All Schools" list via `ref.watch(allSchoolsProvider(false))`.
+- "Add School" quick-action button now navigates to the Schools tab instead of doing nothing (`onTap: () {}` → `() => setState(() => _selectedIndex = 1)`). Note: this does not let a super admin *create* a school from scratch — that capability doesn't exist and wasn't part of GAP-001 (new schools are created via the existing self-signup flow, which already works; the gap was specifically that they couldn't be activated afterward).
+**Files Changed**: `lib/presentation/dashboard/screens/super_admin_dashboard_screen.dart` (imports added: `package:intl/intl.dart`, `school_management_repository.dart`, `domain/entities/school.dart`).
+**Dependencies**: None — backend logic (`SchoolManagementRepository.activateSchool`/`getPendingSchools`/`getAllSchools`/`getPlatformStats`) already existed and required no changes.
 **Database Changes**: None.
-**Security Impact**: None negative; this is purely additive UI wiring to existing, already-correct backend logic.
-**Testing Required**: Manual end-to-end test: sign up a new school, confirm it appears in the pending list, activate it, confirm the school's admin can then log in successfully.
-**Acceptance Criteria**: A newly-signed-up school can be activated through the app with no manual Firestore edit required.
-**Status**: **Not started**
+**Security Impact**: None negative; purely additive UI wiring to existing, already-correct backend logic. `activateSchool`'s own Firestore writes (school doc + admin user docs + membership docs) were not modified.
+**Deliberately NOT included in this task** (kept the change scoped to the GAP-001 blocker specifically): a UI for `deactivateSchool` (the "All Schools" list is browse-only, no status badge or deactivate button — the `School` entity's `.status` field was found not to reliably reflect the `isActive` boolean the repository actually queries on, and building a correct status display would have required either a per-row extra Firestore read or a fix to the entity's field mapping, both bigger than this task's scope); the "Global Staff"/"Reports"/"Settings" nav destinations remain "Coming Soon" stubs.
+**Testing Required**: No Dart/Flutter toolchain was available in this session to run `flutter analyze`/`flutter test`. Verified instead: brace/paren balance (structural check), a full manual read-through of every changed section against the provider signatures in `school_management_repository.dart` (`platformStatsProvider` is `FutureProvider<PlatformStats>`, `pendingSchoolsProvider`/`allSchoolsProvider(bool)` are `StreamProvider`s returning `List<School>`, `School.schoolName`/`.email`/`.createdAt`/`.schoolId` all confirmed to exist on the entity), and confirmed `package:intl/intl.dart` + `DateFormat.yMMMd()` matches the import pattern already used elsewhere in this codebase. **Not verified**: actual compilation, and the full manual end-to-end flow below.
+**Acceptance Criteria**: A newly-signed-up school can be activated through the app with no manual Firestore edit required. **Recommend running this exact manual test before trusting the fix**: sign up a new school → confirm it appears in the Super Admin's Pending Approval list (both the dashboard-home preview and the full Schools tab) → click Activate → confirm the snackbar shows success and the school disappears from the pending list → confirm that school's admin can then log in successfully.
+**Status**: **Done, pending compiler and live verification**
 
 ### IMPL-08 — GAP-009: Payroll admin UI wiring
 **Module**: Finance / Payroll | **Feature**: Admin payroll management entry point

@@ -12,12 +12,12 @@ Legend: ✅ Yes/Good · ⚠️ Partial/Weak · ❌ No/Missing/Broken · 🚫 N/A
 |---|---|---|---|---|---|---|---|---|---|---|
 | CORE-01 | Authentication (email/password login) | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ❌ | **Partial** | Works; password logging removed this session; startup "security gate" (`FirebaseRulesVerifier`) is still a non-functional stub presented as real. |
 | CORE-02 | School setup (self-signup) | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ❌ | **Partial** | Provisioning itself (Auth user + school/admin/user/membership docs) is solid. |
-| CORE-03 | School activation (post-signup approval) | ❌ | ⚠️ | ✅ | 🚫 | 🚫 | 🚫 | ❌ | **Broken** | No reachable UI to flip `isActive: true`. Highest-priority gap in the whole audit — see Gap Register GAP-001. |
+| CORE-03 | School activation (post-signup approval) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | **Ready** (pending compiler verification) | Fixed (IMPL-07): Super Admin dashboard now has a real Pending Approval list with a working Activate button. See Gap Register GAP-001. |
 | CORE-04 | Branch management | ❓ | ❓ | ❓ | ❓ | ❓ | ❓ | ❌ | **Unknown** | No dedicated multi-branch-per-school feature was found; a "school" appears to be the top-level tenant unit with no sub-branch concept. Not exhaustively searched — mark unknown rather than assume absent. |
 | CORE-05 | User management (staff/teacher accounts) | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ | ❌ | **Partial** | CRUD works; `createAdmin()`/`createFinanceAdmin()` and bulk upload still use an older temp-password pattern inconsistent with the newer reset-email pattern. |
 | CORE-06 | Role management (assigning ADMIN/STAFF/etc.) | ⚠️ | ⚠️ | ✅ | ⚠️ | ✅ (fixed) | ⚠️ | ❌ | **Partial** | `setUserClaims` privilege-escalation hole fixed this session. Role-string casing inconsistency (`ADMIN`/`admin`/`TENANT_ADMIN`/`tenant_admin`) is a standing maintenance risk. |
 | CORE-07 | Permissions (RBAC enforcement) | ⚠️ | ❌ | ✅ | ⚠️ | ⚠️ | ⚠️ | ❌ | **Partial** | Backend `backend-authorization.js` never actually called by any function; only 4 top-level screens have a real access gate; ~60 feature screens have none. |
-| CORE-08 | Tenant management (Super Admin: view/manage all schools) | ❌ | ⚠️ | ✅ | 🚫 | 🚫 | 🚫 | ❌ | **Broken** | Dashboard shows hardcoded fake data; "Add School" is a no-op; every other section is a stub. See Gap Register GAP-001. |
+| CORE-08 | Tenant management (Super Admin: view/manage all schools) | ⚠️ | ✅ | ✅ | 🚫 | ✅ | ✅ | ❌ | **Partial** (activation fixed) | Fixed (IMPL-07): real platform stats, a working Pending Approval + Activate flow, and a browsable All Schools list. Still missing: a UI for `deactivateSchool` (backend exists, not wired to any button), and "Global Staff"/"Reports"/"Settings" tabs remain "Coming Soon" stubs — out of scope for GAP-001, which was specifically about activation. |
 | CORE-09 | Settings (school-level) | ✅ | ✅ | ✅ | ⚠️ | ✅ | ❓ | ❌ | **Partial** | `school_settings_screen.dart` works, correctly scoped, but calls Firestore directly rather than through a repository. |
 
 ## Student Management
@@ -141,7 +141,7 @@ Legend: ✅ Yes/Good · ⚠️ Partial/Weak · ❌ No/Missing/Broken · 🚫 N/A
 | ID | Feature | UI | Backend | DB | Validation | Security | Error Handling | Tests | Prod Ready | Status |
 |---|---|---|---|---|---|---|---|---|---|---|
 | DASH-01 | Admin dashboard KPIs | ✅ | ✅ | ✅ | 🚫 | ✅ | ❓ | ❌ | **Partial** | Live and functional (`presentation/dashboard/`, not the dead `dashboards/` folder). |
-| DASH-02 | Super Admin dashboard | ❌ | ❌ | ❌ | 🚫 | ❌ | 🚫 | ❌ | **Broken** | Hardcoded fake data, no-op "Add School" button, every other section a stub. See Gap Register GAP-001. |
+| DASH-02 | Super Admin dashboard | ⚠️ | ✅ | ✅ | 🚫 | ✅ | ✅ | ❌ | **Partial** (core blocker fixed) | Fixed (IMPL-07): real platform stats (replacing "156 Schools"/"2,847 Users"/"99.9% Uptime"), working "Add School" button (now jumps to the real Schools tab), and a functional Pending Approval + Activate flow. "Global Staff"/"Reports"/"Settings" nav destinations remain "Coming Soon" — not part of the GAP-001 blocker. |
 | DASH-03 | Staff/Parent/Finance dashboards | ✅ | ✅ | ✅ | 🚫 | ✅ | ❓ | ❌ | **Partial** | All confirmed live and reachable. |
 | DASH-04 | Dead duplicate dashboard folder | 🚫 | 🚫 | 🚫 | 🚫 | 🚫 | 🚫 | 🚫 | **Dead code, no user impact** | `lib/presentation/dashboards/` (with "s") is unreferenced from the live app — cleanup item, not a functional gap. |
 
