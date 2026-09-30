@@ -132,7 +132,7 @@ Legend: ✅ Yes/Good · ⚠️ Partial/Weak · ❌ No/Missing/Broken · 🚫 N/A
 | FIN-03 | Outstanding fees | ✅ | ✅ | ⚠️ | 🚫 | ✅ | ❓ | ❌ | **Partial** | Inherits the two-fee-system consistency risk. |
 | FIN-04 | Revenue tracking | ✅ | ✅ | ⚠️ | 🚫 | ✅ | ❓ | ❌ | **Partial** | Same. |
 | FIN-05 | Expenses | ✅ | ✅ | ✅ | ❓ | ✅ | ❓ | ❌ | **Partial** | `expense_repository.dart`/`expense_entry_screen.dart` exist; shares the non-transactional ID-generation pattern with bills. |
-| FIN-06 | Payroll | ❌ | ✅ | ✅ | ✅ | ✅ | ❓ | ❌ | **Broken** | Admin nav routes to a "Coming Soon" stub instead of the real, correctly-built `PayrollManagementScreen`. Feature is one navigation wire away from working. |
+| FIN-06 | Payroll | ✅ | ✅ | ✅ | ✅ | ✅ | ❓ | ❌ | **Ready** (pending compiler verification) | Fixed (IMPL-08): admin nav now routes to the real `PayrollManagementScreen` instead of a "Coming Soon" stub. |
 | FIN-07 | Financial reports | ✅ | ✅ | ✅ | 🚫 | ✅ | ❓ | ✅ (partial, 21 cases) | **Partial** | Only report screen in the app; reachable and has some test coverage. |
 | FIN-08 | Reconciliation | ❌ | ❌ | 🚫 | 🚫 | 🚫 | 🚫 | ❌ | **Missing** | Same finding as PAY-08. |
 
@@ -185,7 +185,7 @@ Legend: ✅ Yes/Good · ⚠️ Partial/Weak · ❌ No/Missing/Broken · 🚫 N/A
 |---|---|---|---|---|---|---|---|---|---|---|
 | ACY-01 | Academic year management | ✅ | ✅ | ✅ | ✅ | ✅ | ❓ | ❌ | **Ready** | Confirmed reachable and correctly built. |
 | ACY-02 | Fiscal year management | ✅ | ✅ | ✅ | ✅ | ✅ | ❓ | ❌ | **Ready** | Same repository, same verdict. |
-| ACY-03 | Student promotion (year-end) | ❌ | ✅ | ✅ | ✅ | ✅ | ❓ | ❌ | **Broken** | Fully implemented, completely unreferenced from any live screen — the doc claim of "90% complete, wired in" is overstated for this specific piece. |
+| ACY-03 | Student promotion (year-end) | ✅ | ✅ | ✅ | ✅ | ✅ | ❓ | ❌ | **Ready** (pending compiler and dry-run verification) | Fixed (IMPL-09): admin nav now routes to the real `StudentPromotionScreen`. Given this mutates every promoted student's class/academic-year fields in bulk, a manual dry-run in a non-production environment is strongly recommended before first real use — see IMPLEMENTATION_PLAN.md IMPL-09. |
 | ACY-04 | Arrears tracking | ⚠️ | ✅ | ✅ | ❓ | ✅ | ❓ | ❌ | **Partial** | Data model/rules exist (`arrears` collection); UI surfacing not independently re-verified this pass. |
 
 ## Leave & Permission Management
@@ -196,6 +196,7 @@ Legend: ✅ Yes/Good · ⚠️ Partial/Weak · ❌ No/Missing/Broken · 🚫 N/A
 | LV-02 | Approve/reject leave/permission (admin) | ✅ | ✅ | ✅ | ✅ | ✅ (fixed) | ⚠️ | ❌ | **Ready** | Live path confirmed architecturally sound; cross-tenant gap in the parallel callable-API path fixed this session. |
 | LV-03 | Balance calculation, idempotency | 🚫 | ✅ (fixed) | ✅ | ✅ | ✅ | ✅ (fixed) | ❌ | **Ready** | Idempotency guard added this session; this is now one of the more solid modules in the app. |
 | LV-04 | Cancellation flow | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ❌ | **Ready** (leave) / **Unknown** (permission UI per historical project docs, not re-verified) | See `CODEBASE_ANALYSIS.md` §8 for the historical bug-fix trail on this feature. |
+| LV-05 | Student leave approval (parent-initiated, admin-approved) | ✅ | ✅ | ✅ | ❓ | ✅ | ❓ | ❌ | **Ready** (pending compiler verification) | New finding, not caught by either prior review pass: `StudentLeaveApprovalScreen` was routed to a "Coming Soon" stub in the admin nav *and* separately displayed its own internal "Coming Soon" banner above a fully-built, real implementation (live Riverpod providers, proper loading/error/empty states, no TODOs). Fixed (IMPL-13): wired into the admin nav and removed the internal banner. |
 
 ## Cross-Cutting: RBAC / Security
 

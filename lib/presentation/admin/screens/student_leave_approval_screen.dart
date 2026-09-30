@@ -49,60 +49,30 @@ class _StudentLeaveApprovalScreenState extends ConsumerState<StudentLeaveApprova
 
     return Container(
       color: _bgDark,
-      child: Column(
-        children: [
-          // Coming Soon Banner
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            color: const Color(0xFFF59E0B).withOpacity(0.1),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.upcoming, color: const Color(0xFFF59E0B), size: 20),
-                const SizedBox(width: 8),
-                const Text(
-                  'Coming Soon',
-                  style: TextStyle(
-                    color: Color(0xFFF59E0B),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
+      child: Column(children: [
+        Container(
+          color: _cardDark,
+          child: TabBar(
+            controller: _tabController,
+            indicatorColor: _accentBlue,
+            labelColor: _accentBlue,
+            unselectedLabelColor: _textSecondary,
+            tabs: const [
+              Tab(text: 'Pending Requests'),
+              Tab(text: 'All Requests'),
+            ],
           ),
-          Expanded(
-            child: Container(
-              color: _bgDark,
-              child: Column(children: [
-                Container(
-                  color: _cardDark,
-                  child: TabBar(
-                    controller: _tabController,
-                    indicatorColor: _accentBlue,
-                    labelColor: _accentBlue,
-                    unselectedLabelColor: _textSecondary,
-                    tabs: const [
-                      Tab(text: 'Pending Requests'),
-                      Tab(text: 'All Requests'),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildPendingTab(session, isDesktop),
-                      _buildAllTab(session, isDesktop),
-                    ],
-                  ),
-                ),
-              ]),
-            ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildPendingTab(session, isDesktop),
+              _buildAllTab(session, isDesktop),
+            ],
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 

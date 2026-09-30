@@ -23,6 +23,9 @@ import '../../admin/screens/student_directory_screen.dart';
 import '../../admin/screens/student_directory_with_ledger_screen.dart';
 import '../../admin/screens/class_teacher_assignment_screen.dart';
 import '../../admin/screens/academic_year_management_screen.dart';
+import '../../admin/screens/payroll_management_screen.dart';
+import '../../admin/screens/student_promotion_screen.dart';
+import '../../admin/screens/student_leave_approval_screen.dart';
 import '../../admin/screens/whatsapp_settings_screen.dart';
 import '../../admin/screens/uqi_settings_screen.dart';
 import '../../finance/screens/expense_entry_screen.dart';
@@ -1191,7 +1194,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       case 'holiday_management':
         return const HolidayManagementScreen();
       case 'payroll_management':
-        return _buildComingSoonScreen('Payroll Management');
+        return const PayrollManagementScreen();
       case 'rfid_card_management':
         return const RfidCardManagementScreen();
       case 'rfid_attendance_entries':
@@ -1205,9 +1208,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       case 'class_teacher_assign':
         return const ClassTeacherAssignmentScreen();
       case 'student_leave_approval':
-        return _buildComingSoonScreen('Student Leave Approval');
+        return const StudentLeaveApprovalScreen();
       case 'student-promotion':
-        return _buildComingSoonScreen('Student Promotion');
+        return const StudentPromotionScreen();
       case 'academic-year-mgmt':
         return const AcademicYearManagementScreen();
       case 'student_fee_mgmt':

@@ -108,28 +108,40 @@ Six tasks below (IMPL-01 through IMPL-06) are already **Done** — they were fix
 
 ### IMPL-08 — GAP-009: Payroll admin UI wiring
 **Module**: Finance / Payroll | **Feature**: Admin payroll management entry point
-**Current State**: Dashboard nav routes to `_buildComingSoonScreen('Payroll Management')`.
+**Current State (before)**: Dashboard nav routed to `_buildComingSoonScreen('Payroll Management')`.
 **Expected State**: Routes to the real, already-built `PayrollManagementScreen`.
-**Problem**: Entire payroll feature is inert despite correct backend code.
-**Implementation**: One-line navigation change; then a full manual test of salary-structure entry → payroll run → payslip generation, since this path has never been exercised in production.
-**Files Expected To Change**: `lib/presentation/dashboard/screens/admin_dashboard_screen.dart`.
+**Problem**: Entire payroll feature was inert despite correct backend code.
+**Implementation**: Added `import '../../admin/screens/payroll_management_screen.dart';` and changed the `payroll_management` nav case from `_buildComingSoonScreen('Payroll Management')` to `const PayrollManagementScreen()`.
+**Files Changed**: `lib/presentation/dashboard/screens/admin_dashboard_screen.dart`.
 **Dependencies**: None. **Database Changes**: None (existing schema). **Security Impact**: None — screen already has its own access gating.
-**Testing Required**: Manual end-to-end payroll run for at least one staff member, confirming a payslip is generated and visible to that staff member's `MyPayslipsScreen`.
-**Acceptance Criteria**: An admin can create a salary structure, run payroll, and the affected staff member sees a payslip.
-**Status**: **Not started**
+**Testing Required**: No Dart/Flutter toolchain available this session. Verified: the import path and class name match `payroll_management_screen.dart`'s actual location and its `const PayrollManagementScreen({super.key})` constructor signature; brace/paren structural balance across the whole file. **Not verified**: an actual end-to-end payroll run. **Recommend**: create a salary structure, run payroll for at least one staff member, and confirm a payslip appears in that staff member's `MyPayslipsScreen`, before trusting this in production.
+**Acceptance Criteria**: An admin can create a salary structure, run payroll, and the affected staff member sees a payslip. **Not live-verified.**
+**Status**: **Done, pending compiler and live verification**
 
 ### IMPL-09 — GAP-011: Student promotion UI wiring
 **Module**: Academic Year | **Feature**: Student promotion entry point
-**Current State**: `StudentPromotionScreen` fully built, unreferenced.
-**Expected State**: Reachable from the admin dashboard or `AcademicYearManagementScreen`.
-**Problem**: Year-end promotion cannot be performed.
-**Implementation**: Add a navigation entry point; then a careful manual dry-run given zero automated test coverage of the promotion logic (which mutates every promoted student's class/academic-year fields in bulk — higher blast radius than IMPL-08 if something's wrong).
-**Files Expected To Change**: `lib/presentation/dashboard/screens/admin_dashboard_screen.dart` or `lib/presentation/admin/screens/academic_year_management_screen.dart`.
-**Dependencies**: None. **Database Changes**: None (existing schema); recommend testing against a dev/test environment first given the bulk-mutation nature of promotion.
+**Current State (before)**: `StudentPromotionScreen` fully built, but its `student-promotion` nav case routed to `_buildComingSoonScreen('Student Promotion')`, unreferenced.
+**Expected State**: Reachable from the admin dashboard.
+**Problem**: Year-end promotion could not be performed.
+**Implementation**: Added `import '../../admin/screens/student_promotion_screen.dart';` and changed the `student-promotion` nav case to `const StudentPromotionScreen()`.
+**Files Changed**: `lib/presentation/dashboard/screens/admin_dashboard_screen.dart`.
+**Dependencies**: None. **Database Changes**: None (existing schema).
 **Security Impact**: None — screen already has its own access gating.
-**Testing Required**: Manual dry-run in a non-production environment, verifying arrears creation and rollback behavior described in the repository's own logic before trusting it against production data.
-**Acceptance Criteria**: An admin can promote a class of students to the next academic year, with arrears correctly created for any unpaid balances.
-**Status**: **Not started**
+**Testing Required**: No Dart/Flutter toolchain available. Verified: import path/class name/constructor match; structural balance. **Not verified**: a real promotion run — this is the highest-blast-radius fix in this batch, since `StudentPromotionScreen` mutates every promoted student's class/academic-year fields in bulk with zero automated test coverage of that logic. **Strongly recommend a manual dry-run in a non-production environment** (verify arrears creation and rollback behavior described in `StudentPromotionService`) before running this against real production data.
+**Acceptance Criteria**: An admin can promote a class of students to the next academic year, with arrears correctly created for any unpaid balances. **Not live-verified — treat this specific fix as higher-risk than the others in this batch.**
+**Status**: **Done (navigation wired), pending compiler verification and a required manual dry-run before production use**
+
+### IMPL-13 — GAP-035: Student leave approval UI wiring (new finding)
+**Module**: Leave / Student Portal | **Feature**: Admin approval of parent-initiated student leave requests
+**Current State (before)**: `StudentLeaveApprovalScreen`'s nav case routed to `_buildComingSoonScreen('Student Leave Approval')`; the screen itself *also* displayed its own internal "Coming Soon" banner above a fully-built implementation.
+**Expected State**: Reachable from the admin dashboard, with no contradictory "Coming Soon" messaging on a screen that actually works.
+**Problem**: Admins could not approve/reject student leave requests at all, despite the underlying implementation (tabbed pending/all requests, real Riverpod providers, proper loading/error/empty states) being complete.
+**Implementation**: Added `import '../../admin/screens/student_leave_approval_screen.dart';` and changed the `student_leave_approval` nav case to `const StudentLeaveApprovalScreen()`. Separately, removed the internal "Coming Soon" banner `Container` from `student_leave_approval_screen.dart`'s `build()` method (and the now-unnecessary extra `Expanded`/`Container` wrapper it was nested in), since displaying it would have been actively confusing once the screen was reachable through normal navigation.
+**Files Changed**: `lib/presentation/dashboard/screens/admin_dashboard_screen.dart`, `lib/presentation/admin/screens/student_leave_approval_screen.dart`.
+**Dependencies**: None. **Database Changes**: None. **Security Impact**: None — screen already gated the same way as its siblings (checks `session`/`session.schoolId` at the top of `build()`).
+**Testing Required**: No Dart/Flutter toolchain available. Verified: import/class/constructor match; the removed banner block's braces were fully self-contained (confirmed via brace/paren balance on both files) so no structural damage from its removal; `pendingStudentLeavesProvider`/`schoolStudentLeavesProvider` (the providers this screen watches) were not modified. **Not verified**: an actual end-to-end approve/reject flow for a real student leave request.
+**Acceptance Criteria**: An admin can view pending student leave requests and approve/reject them from the live app, with no "Coming Soon" messaging.
+**Status**: **Done, pending compiler and live verification**
 
 ### IMPL-10 — GAP-006: Storage rules cross-tenant scoping
 **Module**: Security / Storage | **Feature**: `teacher_documents`, `leave_attachments` rules
