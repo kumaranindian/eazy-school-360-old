@@ -127,16 +127,16 @@ Six tasks below (IMPL-01 through IMPL-06) are already **Done** — they were fix
 
 ### IMPL-10 — GAP-006: Storage rules cross-tenant scoping
 **Module**: Security / Storage | **Feature**: `teacher_documents`, `leave_attachments` rules
-**Current State**: Both readable (and `leave_attachments` writable) by any authenticated user regardless of school.
-**Expected State**: Both scoped by `belongsToSchool(schoolId)`, matching the `payslips` rule's pattern.
+**Current State (before)**: Both readable (and `leave_attachments` writable) by any authenticated user regardless of school.
+**Expected State**: Both scoped by `belongsToSchool(schoolId)`.
 **Problem**: Cross-tenant file exposure/write access.
-**Implementation**: Add the `belongsToSchool` check to both `match` blocks in `storage.rules`; deploy via the standard Firebase Storage rules deploy path.
-**Files Expected To Change**: `storage.rules`.
-**Dependencies**: Confirm no current client code relies on the relaxed rule (the in-file comment suggests it was relaxed because "custom claims may not be present for staff users in this environment" — verify staff custom claims are reliably populated before tightening, or this could break legitimate staff access to their own leave attachments).
+**Implementation**: `teacher_documents` read now requires `isSuperAdmin() || belongsToSchool(schoolId) || request.auth.uid == teacherId` (the self-access fallback avoids depending on the schoolId claim being populated, addressing the exact concern the original relaxation comment raised). `leave_attachments` read and write now both require `isSuperAdmin() || belongsToSchool(schoolId)`, matching `firestore.rules`'s own scoping of the `leaves` collection. Neither `write` rule for `teacher_documents` needed a change — it was already correctly self-scoped.
+**Files Changed**: `storage.rules`.
+**Dependencies**: None encountered — see Testing note below on what remains unverified.
 **Database Changes**: None (Storage, not Firestore). **Security Impact**: Closes GAP-006.
-**Testing Required**: Manual test that a staff member can still read/write their own leave attachments and a teacher can read their own documents after the change, plus confirmation a different school's user is now rejected.
-**Acceptance Criteria**: Cross-tenant read/write blocked; same-school legitimate access unaffected.
-**Status**: **Not started**
+**Testing Required**: No Firebase project credentials or emulator were available in this session to run `firebase deploy --only storage` or exercise the rules against real auth tokens. Verified: brace/paren balance (structural sanity check), and that the new logic mirrors the already-correct `payslips` rule and the Firestore `leaves` collection's scoping. **Not verified**: an actual staff member with only self-access (no populated schoolId claim) can still read their own leave attachments in a live environment — this was the specific risk the original "relaxed" comment flagged, and the self-access `uid == teacherId` fallback on `teacher_documents` addresses it for that path, but `leave_attachments` has no equivalent self-access fallback (it relies on `belongsToSchool` alone). **Recommend deploying to a non-production Firebase project first and manually testing**: (1) a staff member uploading/viewing their own leave attachment, (2) an admin viewing a staff member's attachment in the same school, (3) any user from a different school being rejected on both paths.
+**Acceptance Criteria**: Cross-tenant read/write blocked (verified by rule logic); same-school legitimate access unaffected (NOT live-verified — see above).
+**Status**: **Done, pending live/deployed verification**
 
 ### IMPL-11 — GAP-014: Bill/Invoice numbering atomicity
 **Module**: Finance / Bill Management | **Feature**: `getNextBillId()`

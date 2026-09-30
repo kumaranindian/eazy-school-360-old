@@ -2,7 +2,11 @@
 
 Part of the Production Readiness Audit. Tracks changes made as part of the audit/implementation workflow described in `docs/README.md`. Ordinary feature-development commits outside this workflow are tracked in git history, not duplicated here.
 
-## Audit session (this session)
+## Implementation session (P0 blockers, following the audit)
+
+- **IMPL-10 (GAP-006) — Done, pending live verification**: Fixed cross-tenant scoping gaps in `storage.rules` for `teacher_documents` (was readable by any authenticated user from any school; now scoped to same-school members, super admin, or the teacher themself) and `leave_attachments` (was readable AND writable by any authenticated user from any school; now scoped to same-school members or super admin, matching `firestore.rules`'s existing `leaves` collection scoping). **Not deployed or live-tested** — no Firebase project credentials/emulator available in this session; verified by structural check and pattern-matching against the already-correct `payslips` rule and the Firestore `leaves` rule. See `docs/IMPLEMENTATION_PLAN.md` IMPL-10 for the specific manual tests recommended before this is trusted in production.
+
+## Audit session (previous session)
 
 ### Security fixes (see `docs/IMPLEMENTATION_PLAN.md` IMPL-01 through IMPL-06 for full detail)
 

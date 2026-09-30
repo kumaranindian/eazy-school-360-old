@@ -35,19 +35,22 @@ service firebase.storage {
     
     // TEACHER DOCUMENTS
     match /teacher_documents/{schoolId}/{teacherId}/{fileName} {
-      // Relaxed to rely only on authentication and owner match, since custom claims
-      // may not be present for staff users in this environment.
-      allow read: if isSignedIn();
+      // Scoped to same-school members (or the teacher themself, which doesn't
+      // depend on the schoolId claim being populated) or super admin.
+      // Previously any authenticated user from any school could read this path.
+      allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId) || request.auth.uid == teacherId);
       allow write: if isSignedIn() && request.auth.uid == teacherId;
     }
-    
+
     // LEAVE ATTACHMENTS
     match /leave_attachments/{schoolId}/{leaveId}/{fileName} {
-      // Allow authenticated users to attach and view their leave files.
-      // Folder naming should ensure leaveId is unguessable; consider
-      // strengthening later with metadata validations if needed.
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      // Scoped to same-school members or super admin, matching the
+      // corresponding firestore.rules `leaves` collection's own scoping
+      // (allow create: if isSignedIn() && belongsToSchool(schoolId)).
+      // Previously any authenticated user from any school could read AND
+      // write here, relying only on the leaveId being "hard to guess".
+      allow read: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
+      allow write: if isSignedIn() && (isSuperAdmin() || belongsToSchool(schoolId));
     }
     
     // PAYSLIPS
