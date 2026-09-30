@@ -159,17 +159,17 @@ Six tasks below (IMPL-01 through IMPL-06) are already **Done** — they were fix
 
 ### IMPL-12 — GAP-008: Bill deletion / ledger reversion atomicity
 **Module**: Finance / Bill Management | **Feature**: `_deleteBill`
-**Current State**: Non-atomic delete + ledger reversal; reversal failures silently swallowed, UI reports success regardless.
+**Current State (before)**: Non-atomic delete + ledger reversal; reversal failures silently swallowed, UI reported success regardless.
 **Expected State**: Single transaction covering both; any failure surfaces to the admin and nothing is left in a partial state.
-**Problem**: Data corruption risk (student balance can silently diverge from reality).
-**Implementation**: Wrap the bill-delete and ledger-reversal writes in one `runTransaction` call; replace the swallowed `catch` with a surfaced error (rethrow or explicit failure UI state).
-**Files Expected To Change**: `lib/presentation/finance/screens/bill_management_screen.dart`.
-**Dependencies**: Should be designed together with GAP-018 (refunds), since both touch the same ledger-reversal logic — worth planning as one piece of work rather than two separate passes over the same code.
-**Database Changes**: None (existing schema).
-**Security Impact**: None directly, though data-integrity bugs of this kind can look like security bugs to an affected school.
-**Testing Required**: The regression test described in TESTING_STRATEGY.md item 6 (force the reversal step to fail, assert full rollback) — write this test *before* the fix, confirm it fails against current code, then confirm it passes after.
-**Acceptance Criteria**: A forced mid-operation failure leaves neither the bill deleted nor the ledger partially reverted; the admin sees an accurate error.
-**Status**: **Not started**
+**Problem**: Data corruption risk (student balance could silently diverge from reality).
+**Implementation**: Rewrote `_deleteBill` entirely around `FirebaseFirestore.instance.runTransaction(...)`. Firestore transactions can only `.get()` a known `DocumentReference`, not run a `.where()` query, so the three lookups that originally used queries to *find* which document to update (`student_fee_details` by `stuId`+`academicYear`; the ad-hoc ledger by `studentId`+`category`) now run first, outside the transaction, resolving to plain `DocumentReference`s (or `null` if nothing matched) — matching Firestore's own recommended pattern for this exact situation. The transaction itself then does all its `transaction.get()` reads first (bill doc not re-read since we don't need its prior value; `student_fee_details` ref, single ledger ref, and each component-fallback ledger ref, all conditionally), then all writes (bill soft-delete, `student_fee_details` update, ledger update(s)) — preserving every original branch (ad-hoc studentFeeItems vs termFeePayments vs expense bills; single-ledger-by-id vs ad-hoc-ledger-by-category vs component-loop fallback) exactly, just restructured into transaction-legal read-then-write order. The outer `catch` no longer swallows: a transaction failure now shows `'Failed to delete bill; nothing was changed: $e'` instead of a false "reverted" success message. Also removed ~15 `print()` debug statements that were interleaved through the original logic (not extra scope — the lines containing them were being rewritten regardless as part of restructuring into the transaction).
+**Files Changed**: `lib/presentation/finance/screens/bill_management_screen.dart` (one method, `_deleteBill`, ~290 lines before → ~265 after).
+**Dependencies**: None for this fix. GAP-018 (refunds) still isn't designed — deferred, since building a correct atomic reversal here didn't require also designing refunds, and doing both at once would have widened this task's scope.
+**Database Changes**: None (existing schema; the transaction reads/writes the same fields the original code did).
+**Security Impact**: None directly.
+**Testing Required**: No Dart/Flutter toolchain was available in this session. Verified: brace/paren structural balance; a full line-by-line re-read of the new method confirming every original branch and field name is preserved; that `Transaction.get()`/`transaction.update()` calls follow Firestore's read-before-write rule (all `.get()` calls happen before any `.update()` call inside the transaction closure); and that the bare (non-generic) `DocumentReference`/`DocumentSnapshot` typing used throughout matches this file's existing convention (no `.withConverter()` used anywhere else in it either). **Not verified**: actual compilation, and the regression test described in `TESTING_STRATEGY.md` item 6 (force the reversal step to fail mid-transaction and confirm a real Firestore emulator shows full rollback) — recommend writing and running that test before trusting this fix in production, since transaction semantics are exactly the kind of thing that should be verified against a real Firestore instance, not just read by eye.
+**Acceptance Criteria**: A forced mid-operation failure leaves neither the bill deleted nor any ledger partially reverted; the admin sees an accurate error. **Not live-verified.**
+**Status**: **Done, pending compiler and live/emulator verification**
 
 ---
 

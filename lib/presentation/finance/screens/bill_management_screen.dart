@@ -1778,291 +1778,269 @@ class _BillManagementScreenState extends ConsumerState<BillManagementScreen> {
     );
   }
 
+  /// Deletes a bill and reverts its effect on the student's fee balance as a
+  /// single atomic Firestore transaction. Previously these were separate,
+  /// non-transactional writes with the ledger-reversion step wrapped in a
+  /// try/catch that only logged failures -- a transient error there left the
+  /// bill deleted but the student's balance silently wrong, while the UI
+  /// still reported success. Now, if any part of this fails, nothing
+  /// commits (including the bill's own soft-delete), and the admin sees a
+  /// real error instead of a false "reverted" message.
+  ///
+  /// Firestore transactions can only `.get()` a known DocumentReference, not
+  /// run a `.where()` query, so the lookups that resolve *which* documents
+  /// need updating (student_fee_details by stuId+academicYear, the ad-hoc
+  /// ledger by studentId+category) run first, outside the transaction; the
+  /// actual read-modify-write of whatever they resolve to happens inside it.
   Future<void> _deleteBill(
       Map<String, dynamic> bill, String reason, String billType) async {
     if (_schoolId == null) return;
-    try {
-      final isRevenue = billType == 'Revenue';
-      final docId = bill['docId']?.toString() ?? '';
 
-      if (docId.isEmpty) return;
+    final isRevenue = billType == 'Revenue';
+    final docId = bill['docId']?.toString() ?? '';
+    if (docId.isEmpty) return;
 
-      // Soft-delete the bill
-      if (isRevenue) {
-        // For revenue bills, delete from termFeePayments or studentFeeItems
-        final isAdHoc = bill['isAdHoc'] == true;
-        if (isAdHoc) {
-          await FirebaseFirestore.instance
-              .collection('schools')
-              .doc(_schoolId)
-              .collection('studentFeeItems')
-              .doc(docId)
-              .update({
-            'isActive': false,
-            'deletionReason': reason,
-            'deletedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        } else {
-          await FirebaseFirestore.instance
-              .collection('schools')
-              .doc(_schoolId)
-              .collection('termFeePayments')
-              .doc(docId)
-              .update({
-            'isDeleted': true,
-            'deletionReason': reason,
-            'deletedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        }
-      } else {
-        // For expense bills
-        await FirebaseFirestore.instance
+    final isAdHoc = bill['isAdHoc'] == true;
+    final studentId = (bill['studentId'] ?? '').toString();
+    final amount = (bill['amount'] as num?)?.toDouble() ?? 0.0;
+    final academicYear = (bill['academicYear'] ?? '').toString();
+
+    final DocumentReference billRef = isRevenue
+        ? FirebaseFirestore.instance
+            .collection('schools')
+            .doc(_schoolId)
+            .collection(isAdHoc ? 'studentFeeItems' : 'termFeePayments')
+            .doc(docId)
+        : FirebaseFirestore.instance
             .collection('schools')
             .doc(_schoolId)
             .collection('bills')
-            .doc(docId)
-            .update({
-          'isDeleted': true,
-          'isBillDeleted': true,
-          'deletionReason': reason,
-          'deletedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
+            .doc(docId);
 
-      // Revert fee amount for revenue bills
-      if (isRevenue) {
-        final studentId = (bill['studentId'] ?? '').toString();
-        final amount = (bill['amount'] as num?)?.toDouble() ?? 0.0;
-        final academicYear = (bill['academicYear'] ?? '').toString();
+    // Pre-resolve any references that require a query.
+    DocumentReference? studentDetailsRef;
+    DocumentReference? ledgerRef;
+    final List<MapEntry<DocumentReference, double>> componentLedgerRefs = [];
 
-        print('[Delete Bill] isRevenue: true, studentId: $studentId, amount: $amount, academicYear: $academicYear');
+    try {
+      if (isRevenue && studentId.isNotEmpty && amount > 0) {
+        if (academicYear.isNotEmpty) {
+          final studentDetailsQuery = await FirebaseFirestore.instance
+              .collection('schools')
+              .doc(_schoolId)
+              .collection('student_fee_details')
+              .where('stuId', isEqualTo: int.tryParse(studentId) ?? 0)
+              .where('academicYear', isEqualTo: academicYear)
+              .limit(1)
+              .get();
+          if (studentDetailsQuery.docs.isNotEmpty) {
+            studentDetailsRef = studentDetailsQuery.docs.first.reference;
+          }
+        }
 
-        if (studentId.isNotEmpty && amount > 0) {
-          try {
-            final isAdHoc = bill['isAdHoc'] == true;
-            print('[Delete Bill] isAdHoc: $isAdHoc');
-            
-            // Update student_fee_details collection for arrears
-            if (academicYear.isNotEmpty) {
-              print('[Delete Bill] Updating student_fee_details collection');
-              final studentDetailsQuery = await FirebaseFirestore.instance
-                  .collection('schools')
-                  .doc(_schoolId)
-                  .collection('student_fee_details')
-                  .where('stuId', isEqualTo: int.tryParse(studentId) ?? 0)
-                  .where('academicYear', isEqualTo: academicYear)
-                  .limit(1)
-                  .get();
-
-              if (studentDetailsQuery.docs.isNotEmpty) {
-                final studentDetailsDoc = studentDetailsQuery.docs.first;
-                final studentDetailsData = studentDetailsDoc.data();
-                print('[Delete Bill] Found student_fee_details record');
-
-                // Get current paid amounts
-                final currentPaidTuition = (studentDetailsData['stuPaidTutionFees'] as num?)?.toDouble() ?? 0;
-                final currentPaidExam = (studentDetailsData['stuPaidExamFees'] as num?)?.toDouble() ?? 0;
-                final currentPaidVan = (studentDetailsData['studPaidVanFees'] as num?)?.toDouble() ?? 0;
-                final currentPaidAdmission = (studentDetailsData['stuPaidAdmissionFees'] as num?)?.toDouble() ?? 0;
-
-                // Check bill components to determine which fee types were paid
-                final components = bill['components'] as List?;
-                Map<String, double> feeTypeAmounts = {
-                  'tuition': 0.0,
-                  'exam': 0.0,
-                  'van': 0.0,
-                  'admission': 0.0,
-                };
-
-                if (components != null && components.isNotEmpty) {
-                  for (final comp in components) {
-                    final compData = comp as Map<String, dynamic>;
-                    final compAmount = (compData['amount'] as num?)?.toDouble() ?? 0;
-                    final compName = (compData['termName'] ?? compData['itemName'] ?? '').toString().toLowerCase();
-                    
-                    if (compName.contains('tution') || compName.contains('tuition')) {
-                      feeTypeAmounts['tuition'] = feeTypeAmounts['tuition']! + compAmount;
-                    } else if (compName.contains('exam')) {
-                      feeTypeAmounts['exam'] = feeTypeAmounts['exam']! + compAmount;
-                    } else if (compName.contains('van')) {
-                      feeTypeAmounts['van'] = feeTypeAmounts['van']! + compAmount;
-                    } else if (compName.contains('admission')) {
-                      feeTypeAmounts['admission'] = feeTypeAmounts['admission']! + compAmount;
-                    } else {
-                      // Default to tuition if unknown
-                      feeTypeAmounts['tuition'] = feeTypeAmounts['tuition']! + compAmount;
-                    }
-                  }
-                } else {
-                  // If no components, default to tuition
-                  feeTypeAmounts['tuition'] = amount;
-                }
-
-                // Build update map with only the fee types that were actually paid
-                Map<String, dynamic> updates = {};
-                if (feeTypeAmounts['tuition']! > 0) {
-                  updates['stuPaidTutionFees'] = currentPaidTuition - feeTypeAmounts['tuition']!;
-                }
-                if (feeTypeAmounts['exam']! > 0) {
-                  updates['stuPaidExamFees'] = currentPaidExam - feeTypeAmounts['exam']!;
-                }
-                if (feeTypeAmounts['van']! > 0) {
-                  updates['studPaidVanFees'] = currentPaidVan - feeTypeAmounts['van']!;
-                }
-                if (feeTypeAmounts['admission']! > 0) {
-                  updates['stuPaidAdmissionFees'] = currentPaidAdmission - feeTypeAmounts['admission']!;
-                }
-                updates['updatedAt'] = FieldValue.serverTimestamp();
-
-                await studentDetailsDoc.reference.update(updates);
-                print('[Delete Bill] student_fee_details updated with amounts: $feeTypeAmounts');
-              } else {
-                print('[Delete Bill] No student_fee_details record found');
-              }
+        if (isAdHoc) {
+          final category = (bill['category'] ?? '').toString();
+          if (category.isNotEmpty) {
+            final ledgerQuery = await FirebaseFirestore.instance
+                .collection('schools')
+                .doc(_schoolId)
+                .collection('studentFeeLedgers')
+                .where('studentId', isEqualTo: studentId)
+                .where('category', isEqualTo: category)
+                .limit(1)
+                .get();
+            if (ledgerQuery.docs.isNotEmpty) {
+              ledgerRef = ledgerQuery.docs.first.reference;
             }
-            
-            if (isAdHoc) {
-              // For ad-hoc payments, find ledger by studentId and category
-              final category = (bill['category'] ?? '').toString();
-              print('[Delete Bill] category: $category');
-              if (category.isNotEmpty) {
-                final ledgerQuery = await FirebaseFirestore.instance
-                    .collection('schools')
-                    .doc(_schoolId)
-                    .collection('studentFeeLedgers')
-                    .where('studentId', isEqualTo: studentId)
-                    .where('category', isEqualTo: category)
-                    .limit(1)
-                    .get();
-
-                print('[Delete Bill] Found ${ledgerQuery.docs.length} ledgers for ad-hoc payment');
-
-                if (ledgerQuery.docs.isNotEmpty) {
-                  final ledgerDoc = ledgerQuery.docs.first;
-                  final ledgerData = ledgerDoc.data();
-                  final currentPaid =
-                      (ledgerData['totalPaid'] as num?)?.toDouble() ?? 0;
-                  final currentBalance =
-                      (ledgerData['totalBalance'] as num?)?.toDouble() ?? 0;
-
-                  print('[Delete Bill] currentPaid: $currentPaid, currentBalance: $currentBalance');
-                  print('[Delete Bill] Updating to: paid=${currentPaid - amount}, balance=${currentBalance + amount}');
-
-                  await ledgerDoc.reference.update({
-                    'totalPaid': currentPaid - amount,
-                    'totalBalance': currentBalance + amount,
-                    'updatedAt': FieldValue.serverTimestamp(),
-                  });
-                  print('[Delete Bill] Ledger updated successfully');
-                } else {
-                  print('[Delete Bill] No ledger found for ad-hoc payment');
-                }
-              } else {
-                print('[Delete Bill] Category is empty for ad-hoc payment');
-              }
-            } else {
-              // For regular term payments, find ledger by ledgerId
-              final ledgerId = (bill['ledgerId'] ?? '').toString();
-              print('[Delete Bill] ledgerId: $ledgerId');
-              
-              if (ledgerId.isNotEmpty) {
-                final ledgerDoc = await FirebaseFirestore.instance
-                    .collection('schools')
-                    .doc(_schoolId)
-                    .collection('studentFeeLedgers')
-                    .doc(ledgerId)
-                    .get();
-
-                print('[Delete Bill] Ledger exists: ${ledgerDoc.exists}');
-
-                if (ledgerDoc.exists) {
-                  final ledgerData = ledgerDoc.data()!;
-                  final currentPaid =
-                      (ledgerData['totalPaid'] as num?)?.toDouble() ?? 0;
-                  final currentBalance =
-                      (ledgerData['totalBalance'] as num?)?.toDouble() ?? 0;
-
-                  print('[Delete Bill] currentPaid: $currentPaid, currentBalance: $currentBalance');
-                  print('[Delete Bill] Updating to: paid=${currentPaid - amount}, balance=${currentBalance + amount}');
-
-                  await ledgerDoc.reference.update({
-                    'totalPaid': currentPaid - amount,
-                    'totalBalance': currentBalance + amount,
-                    'updatedAt': FieldValue.serverTimestamp(),
-                  });
-                  print('[Delete Bill] Ledger updated successfully');
-                } else {
-                  print('[Delete Bill] Ledger not found with ledgerId: $ledgerId');
-                }
-              } else {
-                print('[Delete Bill] ledgerId is empty, trying to find by components');
-                // Try to find ledger by components if ledgerId is missing
-                final components = bill['components'] as List?;
-                if (components != null && components.isNotEmpty) {
-                  print('[Delete Bill] Found ${components.length} components');
-                  for (final comp in components) {
-                    final compData = comp as Map<String, dynamic>;
-                    final compLedgerId = (compData['ledgerId'] ?? '').toString();
-                    if (compLedgerId.isNotEmpty) {
-                      final compAmount = (compData['amount'] as num?)?.toDouble() ?? 0;
-                      print('[Delete Bill] Updating component ledger: $compLedgerId, amount: $compAmount');
-                      
-                      final compLedgerDoc = await FirebaseFirestore.instance
-                          .collection('schools')
-                          .doc(_schoolId)
-                          .collection('studentFeeLedgers')
-                          .doc(compLedgerId)
-                          .get();
-
-                      if (compLedgerDoc.exists) {
-                        final compLedgerData = compLedgerDoc.data()!;
-                        final compCurrentPaid =
-                            (compLedgerData['totalPaid'] as num?)?.toDouble() ?? 0;
-                        final compCurrentBalance =
-                            (compLedgerData['totalBalance'] as num?)?.toDouble() ?? 0;
-
-                        await compLedgerDoc.reference.update({
-                          'totalPaid': compCurrentPaid - compAmount,
-                          'totalBalance': compCurrentBalance + compAmount,
-                          'updatedAt': FieldValue.serverTimestamp(),
-                        });
-                        print('[Delete Bill] Component ledger updated successfully');
-                      }
-                    }
-                  }
+          }
+        } else {
+          final ledgerId = (bill['ledgerId'] ?? '').toString();
+          if (ledgerId.isNotEmpty) {
+            ledgerRef = FirebaseFirestore.instance
+                .collection('schools')
+                .doc(_schoolId)
+                .collection('studentFeeLedgers')
+                .doc(ledgerId);
+          } else {
+            final components = bill['components'] as List?;
+            if (components != null && components.isNotEmpty) {
+              for (final comp in components) {
+                final compData = comp as Map<String, dynamic>;
+                final compLedgerId = (compData['ledgerId'] ?? '').toString();
+                final compAmount = (compData['amount'] as num?)?.toDouble() ?? 0;
+                if (compLedgerId.isNotEmpty) {
+                  componentLedgerRefs.add(MapEntry(
+                    FirebaseFirestore.instance
+                        .collection('schools')
+                        .doc(_schoolId)
+                        .collection('studentFeeLedgers')
+                        .doc(compLedgerId),
+                    compAmount,
+                  ));
                 }
               }
             }
-          } catch (e) {
-            print('[Delete Bill] Error reverting ledger: $e');
           }
         }
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error preparing bill deletion: $e'),
+            backgroundColor: Colors.red));
+      }
+      return;
+    }
+
+    // Fee-type breakdown for student_fee_details, computed from the bill's
+    // own (already in-memory) components -- no extra read needed.
+    final Map<String, double> feeTypeAmounts = {
+      'tuition': 0.0,
+      'exam': 0.0,
+      'van': 0.0,
+      'admission': 0.0,
+    };
+    if (studentDetailsRef != null) {
+      final components = bill['components'] as List?;
+      if (components != null && components.isNotEmpty) {
+        for (final comp in components) {
+          final compData = comp as Map<String, dynamic>;
+          final compAmount = (compData['amount'] as num?)?.toDouble() ?? 0;
+          final compName =
+              (compData['termName'] ?? compData['itemName'] ?? '').toString().toLowerCase();
+          if (compName.contains('tution') || compName.contains('tuition')) {
+            feeTypeAmounts['tuition'] = feeTypeAmounts['tuition']! + compAmount;
+          } else if (compName.contains('exam')) {
+            feeTypeAmounts['exam'] = feeTypeAmounts['exam']! + compAmount;
+          } else if (compName.contains('van')) {
+            feeTypeAmounts['van'] = feeTypeAmounts['van']! + compAmount;
+          } else if (compName.contains('admission')) {
+            feeTypeAmounts['admission'] = feeTypeAmounts['admission']! + compAmount;
+          } else {
+            feeTypeAmounts['tuition'] = feeTypeAmounts['tuition']! + compAmount;
+          }
+        }
+      } else {
+        feeTypeAmounts['tuition'] = amount;
+      }
+    }
+
+    try {
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        // ---- ALL READS FIRST (Firestore transaction requirement) ----
+        final studentDetailsSnap = studentDetailsRef != null
+            ? await transaction.get(studentDetailsRef)
+            : null;
+        final ledgerSnap =
+            ledgerRef != null ? await transaction.get(ledgerRef) : null;
+        final componentLedgerSnaps = <DocumentSnapshot>[];
+        for (final entry in componentLedgerRefs) {
+          componentLedgerSnaps.add(await transaction.get(entry.key));
+        }
+
+        // ---- THEN ALL WRITES ----
+        if (isRevenue) {
+          if (isAdHoc) {
+            transaction.update(billRef, {
+              'isActive': false,
+              'deletionReason': reason,
+              'deletedAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          } else {
+            transaction.update(billRef, {
+              'isDeleted': true,
+              'deletionReason': reason,
+              'deletedAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          }
+        } else {
+          transaction.update(billRef, {
+            'isDeleted': true,
+            'isBillDeleted': true,
+            'deletionReason': reason,
+            'deletedAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        if (studentDetailsSnap != null && studentDetailsSnap.exists) {
+          final data = studentDetailsSnap.data() as Map<String, dynamic>;
+          final currentPaidTuition = (data['stuPaidTutionFees'] as num?)?.toDouble() ?? 0;
+          final currentPaidExam = (data['stuPaidExamFees'] as num?)?.toDouble() ?? 0;
+          final currentPaidVan = (data['studPaidVanFees'] as num?)?.toDouble() ?? 0;
+          final currentPaidAdmission = (data['stuPaidAdmissionFees'] as num?)?.toDouble() ?? 0;
+
+          final updates = <String, dynamic>{};
+          if (feeTypeAmounts['tuition']! > 0) {
+            updates['stuPaidTutionFees'] = currentPaidTuition - feeTypeAmounts['tuition']!;
+          }
+          if (feeTypeAmounts['exam']! > 0) {
+            updates['stuPaidExamFees'] = currentPaidExam - feeTypeAmounts['exam']!;
+          }
+          if (feeTypeAmounts['van']! > 0) {
+            updates['studPaidVanFees'] = currentPaidVan - feeTypeAmounts['van']!;
+          }
+          if (feeTypeAmounts['admission']! > 0) {
+            updates['stuPaidAdmissionFees'] = currentPaidAdmission - feeTypeAmounts['admission']!;
+          }
+          updates['updatedAt'] = FieldValue.serverTimestamp();
+          transaction.update(studentDetailsRef!, updates);
+        }
+
+        if (ledgerRef != null && ledgerSnap != null && ledgerSnap.exists) {
+          final data = ledgerSnap.data() as Map<String, dynamic>;
+          final currentPaid = (data['totalPaid'] as num?)?.toDouble() ?? 0;
+          final currentBalance = (data['totalBalance'] as num?)?.toDouble() ?? 0;
+          transaction.update(ledgerRef, {
+            'totalPaid': currentPaid - amount,
+            'totalBalance': currentBalance + amount,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        for (var i = 0; i < componentLedgerRefs.length; i++) {
+          final snap = componentLedgerSnaps[i];
+          if (!snap.exists) continue;
+          final data = snap.data() as Map<String, dynamic>;
+          final compAmount = componentLedgerRefs[i].value;
+          final currentPaid = (data['totalPaid'] as num?)?.toDouble() ?? 0;
+          final currentBalance = (data['totalBalance'] as num?)?.toDouble() ?? 0;
+          transaction.update(componentLedgerRefs[i].key, {
+            'totalPaid': currentPaid - compAmount,
+            'totalBalance': currentBalance + compAmount,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      });
 
       _fetchBills();
-      // Trigger fee data refresh across screens
       triggerFeeRefresh(ref);
-      
+
       if (mounted) {
-        final amount = isRevenue
+        final displayAmount = isRevenue
             ? (bill['amount'] as num?)?.toDouble() ?? 0
             : (bill['expenseAmount'] as num?)?.toDouble() ??
                 (bill['amount'] as num?)?.toDouble() ??
                 0;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(isRevenue
-              ? 'Bill deleted & Rs.${amount.toStringAsFixed(0)} reverted to student balance'
+              ? 'Bill deleted & Rs.${displayAmount.toStringAsFixed(0)} reverted to student balance'
               : 'Expense bill deleted'),
           backgroundColor: _accentGreen,
         ));
       }
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      // Transaction failed atomically: nothing committed, including the
+      // bill's own soft-delete. Surface the real error rather than the old
+      // behavior (swallow the ledger-reversion error and still claim success).
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to delete bill; nothing was changed: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
     }
   }
 
