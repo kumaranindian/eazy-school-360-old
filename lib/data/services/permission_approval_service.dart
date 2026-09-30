@@ -3,6 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Service to handle permission request approval workflows with atomic transactions
 /// Replaces Cloud Functions - all logic runs client-side with Firestore rules for security
+///
+/// NOT CURRENTLY WIRED TO ANY SCREEN — see the equivalent warning on
+/// LeaveApprovalService (leave_approval_service.dart). The live admin flow
+/// (permission_approval_screen.dart -> PermissionRequestRepository.processPermissionRequest)
+/// only updates the permission document's status and relies on the
+/// onPermissionStatusChange Cloud Function trigger for usage accounting.
 class PermissionApprovalService {
   final FirebaseFirestore _firestore;
 

@@ -3,6 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Service to handle leave approval workflows with atomic transactions
 /// Replaces Cloud Functions - all logic runs client-side with Firestore rules for security
+///
+/// NOT CURRENTLY WIRED TO ANY SCREEN — the live admin approval flow
+/// (leave_approval_screen.dart -> LeaveApplicationRepository.approveLeaveApplication)
+/// only updates the leave document's status and relies on the
+/// onLeaveStatusChange Cloud Function trigger to move the balance, matching
+/// firebase/firestore.rules ("leaveBalances: allow write: if false"). This
+/// class's direct client write to leaveBalances would be rejected by that
+/// rule today — but if the rule is ever loosened and this class is wired up,
+/// its balance mutation would double up with the same mutation the
+/// onLeaveStatusChange trigger performs on the same status change. Don't use
+/// this class unless you also remove/guard against that trigger.
 class LeaveApprovalService {
   final FirebaseFirestore _firestore;
 
