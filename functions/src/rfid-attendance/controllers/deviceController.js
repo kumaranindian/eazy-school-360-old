@@ -81,15 +81,18 @@ const registerDevice = async (req, res) => {
       });
     }
 
-    // Generate secure device key
+    // Generate secure device key; only its hash is ever stored, so a read of
+    // the devices collection (export, backup, misconfigured rule) can't leak
+    // a usable credential.
     const deviceKey = generateDeviceKey();
+    const deviceKeyHash = crypto.createHash('sha256').update(deviceKey).digest('hex');
 
     // Register device
     const device = {
       deviceId,
       deviceName,
       schoolId,
-      deviceKey,
+      deviceKeyHash,
       isActive: true,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),

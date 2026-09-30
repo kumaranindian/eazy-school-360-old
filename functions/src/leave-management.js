@@ -238,6 +238,15 @@ exports.onLeaveStatusChange = functions.firestore
       return null;
     }
 
+    // IDEMPOTENCY: skip if this exact status change was already processed.
+    // Cloud Functions triggers are at-least-once, so the same event can be
+    // redelivered after a transient failure; without this guard a retry
+    // would double-apply the balance mutation below.
+    if (afterData.processedAt) {
+      console.log(`⏭️ [LEAVE_TRIGGER] Leave ${leaveId} already processed at ${afterData.processedAt}, skipping`);
+      return null;
+    }
+
     const oldStatus = beforeData.status;
     const newStatus = afterData.status;
     const staffId = afterData.staffId;
@@ -254,10 +263,19 @@ exports.onLeaveStatusChange = functions.firestore
         .doc(schoolId)
         .collection('leaveBalances')
         .doc(balanceId);
+      const leaveRef = change.after.ref;
 
       await db.runTransaction(async (transaction) => {
+        // Re-check inside the transaction: guards against a concurrent/retried
+        // invocation that passed the outer check before this one committed.
+        const currentLeaveDoc = await transaction.get(leaveRef);
+        if (currentLeaveDoc.exists && currentLeaveDoc.data().processedAt) {
+          console.log(`⏭️ [LEAVE_TRIGGER] Leave ${leaveId} processed concurrently, skipping`);
+          return;
+        }
+
         const balanceDoc = await transaction.get(balanceRef);
-        
+
         if (!balanceDoc.exists) {
           console.error(`❌ [LEAVE_TRIGGER] Balance not found: ${balanceId}`);
           return;
@@ -294,6 +312,12 @@ exports.onLeaveStatusChange = functions.firestore
         }
 
         transaction.update(balanceRef, updates);
+
+        // Mark this status change processed, in the same transaction as the
+        // balance mutation, so a redelivered/retried trigger is a no-op.
+        transaction.update(leaveRef, {
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
 
         // Create mutation record for audit trail
         const mutationRef = db
@@ -333,6 +357,11 @@ exports.onLeaveStatusChange = functions.firestore
 /**
  * Trigger when a new leave application is created
  * Reserves balance (marks as pending)
+ *
+ * NOT EXPORTED FROM functions/index.js — DO NOT wire this up.
+ * handleLeaveApplicationCreate (this file, above) already does balance
+ * reservation for the same onCreate path. Exporting both would double-reserve
+ * the balance on every new leave application.
  */
 exports.onLeaveCreate = functions.firestore
   .document('schools/{schoolId}/leaves/{leaveId}')
@@ -820,6 +849,13 @@ exports.onPermissionStatusChange = functions.firestore
       return null;
     }
 
+    // IDEMPOTENCY: skip if this exact status change was already processed
+    // (see onLeaveStatusChange above for why this guard is needed).
+    if (afterData.processedAt) {
+      console.log(`⏭️ [PERMISSION_TRIGGER] Permission ${permissionId} already processed at ${afterData.processedAt}, skipping`);
+      return null;
+    }
+
     const oldStatus = beforeData.status;
     const newStatus = afterData.status;
     const staffId = afterData.staffId;
@@ -841,10 +877,18 @@ exports.onPermissionStatusChange = functions.firestore
         .doc(schoolId)
         .collection('monthlyPermissionUsage')
         .doc(usageId);
+      const permissionRef = change.after.ref;
 
       await db.runTransaction(async (transaction) => {
+        // Re-check inside the transaction against a concurrent/retried invocation.
+        const currentPermissionDoc = await transaction.get(permissionRef);
+        if (currentPermissionDoc.exists && currentPermissionDoc.data().processedAt) {
+          console.log(`⏭️ [PERMISSION_TRIGGER] Permission ${permissionId} processed concurrently, skipping`);
+          return;
+        }
+
         const usageDoc = await transaction.get(usageRef);
-        
+
         if (!usageDoc.exists) {
           console.error(`❌ [PERMISSION_TRIGGER] Usage document not found: ${usageId}`);
           return;
@@ -876,6 +920,12 @@ exports.onPermissionStatusChange = functions.firestore
         }
 
         transaction.update(usageRef, updates);
+
+        // Mark this status change processed, in the same transaction as the
+        // usage mutation, so a redelivered/retried trigger is a no-op.
+        transaction.update(permissionRef, {
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
 
         // Create mutation record for audit trail
         const mutationRef = db

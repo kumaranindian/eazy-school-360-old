@@ -20,22 +20,29 @@ const db = admin.firestore();
  * Use with caution - this is for testing/demo purposes only
  */
 exports.updateAllStudentPhoneNumbers = functions.https.onCall(async (data, context) => {
-  // Authentication temporarily disabled for testing purposes
-  // if (!context.auth) {
-  //   throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
-  // }
-  
-  // Admin role check temporarily disabled for testing purposes
-  // const userDoc = await db.collection('users').doc(context.auth.uid).get();
-  // if (!userDoc.exists || userDoc.data().role !== 'admin') {
-  //   throw new functions.https.HttpsError('permission-denied', 'Only admins can run this function');
-  // }
-  
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
   const schoolId = data.schoolId;
   const newPhoneNumber = data.phoneNumber || '+918508196981';
-  
+
   if (!schoolId) {
     throw new functions.https.HttpsError('invalid-argument', 'schoolId is required');
+  }
+
+  const userDoc = await db.collection('users').doc(context.auth.uid).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'User document not found');
+  }
+  const userData = userDoc.data();
+  const isAdmin = ['ADMIN', 'admin', 'TENANT_ADMIN', 'tenant_admin', 'SUPER_ADMIN', 'super_admin'].includes(userData.role);
+  if (!isAdmin) {
+    throw new functions.https.HttpsError('permission-denied', 'Only admins can run this function');
+  }
+  const isSuperAdmin = ['SUPER_ADMIN', 'super_admin'].includes(userData.role);
+  if (!isSuperAdmin && userData.schoolId !== schoolId) {
+    throw new functions.https.HttpsError('permission-denied', 'Cannot run this function for another school');
   }
   
   // Validate phone number format
@@ -190,7 +197,7 @@ exports.previewPhoneNumberUpdate = functions.https.onCall(async (data, context) 
     const preview = [];
     
     // Preview students that would be updated
-    for (const doc of studentsSnapshot.docs.take(10)) { // Show first 10 only
+    for (const doc of studentsSnapshot.docs.slice(0, 10)) { // Show first 10 only
       const studentData = doc.data();
       const currentPhone = studentData['phoneNumber'];
       const studentName = studentData['studentName'] || studentData['name'] || 'Unknown';
@@ -249,15 +256,20 @@ exports.mapRfidToStaff = functions.https.onCall(async (data, context) => {
   
   const userData = userDoc.data();
   const isAdmin = ['ADMIN', 'admin', 'TENANT_ADMIN', 'tenant_admin', 'SUPER_ADMIN', 'super_admin'].includes(userData.role);
-  
+
   if (!isAdmin) {
     throw new functions.https.HttpsError('permission-denied', 'Only admins can run this function');
   }
-  
+
   const { schoolId, rfidTag, staffId, studentId, cardType, staffName } = data;
-  
+
   if (!schoolId || !rfidTag) {
     throw new functions.https.HttpsError('invalid-argument', 'schoolId and rfidTag are required');
+  }
+
+  const isSuperAdmin = ['SUPER_ADMIN', 'super_admin'].includes(userData.role);
+  if (!isSuperAdmin && userData.schoolId !== schoolId) {
+    throw new functions.https.HttpsError('permission-denied', 'Cannot manage RFID cards for another school');
   }
   
   if (!staffId && !studentId) {
@@ -361,17 +373,22 @@ exports.listRfidCards = functions.https.onCall(async (data, context) => {
   
   const userData = userDoc.data();
   const isAdmin = ['ADMIN', 'admin', 'TENANT_ADMIN', 'tenant_admin', 'SUPER_ADMIN', 'super_admin'].includes(userData.role);
-  
+
   if (!isAdmin) {
     throw new functions.https.HttpsError('permission-denied', 'Only admins can run this function');
   }
-  
+
   const { schoolId } = data;
-  
+
   if (!schoolId) {
     throw new functions.https.HttpsError('invalid-argument', 'schoolId is required');
   }
-  
+
+  const isSuperAdmin = ['SUPER_ADMIN', 'super_admin'].includes(userData.role);
+  if (!isSuperAdmin && userData.schoolId !== schoolId) {
+    throw new functions.https.HttpsError('permission-denied', 'Cannot list RFID cards for another school');
+  }
+
   try {
     // Get all RFID cards for the school
     const rfidCardsSnapshot = await db
@@ -460,15 +477,20 @@ exports.unmapRfidCard = functions.https.onCall(async (data, context) => {
   
   const userData = userDoc.data();
   const isAdmin = ['ADMIN', 'admin', 'TENANT_ADMIN', 'tenant_admin', 'SUPER_ADMIN', 'super_admin'].includes(userData.role);
-  
+
   if (!isAdmin) {
     throw new functions.https.HttpsError('permission-denied', 'Only admins can run this function');
   }
-  
+
   const { schoolId, rfidTag } = data;
-  
+
   if (!schoolId || !rfidTag) {
     throw new functions.https.HttpsError('invalid-argument', 'schoolId and rfidTag are required');
+  }
+
+  const isSuperAdmin = ['SUPER_ADMIN', 'super_admin'].includes(userData.role);
+  if (!isSuperAdmin && userData.schoolId !== schoolId) {
+    throw new functions.https.HttpsError('permission-denied', 'Cannot unmap RFID cards for another school');
   }
   
   try {

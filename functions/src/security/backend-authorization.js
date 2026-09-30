@@ -4,6 +4,15 @@ const functions = require('firebase-functions');
 /**
  * Backend Authorization Service
  * Enforces role-based access control for all Cloud Functions
+ *
+ * NOTE: as of this writing, no function exported from functions/index.js
+ * calls into this class — each callable/trigger implements its own inline
+ * auth check instead (see functions/src/leave-permission-management.js,
+ * functions/src/student-phone-update.js, etc.). Treat this module as a
+ * reference implementation, not as active protection, until it's actually
+ * wired into request handling. If you're adding a new sensitive function,
+ * either call BackendAuthorization.validateRequest here or replicate its
+ * schoolId-scoping check inline — don't assume this class is already doing it.
  */
 class BackendAuthorization {
   

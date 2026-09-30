@@ -17,6 +17,7 @@ const { registerDevice } = require('./controllers/deviceController');
 
 // Import middleware
 const { validateDeviceKey } = require('./middleware/deviceAuth');
+const { validateAdminAuth } = require('./middleware/adminAuth');
 const { validateRequest } = require('./middleware/validation');
 const { logger } = require('./utils/logger');
 
@@ -29,7 +30,9 @@ app.use(express.json());
 app.use(logger);
 
 // Routes
-app.post('/register-device', validateRequest, registerDevice);
+// register-device hands back a permanent device credential, so it requires an
+// authenticated admin of the target school (not the unauthenticated device itself).
+app.post('/register-device', validateRequest, validateAdminAuth, registerDevice);
 app.post('/register-rfid', validateRequest, validateDeviceKey, registerRfidCard);
 app.post('/unmap-rfid', validateRequest, validateDeviceKey, unmapRfidCard);
 app.post('/mark-attendance', validateRequest, validateDeviceKey, markAttendance);

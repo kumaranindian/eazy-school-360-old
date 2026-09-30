@@ -111,8 +111,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       state = AuthState.loading;
       print('🔐 [AUTH] Attempting sign in for email: $email');
-      print('🔐 [AUTH] Password length: ${password.length}');
-      print('🔐 [AUTH] Password entered: $password');
 
       // Firebase Authentication
       final credential = await _firebaseAuth.signInWithEmailAndPassword(

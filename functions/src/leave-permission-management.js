@@ -4,6 +4,20 @@ const admin = require('firebase-admin');
 const db = admin.firestore();
 
 /**
+ * Enforce tenant isolation for admin-role callables: SUPER_ADMIN may act on
+ * any school, but ADMIN/TENANT_ADMIN must be scoped to their own schoolId.
+ */
+function assertAdminSchoolAccess(userData, schoolId) {
+  const isSuperAdmin = ['SUPER_ADMIN', 'super_admin'].includes(userData.role);
+  if (!isSuperAdmin && userData.schoolId !== schoolId) {
+    throw new functions.https.HttpsError(
+      'permission-denied',
+      'Cannot perform this action for another school'
+    );
+  }
+}
+
+/**
  * Apply for Leave
  * Staff can apply for leave based on available balance
  */
@@ -168,6 +182,7 @@ exports.approveLeave = functions.https.onCall(async (data, context) => {
     if (!isAdmin) {
       throw new functions.https.HttpsError('permission-denied', 'Only admins can approve leaves');
     }
+    assertAdminSchoolAccess(userData, schoolId);
 
     // Get leave application
     const leaveRef = db.collection('schools').doc(schoolId).collection('leaves').doc(leaveId);
@@ -268,6 +283,7 @@ exports.rejectLeave = functions.https.onCall(async (data, context) => {
     if (!isAdmin) {
       throw new functions.https.HttpsError('permission-denied', 'Only admins can reject leaves');
     }
+    assertAdminSchoolAccess(userData, schoolId);
 
     // Get leave application
     const leaveRef = db.collection('schools').doc(schoolId).collection('leaves').doc(leaveId);
@@ -548,6 +564,7 @@ exports.approvePermission = functions.https.onCall(async (data, context) => {
     if (!isAdmin) {
       throw new functions.https.HttpsError('permission-denied', 'Only admins can approve permissions');
     }
+    assertAdminSchoolAccess(userData, schoolId);
 
     // Get permission application
     const permissionRef = db.collection('schools').doc(schoolId).collection('permissions').doc(permissionId);
@@ -648,6 +665,7 @@ exports.rejectPermission = functions.https.onCall(async (data, context) => {
     if (!isAdmin) {
       throw new functions.https.HttpsError('permission-denied', 'Only admins can reject permissions');
     }
+    assertAdminSchoolAccess(userData, schoolId);
 
     // Get permission application
     const permissionRef = db.collection('schools').doc(schoolId).collection('permissions').doc(permissionId);
@@ -716,6 +734,7 @@ exports.adjustLeaveBalance = functions.https.onCall(async (data, context) => {
     if (!isAdmin) {
       throw new functions.https.HttpsError('permission-denied', 'Only admins can adjust balances');
     }
+    assertAdminSchoolAccess(userData, schoolId);
 
     const balanceRef = db
       .collection('schools')
@@ -877,6 +896,7 @@ exports.adjustPermissionBalance = functions.https.onCall(async (data, context) =
     if (!isAdmin) {
       throw new functions.https.HttpsError('permission-denied', 'Only admins can adjust balances');
     }
+    assertAdminSchoolAccess(userData, schoolId);
 
     const balanceRef = db
       .collection('schools')

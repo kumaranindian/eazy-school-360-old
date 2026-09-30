@@ -48,7 +48,6 @@ try {
   const phoneUpdate = require('./src/student-phone-update');
   exports.updateAllStudentPhoneNumbers = phoneUpdate.updateAllStudentPhoneNumbers;
   exports.previewPhoneNumberUpdate = phoneUpdate.previewPhoneNumberUpdate;
-  exports.revertStudentPhoneNumbers = phoneUpdate.revertStudentPhoneNumbers;
   exports.mapRfidToStaff = phoneUpdate.mapRfidToStaff;
   exports.listRfidCards = phoneUpdate.listRfidCards;
   exports.unmapRfidCard = phoneUpdate.unmapRfidCard;
@@ -97,9 +96,10 @@ try {
 // RFID card management functions removed - using existing mapRfidToStaff and unmapRfidCard instead
 
 // Export new TypeScript RFID Attendance & Leave functions
+// Note: dailyAttendanceFinalizer is intentionally not re-exported here — it's
+// handled by combined-daily-jobs.js's runDailyJobs instead (see that file).
 const {
   processRfidSwipe,
-  dailyAttendanceFinalizer,
   validateLeaveApplication,
   updateLeaveBalanceOnApproval,
   validatePermissionRequest,
@@ -107,7 +107,6 @@ const {
 } = require('./lib/index');
 
 exports.processRfidSwipe = processRfidSwipe;
-exports.dailyAttendanceFinalizer = dailyAttendanceFinalizer;
 exports.validateLeaveApplication = validateLeaveApplication;
 exports.updateLeaveBalanceOnApproval = updateLeaveBalanceOnApproval;
 exports.validatePermissionRequest = validatePermissionRequest;
@@ -173,32 +172,54 @@ exports.setCustomClaims = functions.https.onCall(async (data, context) => {
   }
 });
 
-// Cloud Function: Set custom claims for a user
+// Cloud Function: Set custom claims for a user (SUPER_ADMIN only, re-derived from
+// that target user's own Firestore document — never trusts a client-supplied claims object)
 exports.setUserClaims = functions.https.onCall(async (data, context) => {
-  // Check if request is made by an authenticated user
   if (!context.auth) {
     throw new functions.https.HttpsError('failed-precondition', 'The function must be called while authenticated.');
   }
 
-  const { uid, claims } = data;
+  const callerDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
+  if (!callerDoc.exists || callerDoc.data().role !== 'SUPER_ADMIN') {
+    throw new functions.https.HttpsError('permission-denied', 'Only super admins can set another user\'s claims.');
+  }
 
-  if (!uid || !claims) {
-    throw new functions.https.HttpsError('invalid-argument', 'The function must be called with uid and claims.');
+  const { uid } = data;
+
+  if (!uid) {
+    throw new functions.https.HttpsError('invalid-argument', 'The function must be called with a uid.');
   }
 
   try {
-    // Set custom claims for the user
+    // Re-derive claims from the target user's own Firestore doc, exactly like
+    // setCustomClaims does for self-service — a client-supplied `claims` object
+    // is never trusted, since that would let a caller grant arbitrary roles.
+    const targetDoc = await admin.firestore().collection('users').doc(uid).get();
+    if (!targetDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Target user document not found');
+    }
+
+    const targetData = targetDoc.data();
+    const role = targetData.role || 'STAFF';
+    const claims = {
+      ...roleToClaimFlags(role),
+      schoolId: targetData.schoolId || null,
+      isActive: targetData.isActive !== false
+    };
+
     await admin.auth().setCustomUserClaims(uid, claims);
-    
+
     // Force token refresh by updating a field in the user document
-    const userRef = admin.firestore().collection('users').doc(uid);
-    await userRef.update({
+    await targetDoc.ref.update({
       claimsUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
     return { message: 'Claims set successfully', uid, claims };
   } catch (error) {
     console.error('Error setting custom claims:', error);
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
     throw new functions.https.HttpsError('internal', 'Unable to set custom claims.');
   }
 });

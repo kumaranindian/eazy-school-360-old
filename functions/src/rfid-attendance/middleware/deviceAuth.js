@@ -1,5 +1,18 @@
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 const db = admin.firestore();
+
+const hashDeviceKey = (key) => crypto.createHash('sha256').update(key).digest('hex');
+
+/**
+ * Constant-time comparison of two hex-encoded hashes, to avoid leaking
+ * information about a valid key through response-time differences.
+ */
+const hashesMatch = (a, b) => {
+  const bufA = Buffer.from(a, 'hex');
+  const bufB = Buffer.from(b, 'hex');
+  return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+};
 
 /**
  * Validate device key from header
@@ -41,14 +54,27 @@ const validateDeviceKey = async (req, res, next) => {
         .doc(targetDeviceId)
         .get();
     } else {
-      // Find device by device key (for endpoints where deviceId is optional)
-      const devicesSnapshot = await db
+      // Find device by device key (for endpoints where deviceId is optional).
+      // New devices are keyed by deviceKeyHash only; fall back to the legacy
+      // plaintext deviceKey field for devices registered before this fix.
+      const incomingHash = hashDeviceKey(deviceKey);
+      let devicesSnapshot = await db
         .collection('schools')
         .doc(schoolId)
         .collection('devices')
-        .where('deviceKey', '==', deviceKey)
+        .where('deviceKeyHash', '==', incomingHash)
         .limit(1)
         .get();
+
+      if (devicesSnapshot.empty) {
+        devicesSnapshot = await db
+          .collection('schools')
+          .doc(schoolId)
+          .collection('devices')
+          .where('deviceKey', '==', deviceKey)
+          .limit(1)
+          .get();
+      }
 
       if (devicesSnapshot.empty) {
         return res.status(403).json({
@@ -72,8 +98,12 @@ const validateDeviceKey = async (req, res, next) => {
 
     const deviceData = deviceDoc.data();
 
-    // Validate device key
-    if (deviceData.deviceKey !== deviceKey) {
+    // Validate device key: compare hashes in constant time. Supports both the
+    // new deviceKeyHash-only storage and legacy plaintext deviceKey records.
+    const incomingHash = hashDeviceKey(deviceKey);
+    const storedHash = deviceData.deviceKeyHash || (deviceData.deviceKey ? hashDeviceKey(deviceData.deviceKey) : null);
+
+    if (!storedHash || !hashesMatch(incomingHash, storedHash)) {
       return res.status(403).json({
         success: false,
         error: 'FORBIDDEN',

@@ -50,109 +50,6 @@ class StaffManagementRepository {
 
   /// Get all staff for a specific school (Admin only)
   Stream<List<StaffProfile>> getSchoolStaff(String schoolId) {
-    print('🔍 [STAFF_REPO] Getting staff for schoolId: $schoolId');
-    print('🔍 [STAFF_REPO] Current user: ${_auth.currentUser?.uid}');
-    print('🔍 [STAFF_REPO] User authenticated: ${_auth.currentUser != null}');
-    print('🔍 [STAFF_REPO] Query path: schools/$schoolId/staff');
-    print('🔍 [STAFF_REPO] Attempting to query staff collection...');
-    
-    // First, let's check if the school document exists and log its data
-    _firestore.collection('schools').doc(schoolId).get().then((schoolDoc) {
-      print('🔍 [STAFF_REPO] School doc exists: ${schoolDoc.exists}');
-      if (schoolDoc.exists) {
-        print('🔍 [STAFF_REPO] School doc data: ${schoolDoc.data()}');
-      }
-    }).catchError((error) {
-      print('❌ [STAFF_REPO] Error checking school doc: $error');
-    });
-    
-    // Let's also check if we can access the users collection for the current user
-    if (_auth.currentUser != null) {
-      _firestore.collection('users').doc(_auth.currentUser!.uid).get().then((userDoc) {
-        print('🔍 [STAFF_REPO] Current user doc exists: ${userDoc.exists}');
-        if (userDoc.exists) {
-          final userData = userDoc.data()!;
-          print('🔍 [STAFF_REPO] Current user doc data: $userData');
-          print('🔍 [STAFF_REPO] User role: ${userData['role']}');
-          print('🔍 [STAFF_REPO] User schoolId: ${userData['schoolId']}');
-          print('🔍 [STAFF_REPO] User status: ${userData['status']}');
-          print('🔍 [STAFF_REPO] User isActive: ${userData['isActive']}');
-          
-          // Check if this user should have admin access
-          final role = userData['role'];
-          final userSchoolId = userData['schoolId'];
-          final isActive = userData['isActive'];
-          final status = userData['status'];
-          
-          print('🔍 [STAFF_REPO] Role check - is admin: ${role == 'ADMIN' || role == 'tenant_admin'}');
-          print('🔍 [STAFF_REPO] School match: ${userSchoolId == schoolId}');
-          print('🔍 [STAFF_REPO] Active status: $isActive');
-          print('🔍 [STAFF_REPO] User status: $status');
-          
-          // Fix the bug: if status is null but isActive is true, update the status field
-          if (status == null && isActive == true) {
-            print('🔧 [STAFF_REPO] FIXING BUG: User status is null but isActive is true. Updating status to ACTIVE...');
-            _firestore.collection('users').doc(_auth.currentUser!.uid).update({
-              'status': 'ACTIVE',
-              'updatedAt': FieldValue.serverTimestamp(),
-            }).then((_) {
-              print('✅ [STAFF_REPO] User status updated to ACTIVE successfully');
-              
-              // Force refresh the Firebase Auth token to pick up the updated user document
-              print('🔄 [STAFF_REPO] Refreshing Firebase Auth token...');
-              return _auth.currentUser!.getIdToken(true);
-            }).then((newToken) {
-              print('✅ [STAFF_REPO] Firebase Auth token refreshed successfully');
-              
-              // Wait a moment for the token to propagate, then retry the test document
-              Future.delayed(const Duration(seconds: 2), () {
-                print('🔄 [STAFF_REPO] Retrying test document creation after token refresh...');
-                _firestore.collection('schools').doc(schoolId).collection('staff').doc('test-doc-retry').set({
-                  'test': true,
-                  'retryAfterFix': true,
-                  'timestamp': FieldValue.serverTimestamp(),
-                }).then((_) {
-                  print('✅ [STAFF_REPO] RETRY SUCCESS: Test document created after fixing status!');
-                  // Clean up
-                  _firestore.collection('schools').doc(schoolId).collection('staff').doc('test-doc-retry').delete();
-                }).catchError((retryError) {
-                  print('❌ [STAFF_REPO] RETRY FAILED: Still getting permission error after fix: $retryError');
-                });
-              });
-            }).catchError((updateError) {
-              print('❌ [STAFF_REPO] Error updating user status or refreshing token: $updateError');
-            });
-          }
-        }
-      }).catchError((error) {
-        print('❌ [STAFF_REPO] Error checking current user doc: $error');
-      });
-    }
-    
-    // Try to create a test document to see if we have write permissions
-    _firestore.collection('schools').doc(schoolId).collection('staff').doc('test-doc').set({
-      'test': true,
-      'timestamp': FieldValue.serverTimestamp(),
-    }).then((_) {
-      print('✅ [STAFF_REPO] Test document created successfully');
-      // Clean up the test document
-      _firestore.collection('schools').doc(schoolId).collection('staff').doc('test-doc').delete();
-    }).catchError((error) {
-      print('❌ [STAFF_REPO] Error with test document: $error');
-      
-      // Let's also check what the Firebase rules are actually seeing
-      if (_auth.currentUser != null) {
-        print('🔍 [STAFF_REPO] Checking Firebase Auth token claims...');
-        _auth.currentUser!.getIdTokenResult().then((tokenResult) {
-          print('🔍 [STAFF_REPO] Token claims: ${tokenResult.claims}');
-          print('🔍 [STAFF_REPO] Token auth time: ${tokenResult.authTime}');
-          print('🔍 [STAFF_REPO] Token issued at: ${tokenResult.issuedAtTime}');
-        }).catchError((tokenError) {
-          print('❌ [STAFF_REPO] Error getting token: $tokenError');
-        });
-      }
-    });
-    
     return _firestore
         .collection('schools')
         .doc(schoolId)
@@ -161,22 +58,9 @@ class StaffManagementRepository {
         .limit(10000)
         .snapshots()
         .handleError((error) {
-          print('❌ [STAFF_REPO] Error getting staff: $error');
-          print('❌ [STAFF_REPO] Error type: ${error.runtimeType}');
-          if (error is FirebaseException) {
-            print('❌ [STAFF_REPO] Error code: ${error.code}');
-            print('❌ [STAFF_REPO] Error message: ${error.message}');
-          }
-          print('❌ [STAFF_REPO] User ID: ${_auth.currentUser?.uid}');
-          print('❌ [STAFF_REPO] User email: ${_auth.currentUser?.email}');
-          print('❌ [STAFF_REPO] School ID: $schoolId');
-          print('❌ [STAFF_REPO] Full error: $error');
+          print('❌ [STAFF_REPO] Error getting staff for school $schoolId: $error');
         })
         .map((snapshot) {
-          print('✅ [STAFF_REPO] Successfully got ${snapshot.docs.length} staff members');
-          for (var doc in snapshot.docs) {
-            print('📄 [STAFF_REPO] Staff doc: ${doc.id}');
-          }
           return snapshot.docs
               .map((doc) => StaffProfile.fromFirestore(doc))
               .toList();
@@ -926,9 +810,6 @@ class StaffManagementRepository {
     final phoneDigits = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
     final last5Digits = phoneDigits.length >= 5 ? phoneDigits.substring(phoneDigits.length - 5) : phoneDigits.padLeft(5, '0');
     final password = '$emailPart$last5Digits';
-    print('🔐 [PASSWORD GEN] Email: $email -> Email part: $emailPart');
-    print('🔐 [PASSWORD GEN] Phone: $phoneNumber -> Digits: $phoneDigits -> Last 5: $last5Digits');
-    print('🔐 [PASSWORD GEN] Generated password: $password (length: ${password.length})');
     return password;
   }
 
@@ -953,8 +834,6 @@ class StaffManagementRepository {
       print('📧 [STAFF_REPO] User can now set their own password via email link');
     } catch (e) {
       print('❌ [STAFF_REPO] Failed to send password reset email to $email: $e');
-      // Fallback: just log the temp password
-      print('🔑 [STAFF_REPO] Temporary password for $email: $tempPassword');
     }
   }
 }

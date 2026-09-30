@@ -215,8 +215,7 @@ class TeacherRepository {
       // Note: Implement email sending logic here
       // This would typically use Firebase Functions, SendGrid, or another email service
       print('📧 [TEACHER_REPO] Welcome email sent to: $email');
-      print('📧 [TEACHER_REPO] Email contains temp password: $tempPassword');
-      
+
       // For now, just log the email details
       // In production, integrate with your email service
     } catch (e) {

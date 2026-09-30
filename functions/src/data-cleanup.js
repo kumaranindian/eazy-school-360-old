@@ -67,17 +67,6 @@ exports.standardizeAcademicYears = functions.https.onRequest(async (req, res) =>
     return;
   }
 
-  // Authentication temporarily disabled for migration purposes
-  // if (!context.auth) {
-  //   throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
-  // }
-  
-  // Admin role check temporarily disabled for migration purposes
-  // const userDoc = await db.collection('users').doc(context.auth.uid).get();
-  // if (!userDoc.exists || userDoc.data().role !== 'admin') {
-  //   throw new functions.https.HttpsError('permission-denied', 'Only admins can run this function');
-  // }
-  
   let schoolId;
   try {
     const data = req.body;
@@ -88,6 +77,31 @@ exports.standardizeAcademicYears = functions.https.onRequest(async (req, res) =>
     }
   } catch (error) {
     res.status(400).send({ error: 'Invalid request body' });
+    return;
+  }
+
+  // Require a valid Firebase ID token for an admin of this school (or a super admin)
+  const authHeader = req.headers.authorization || '';
+  const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!idToken) {
+    res.status(401).send({ error: 'Missing Authorization: Bearer <idToken> header' });
+    return;
+  }
+
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    const userDoc = await db.collection('users').doc(decoded.uid).get();
+    const role = userDoc.exists ? userDoc.data().role : null;
+    const isSuperAdmin = ['SUPER_ADMIN', 'super_admin'].includes(role);
+    const isSchoolAdmin = ['ADMIN', 'admin', 'TENANT_ADMIN', 'tenant_admin'].includes(role)
+      && userDoc.data().schoolId === schoolId;
+
+    if (!isSuperAdmin && !isSchoolAdmin) {
+      res.status(403).send({ error: 'Only an admin of this school (or a super admin) can run this function' });
+      return;
+    }
+  } catch (error) {
+    res.status(401).send({ error: 'Invalid or expired ID token' });
     return;
   }
   
